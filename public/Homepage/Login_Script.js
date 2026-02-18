@@ -7,9 +7,7 @@ async function login(event) {
   try {
     const res = await fetch("http://localhost:3000/api/auth/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password })
     });
 
@@ -20,19 +18,11 @@ async function login(event) {
       return;
     }
 
-    // ✅ SIMPAN DATA LOGIN
+    // ✅ Save to localStorage
     localStorage.setItem("user_id", data.user_id);
-    localStorage.setItem("login_email", data.email);
+    localStorage.setItem("email", data.email);
 
-    alert("Login sukses 🔓");
-
-    localStorage.setItem("user_id", data.user.id);
-    localStorage.setItem("email", data.user.email);
-
-// lanjut fingerprint login / dashboard
-window.location.href = "../Fingerprint_Register/fingerprint_register.html";
-
-    // ✅ LANGSUNG KE FINGERPRINT LOGIN
+    // ✅ Go to fingerprint LOGIN to verify
     window.location.href = "../Fingerprint_Login/fingerprint_login.html";
 
   } catch (err) {
@@ -40,3 +30,5 @@ window.location.href = "../Fingerprint_Register/fingerprint_register.html";
     alert("Server mati / ga nyambung");
   }
 }
+
+document.getElementById("loginForm").addEventListener("submit", login);

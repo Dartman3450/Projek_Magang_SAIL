@@ -8,8 +8,27 @@ function loadPage(page) {
 
   const pages = {
     dashboard: `
-      <h1>Informasi Air</h1>
-      <p>Water Steam Generator information :</p>
+  <h1>Informasi Air</h1>
+  <p>Water Steam Generator information :</p>
+  <p>PH air = ".."</p>
+  <p>TDS air = ".."</p>
+  <p>Alkalinity = ".."</p>
+  <p>Volume air = ".."</p>
+
+  <h2>Treated/Slurry water :</h2>
+  <p>PH air = ".."</p>
+  <p>TDS air = ".."</p>
+  <p>Alkalinity = ".."</p>
+  <p>Volume air = ".."</p>
+
+  <h3>Processed Water:</h3>
+  <p>Soft water<br>
+     pH = ".."<br>
+     Hardness = ".."</p>
+  <p>Water filter<br>
+     pH = ".."<br>
+     Hardness = ".."</p>
+  <p>Volume air = ".."</p>
     `,
 
     "recent-project": `

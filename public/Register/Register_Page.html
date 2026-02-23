@@ -17,11 +17,9 @@
   </div>
 
   <div class="middle-section-login-form">
-    <!-- ⬇️ event dikirim biar preventDefault jalan -->
     <form onsubmit="register(event)">
       <h1>Register Page</h1>
 
-      <!-- username OPTIONAL (backend belum pakai) -->
       <label for="username">Username:</label>
       <input type="text" id="username" placeholder="Username">
 
@@ -34,7 +32,6 @@
       <label for="confirm-password">Confirm Password:</label>
       <input type="password" id="confirm-password" placeholder="Confirm Password" required>
 
-      <!-- type submit BIAR onsubmit kepanggil -->
       <button type="submit">Next</button>
 
       <p>Only registered user can login and sign up!</p>
@@ -45,8 +42,6 @@
       <a href="../Homepage/Homepage.html" class="back-link">Click here!</a>
     </p>
   </div>
-
-  <!-- 🔥 PASTIIN PATH BENAR -->
   <script src="Register.js"></script>
 </body>
 </html>

@@ -6,12 +6,12 @@ async function register(event) {
   const confirmPassword = document.getElementById("confirm-password").value;
 
   if (!email || !password || !confirmPassword) {
-    alert("Semua field harus diisi");
+    alert("All field are required!");
     return;
   }
 
   if (password !== confirmPassword) {
-    alert("Password tidak sama 😭");
+    alert("Password not matched!");
     return;
   }
 
@@ -45,6 +45,6 @@ async function register(event) {
 
   } catch (err) {
     console.error(err);
-    alert("Gagal konek ke server");
+    alert("Failed to connect!");
   }
 }

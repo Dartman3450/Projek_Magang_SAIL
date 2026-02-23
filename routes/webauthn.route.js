@@ -10,7 +10,6 @@ const {
   verifyAuthenticationResponse,
 } = require("@simplewebauthn/server");
 
-// Store challenge per user_id so multiple users don't overwrite each other
 const challengeStore = {};
 
 /* ================= REGISTER OPTIONS ================= */
@@ -39,9 +38,7 @@ router.post("/register/options", async (req, res) => {
       attestationType: "none",
     });
 
-    // Store challenge keyed by user_id
     challengeStore[user_id] = options.challenge;
-
     res.json(options);
   } catch (err) {
     console.error("REGISTER OPTIONS ERROR:", err);
@@ -76,28 +73,32 @@ router.post("/register/verify", async (req, res) => {
 
     const { credential: cred } = verification.registrationInfo;
 
-    // Check if credential already exists
+    // ✅ In v13, cred.id is already a base64url string
+    // ✅ cred.publicKey is a Uint8Array — save as base64url
+    const credentialId = cred.id;
+    const publicKeyBase64 = Buffer.from(cred.publicKey).toString("base64url");
+    const counter = cred.counter ?? 0;
+
+    console.log("Saving credential_id:", credentialId);
+    console.log("Type:", typeof credentialId);
+
     const existing = await pool.query(
       `SELECT id FROM webauthn_credentials WHERE credential_id = $1`,
-      [cred.id]
+      [credentialId]
     );
 
     if (existing.rows.length > 0) {
+      delete challengeStore[user_id];
       return res.json({ success: true, message: "Fingerprint already registered" });
     }
 
     await pool.query(
       `INSERT INTO webauthn_credentials (user_id, credential_id, public_key, counter)
        VALUES ($1, $2, $3, $4)`,
-      [
-        user_id,
-        cred.id,
-        Buffer.from(cred.publicKey).toString("base64"),
-        cred.counter ?? 0,
-      ]
+      [user_id, credentialId, publicKeyBase64, counter]
     );
 
-    delete challengeStore[user_id]; // Clean up
+    delete challengeStore[user_id];
     res.json({ success: true, message: "Fingerprint registered successfully!" });
   } catch (err) {
     console.error("REGISTER VERIFY ERROR:", err);
@@ -123,10 +124,14 @@ router.post("/login/options", async (req, res) => {
       return res.status(400).json({ message: "No fingerprint registered for this user" });
     }
 
+    const credentialId = result.rows[0].credential_id;
+    console.log("RAW credential_id from DB:", credentialId);
+    console.log("Type:", typeof credentialId);
+
     const options = await generateAuthenticationOptions({
       rpID: "localhost",
       allowCredentials: result.rows.map((r) => ({
-        id: r.credential_id,
+        id: r.credential_id,  // ✅ must be a base64url string
         type: "public-key",
       })),
       userVerification: "required",
@@ -135,6 +140,7 @@ router.post("/login/options", async (req, res) => {
 
     challengeStore[user_id] = options.challenge;
     res.json(options);
+
   } catch (err) {
     console.error("LOGIN OPTIONS ERROR:", err);
     res.status(500).json({ message: err.message });
@@ -155,7 +161,6 @@ router.post("/login/verify", async (req, res) => {
       return res.status(400).json({ message: "No challenge found, restart login" });
     }
 
-    // Fetch stored credential from DB
     const result = await pool.query(
       `SELECT credential_id, public_key, counter
        FROM webauthn_credentials
@@ -176,7 +181,8 @@ router.post("/login/verify", async (req, res) => {
       expectedRPID: "localhost",
       credential: {
         id: storedCred.credential_id,
-        publicKey: Buffer.from(storedCred.public_key, "base64"),
+        // ✅ public_key was saved as base64url, decode the same way
+        publicKey: Buffer.from(storedCred.public_key, "base64url"),
         counter: storedCred.counter,
       },
     });
@@ -185,15 +191,13 @@ router.post("/login/verify", async (req, res) => {
       return res.status(401).json({ success: false, message: "Fingerprint tidak cocok" });
     }
 
-    // Update counter (important for security)
     await pool.query(
       `UPDATE webauthn_credentials SET counter = $1 WHERE credential_id = $2`,
       [verification.authenticationInfo.newCounter, id]
     );
 
-    delete challengeStore[user_id]; // Clean up
+    delete challengeStore[user_id];
 
-    // Fetch user info to return
     const userResult = await pool.query(
       `SELECT id, email FROM users WHERE id = $1`,
       [user_id]

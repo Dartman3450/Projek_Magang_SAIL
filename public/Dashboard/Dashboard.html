@@ -333,6 +333,45 @@
     ::-webkit-scrollbar{width:5px;height:5px;}
     ::-webkit-scrollbar-track{background:transparent;}
     ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+    .de-wrap { padding: 4px 0; animation: defadeIn .3s ease; }
+@keyframes defadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+.de-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+.de-title { font-size:18px; font-weight:600; color:var(--txt); }
+.de-sub { font-size:12px; color:var(--txt3); margin-top:2px; }
+.de-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--txt3); background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:6px 12px; }
+.de-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 24px; }
+.de-card-title { font-size:13px; font-weight:600; color:var(--txt2); margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+.de-card-ico { font-size:15px; }
+.de-refresh-btn { margin-left:auto; background:none; border:1px solid var(--border); border-radius:6px; padding:3px 10px; font-size:11px; color:var(--txt3); cursor:pointer; transition:all .15s; }
+.de-refresh-btn:hover { border-color:var(--blue); color:var(--blue); }
+.de-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+.de-field { display:flex; flex-direction:column; gap:6px; }
+.de-full { grid-column:1 / -1; }
+.de-label { font-size:10px; font-weight:600; letter-spacing:1px; color:var(--txt3); text-transform:uppercase; }
+.de-unit { font-weight:400; letter-spacing:0; text-transform:none; color:var(--txt3); }
+.de-input { width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:8px; font-family:'DM Sans',sans-serif; font-size:13px; color:var(--txt); background:var(--bg); outline:none; transition:border-color .2s,box-shadow .2s,background .2s; }
+.de-input:focus { border-color:var(--blue); background:var(--surface); box-shadow:0 0 0 3px rgba(43,125,233,.10); }
+.de-input::placeholder { color:var(--txt3); }
+.de-select { cursor:pointer; }
+.de-textarea { resize:vertical; min-height:80px; line-height:1.5; }
+.de-status-bar { display:flex; align-items:center; gap:8px; padding:10px 14px; border-radius:8px; font-size:13px; font-weight:500; margin-bottom:16px; }
+.de-status-success { background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+.de-status-error { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+.de-status-loading { background:#eff6ff; color:var(--blue); border:1px solid #bfdbfe; }
+.de-actions { display:flex; justify-content:flex-end; gap:10px; }
+.de-btn { padding:9px 20px; border-radius:8px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; border:none; }
+.de-btn-primary { background:var(--blue); color:white; }
+.de-btn-primary:hover { background:#1a6dd8; transform:translateY(-1px); }
+.de-btn-ghost { background:transparent; color:var(--txt2); border:1.5px solid var(--border); }
+.de-btn-ghost:hover { background:var(--bg); }
+.de-table-wrap { overflow-x:auto; }
+.de-table { width:100%; border-collapse:collapse; font-size:12px; }
+.de-table th { text-align:left; padding:8px 12px; font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--txt3); border-bottom:1px solid var(--border); }
+.de-table td { padding:10px 12px; border-bottom:1px solid var(--border); color:var(--txt2); }
+.de-table tr:last-child td { border-bottom:none; }
+.de-table tr:hover td { background:var(--bg); }
+.de-empty { text-align:center; padding:32px; color:var(--txt3); font-size:13px; }
   </style>
 </head>
 <body>
@@ -454,6 +493,9 @@ function loadPage(page) {
   const content = $('content');
   if (page === 'iot') {
     renderIoT(content);
+  } else if (page === 'production') {
+    content.innerHTML = getProductionHTML();
+    initProductionForm();
   } else {
     content.innerHTML = `
       <div class="page-placeholder">
@@ -799,21 +841,21 @@ function showOverlays(show) {
 // ── Apply data ──────────────────────────────────────
 function applyWL(wl) {
   if(!wl) return;
-  const v = +(wl.tinggi_air ?? wl.water_level ?? wl.level ?? 0);
-  const pct = clamp(Math.round(v/300*100),0,100);
-  set('wl-val', v); set('wl-level', v+' cm');
+  const v = +(wl.s1 ?? wl.tinggi_air ?? wl.water_level ?? 0);
+  const pct = clamp(v, 0, 100); // s1 is already 0-100%
+  set('wl-val', v); set('wl-level', v+'%');
   set('wl-pct2', pct+'%'); set('wl-time', fmtT(wl.created_at));
   set('tank-pct', pct+'%');
   const tw=$('tank-water'); if(tw) tw.style.height=pct+'%';
-  pill('wl-status', v, 200, 250);
+  pill('wl-status', v, 70, 90);
 }
 
 function applyWF(wf) {
   if(!wf) return;
-  const v = +(wf.flow_rate ?? wf.water_flow ?? wf.flow ?? 0);
+  const v = +(wf.rate ?? wf.flow_rate ?? wf.flow ?? 0);
   set('wf-val', v);
   set('wf-rpm', Math.round(v*8)+' rpm');
-  set('wf-vol', (wf.volume ?? '—')+' L');
+  set('wf-vol', (wf.total ?? '—')+' mL');
   set('wf-time', fmtT(wf.created_at));
   const fan=$('fan-svg');
   if(fan) fan.style.animationDuration = v>0 ? Math.max(.2,5/v)+'s' : '20s';
@@ -826,11 +868,10 @@ function applyWF(wf) {
 
 function applyEnv(env) {
   if(!env) return;
-  const suhu = +(env.suhu ?? env.temperature ?? 0);
-  const lemb = +(env.kelembapan ?? env.humidity ?? 0);
-  const gas  = +(env.gas ?? env.gas_value ?? env.ppm ?? 0);
+  const suhu = +(env.t ?? env.suhu ?? env.temperature ?? 0);
+  const lemb = +(env.h ?? env.kelembapan ?? env.humidity ?? 0);
+  const gas  = +(env.raw ?? env.gas ?? env.gas_value ?? 0);
 
-  // suhu
   set('suhu-val', suhu); set('suhu-v2', suhu+'°C'); set('suhu-time', fmtT(env.created_at));
   const merc=$('thermo-merc'); if(merc) merc.style.height=clamp(suhu/50*100,0,100)+'%';
   let cond='NORMAL', bb='radial-gradient(circle at 35% 35%,#93c5fd,#1d4ed8)';
@@ -841,7 +882,6 @@ function applyEnv(env) {
   const bulb=$('thermo-bulb'); if(bulb) bulb.style.background=bb;
   pill('suhu-status', suhu, 35, 40);
 
-  // kelembapan
   set('kel-val', lemb); set('g-num', lemb);
   const arc=$('g-arc'); if(arc) arc.style.strokeDashoffset=204-(lemb/100)*204;
   const ndl=$('g-needle'); if(ndl) ndl.setAttribute('transform',`rotate(${-90+(lemb/100)*180},78,83)`);
@@ -854,7 +894,6 @@ function applyEnv(env) {
   }
   pill('kel-status', lemb, 80, 95);
 
-  // gas
   const maxG=600, gPct=clamp(Math.round(gas/maxG*100),0,100);
   set('gas-val', gas); set('gas-pct-lbl', gPct+'%');
   const gbar=$('gbar-main');
@@ -867,6 +906,7 @@ function applyEnv(env) {
   });
   pill('gas-status', gas, 300, 500);
 }
+
 
 function applyPatroli(total) {
   const tot = parseInt(total)||0;
@@ -930,8 +970,164 @@ function confirmLogout() {
   }
 }
 
+window._poll = setInterval(() => {
+    if (!$('wl-val')) { clearInterval(window._poll); return; }
+    fetchSummary();
+    loadTable(_activeTab);
+  }, 5000);  
+
 // ══ BOOT ════════════════════════════════════════════
 loadPage('iot');
+
+// ══ PRODUCTION FORM ════════════════════════════════
+function getProductionHTML() {
+  return `
+  <div class="de-wrap">
+    <div class="de-header">
+      <div>
+        <div class="de-title">Data Entry Production</div>
+        <div class="de-sub">Catat data produksi harian</div>
+      </div>
+      <div class="de-date" id="de-datetime">--</div>
+    </div>
+    <div class="de-card">
+      <div class="de-card-title"><span class="de-card-ico">📋</span>Form Input Produksi</div>
+      <div class="de-grid">
+        <div class="de-field">
+          <label class="de-label">TANGGAL</label>
+          <input class="de-input" type="date" id="prod-date">
+        </div>
+        <div class="de-field">
+          <label class="de-label">SHIFT</label>
+          <select class="de-input de-select" id="prod-shift">
+            <option value="">-- Pilih Shift --</option>
+            <option value="pagi">🌅 Pagi (06:00 - 14:00)</option>
+            <option value="siang">☀️ Siang (14:00 - 22:00)</option>
+            <option value="malam">🌙 Malam (22:00 - 06:00)</option>
+          </select>
+        </div>
+        <div class="de-field">
+          <label class="de-label">NAMA OPERATOR</label>
+          <input class="de-input" type="text" id="prod-operator" placeholder="Nama operator...">
+        </div>
+        <div class="de-field">
+          <label class="de-label">JENIS PRODUK</label>
+          <input class="de-input" type="text" id="prod-type" placeholder="Jenis produk...">
+        </div>
+        <div class="de-field">
+          <label class="de-label">VOLUME PRODUKSI <span class="de-unit">(L)</span></label>
+          <input class="de-input" type="number" id="prod-volume" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="de-field">
+          <label class="de-label">TARGET <span class="de-unit">(L)</span></label>
+          <input class="de-input" type="number" id="prod-target" placeholder="0" min="0" step="0.1">
+        </div>
+        <div class="de-field de-full">
+          <label class="de-label">CATATAN</label>
+          <textarea class="de-input de-textarea" id="prod-notes" placeholder="Tambahkan catatan produksi..."></textarea>
+        </div>
+      </div>
+      <div class="de-status-bar" id="prod-status-bar" style="display:none">
+        <span id="prod-status-msg"></span>
+      </div>
+      <div class="de-actions">
+        <button class="de-btn de-btn-ghost" onclick="resetProductionForm()">🔄 Reset</button>
+        <button class="de-btn de-btn-primary" onclick="submitProduction()">💾 Simpan Data</button>
+      </div>
+    </div>
+    <div class="de-card" style="margin-top:16px">
+      <div class="de-card-title">
+        <span class="de-card-ico">📊</span>Riwayat Input Hari Ini
+        <button class="de-refresh-btn" onclick="loadProductionHistory()">↻ Refresh</button>
+      </div>
+      <div id="prod-history"><div class="de-empty">Belum ada data hari ini</div></div>
+    </div>
+  </div>`;
+}
+
+function initProductionForm() {
+  const today = new Date().toISOString().split('T')[0];
+  const dateInput = document.getElementById('prod-date');
+  if (dateInput) dateInput.value = today;
+  if (window._deClock) clearInterval(window._deClock);
+  window._deClock = setInterval(() => {
+    const el = document.getElementById('de-datetime');
+    if (!el) { clearInterval(window._deClock); return; }
+    el.textContent = new Date().toLocaleString('id-ID', {
+      weekday:'long', day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
+  }, 1000);
+  loadProductionHistory();
+}
+
+async function submitProduction() {
+  const data = {
+    date:     document.getElementById('prod-date')?.value,
+    shift:    document.getElementById('prod-shift')?.value,
+    operator: document.getElementById('prod-operator')?.value,
+    type:     document.getElementById('prod-type')?.value,
+    volume:   document.getElementById('prod-volume')?.value,
+    target:   document.getElementById('prod-target')?.value,
+    notes:    document.getElementById('prod-notes')?.value,
+  };
+  if (!data.date || !data.shift || !data.operator || !data.type || !data.volume) {
+    showProdStatus('error', '❌ Harap isi semua field yang wajib diisi!');
+    return;
+  }
+  showProdStatus('loading', '⏳ Menyimpan data...');
+  await new Promise(r => setTimeout(r, 800));
+  const history = JSON.parse(localStorage.getItem('prod_history') || '[]');
+  history.unshift({ ...data, id: Date.now(), saved_at: new Date().toLocaleTimeString('id-ID') });
+  localStorage.setItem('prod_history', JSON.stringify(history.slice(0, 50)));
+  showProdStatus('success', '✅ Data produksi berhasil disimpan!');
+  resetProductionForm();
+  loadProductionHistory();
+}
+
+function resetProductionForm() {
+  ['prod-shift','prod-operator','prod-type','prod-volume','prod-target','prod-notes']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  const dateEl = document.getElementById('prod-date');
+  if (dateEl) dateEl.value = new Date().toISOString().split('T')[0];
+}
+
+function showProdStatus(type, msg) {
+  const bar = document.getElementById('prod-status-bar');
+  const msgEl = document.getElementById('prod-status-msg');
+  if (!bar || !msgEl) return;
+  bar.style.display = 'flex';
+  bar.className = 'de-status-bar de-status-' + type;
+  msgEl.textContent = msg;
+  if (type === 'success') setTimeout(() => { if(bar) bar.style.display='none'; }, 4000);
+}
+
+function loadProductionHistory() {
+  const container = document.getElementById('prod-history');
+  if (!container) return;
+  const today = new Date().toISOString().split('T')[0];
+  const history = JSON.parse(localStorage.getItem('prod_history') || '[]');
+  const todayData = history.filter(h => h.date === today);
+  if (todayData.length === 0) {
+    container.innerHTML = '<div class="de-empty">Belum ada data hari ini</div>';
+    return;
+  }
+  const shiftLabel = { pagi:'🌅 Pagi', siang:'☀️ Siang', malam:'🌙 Malam' };
+  container.innerHTML = `
+    <div class="de-table-wrap"><table class="de-table">
+      <thead><tr><th>Shift</th><th>Operator</th><th>Produk</th><th>Volume</th><th>Target</th><th>Capaian</th><th>Waktu</th></tr></thead>
+      <tbody>${todayData.map(r => {
+        const pct = r.target > 0 ? Math.round(r.volume/r.target*100) : 0;
+        const c = pct>=100?'var(--green)':pct>=75?'var(--yellow)':'var(--red)';
+        return `<tr>
+          <td>${shiftLabel[r.shift]||r.shift}</td>
+          <td>${r.operator}</td><td>${r.type}</td>
+          <td>${r.volume} L</td><td>${r.target||'—'} L</td>
+          <td><span style="color:${c};font-weight:600">${pct}%</span></td>
+          <td style="color:var(--txt3);font-size:11px">${r.saved_at}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+}
 </script>
 </body>
 </html>

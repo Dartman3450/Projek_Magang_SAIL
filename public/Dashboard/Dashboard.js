@@ -215,3 +215,115 @@ function confirmLogout() {
     window.location.href = "Logout_Success.html";
   }
 }
+
+async function fetchSummary() {
+  try {
+    const res = await fetch(API.summary);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message || 'error');
+
+    const d = j.data;
+
+    // ✅ Check if latest data is recent (within last 2 minutes)
+    const latestTimestamp = d.water_level?.created_at 
+      || d.water_flow?.created_at 
+      || d.lingkungan?.created_at;
+
+    if (latestTimestamp) {
+      const ageSeconds = (Date.now() - new Date(latestTimestamp)) / 1000;
+      
+      if (ageSeconds > 120) {  // ← 120 seconds = 2 minutes, adjust as needed
+        console.warn('Data too old:', Math.round(ageSeconds), 'seconds');
+        espConnected = false;
+        setEspStatus('waiting');
+        showOverlays(true);
+        const tbl = $('tbl-cont');
+        if (tbl) tbl.innerHTML = '<div class="tbl-empty">Menunggu koneksi ESP…</div>';
+        return;  // ← stop here, don't update display
+      }
+    }
+
+    // Data is fresh — update display
+    espConnected = true;
+    setEspStatus('connected');
+    showOverlays(false);
+
+    applyWL(d.water_level);
+    applyWF(d.water_flow);
+    applyEnv(d.lingkungan);
+    applyPatroli(d.patroli?.total_hari_ini);
+    loadTable(_activeTab);
+
+  } catch(e) {
+    console.warn('ESP tidak terhubung:', e.message);
+    espConnected = false;
+    setEspStatus('waiting');
+    showOverlays(true);
+    const tbl = $('tbl-cont');
+    if (tbl) tbl.innerHTML = '<div class="tbl-empty">Menunggu koneksi ESP…</div>';
+  }
+}
+
+function applyWF(wf) {
+  if(!wf) return;
+  
+  // ✅ Your DB columns are rate and total
+  const v = +(wf.rate ?? wf.flow_rate ?? wf.water_flow ?? wf.flow ?? 0);
+  
+  set('wf-val', v);
+  set('wf-rpm', Math.round(v*8)+' rpm');
+  set('wf-vol', (wf.total ?? '—')+' mL');
+  set('wf-time', fmtT(wf.created_at));
+  
+  const fan=$('fan-svg');
+  if(fan) fan.style.animationDuration = v>0 ? Math.max(.2,5/v)+'s' : '20s';
+  document.querySelectorAll('.fp').forEach(p=>{
+    p.style.animationPlayState = v>0?'running':'paused';
+    p.style.animationDuration  = v>0?(1.2/Math.max(v,.5))+'s':'2s';
+  });
+  pill('wf-status', v, 80, 120);
+}
+
+function applyEnv(env) {
+  if(!env) return;
+  
+  // ✅ Your DB columns are t, h, raw
+  const suhu = +(env.t ?? env.suhu ?? env.temperature ?? 0);
+  const lemb = +(env.h ?? env.kelembapan ?? env.humidity ?? 0);
+  const gas  = +(env.raw ?? env.gas ?? env.gas_value ?? 0);
+
+  set('suhu-val', suhu); set('suhu-v2', suhu+'°C'); set('suhu-time', fmtT(env.created_at));
+  const merc=$('thermo-merc'); if(merc) merc.style.height=clamp(suhu/50*100,0,100)+'%';
+  let cond='NORMAL', bb='radial-gradient(circle at 35% 35%,#93c5fd,#1d4ed8)';
+  if(suhu>=38){cond='SANGAT PANAS';bb='radial-gradient(circle at 35% 35%,#fca5a5,#b91c1c)';}
+  else if(suhu>=35){cond='PANAS';bb='radial-gradient(circle at 35% 35%,#fdba74,#c2410c)';}
+  else if(suhu>=30){cond='HANGAT';bb='radial-gradient(circle at 35% 35%,#fed7aa,#ea580c)';}
+  set('suhu-cond', cond);
+  const bulb=$('thermo-bulb'); if(bulb) bulb.style.background=bb;
+  pill('suhu-status', suhu, 35, 40);
+
+  set('kel-val', lemb); set('g-num', lemb);
+  const arc=$('g-arc'); if(arc) arc.style.strokeDashoffset=204-(lemb/100)*204;
+  const ndl=$('g-needle'); if(ndl) ndl.setAttribute('transform',`rotate(${-90+(lemb/100)*180},78,83)`);
+  for(let i=0;i<7;i++){
+    const drp=$('drp-'+i); if(!drp) continue;
+    const active=(lemb/100*7)>i;
+    drp.style.height=(active?11+i*2:6)+'px';
+    drp.style.opacity=active?'.8':'.2';
+    drp.style.background=lemb>90?'var(--red)':lemb>75?'var(--yellow)':'var(--blue)';
+  }
+  pill('kel-status', lemb, 80, 95);
+
+  const maxG=600, gPct=clamp(Math.round(gas/maxG*100),0,100);
+  set('gas-val', gas); set('gas-pct-lbl', gPct+'%');
+  const gbar=$('gbar-main');
+  if(gbar){
+    gbar.style.width=gPct+'%';
+    gbar.style.background=gas>=500?'linear-gradient(90deg,#e07b2a,#dc3545)':gas>=300?'linear-gradient(90deg,#c99a0a,#e07b2a)':'linear-gradient(90deg,#18a96a,#6f52d9)';
+  }
+  document.querySelectorAll('.gp').forEach((p,i)=>{
+    p.style.animationDuration=(Math.max(.3,1.4-gas/600)+(i%3)*.12)+'s';
+  });
+  pill('gas-status', gas, 300, 500);
+}

@@ -8,27 +8,8 @@ function loadPage(page) {
 
   const pages = {
     dashboard: `
-  <h1>Informasi Air</h1>
-  <p>Water Steam Generator information :</p>
-  <p>PH air = ".."</p>
-  <p>TDS air = ".."</p>
-  <p>Alkalinity = ".."</p>
-  <p>Volume air = ".."</p>
-
-  <h2>Treated/Slurry water :</h2>
-  <p>PH air = ".."</p>
-  <p>TDS air = ".."</p>
-  <p>Alkalinity = ".."</p>
-  <p>Volume air = ".."</p>
-
-  <h3>Processed Water:</h3>
-  <p>Soft water<br>
-     pH = ".."<br>
-     Hardness = ".."</p>
-  <p>Water filter<br>
-     pH = ".."<br>
-     Hardness = ".."</p>
-  <p>Volume air = ".."</p>
+      <h1>Informasi Air</h1>
+      <p>Water Steam Generator information :</p>
     `,
 
     "recent-project": `
@@ -77,6 +58,10 @@ function loadPage(page) {
     `,
     "change-password":`
       <h1>change your password here!</h1>
+    `,
+    "change-water-level": `
+      <h1>Change Water Level</h1>
+      <p>Adjust water level settings</p>
     `
   };
 
@@ -127,6 +112,100 @@ function changePassword() {
       alert("Error. Failed to connect to database!");
     });
   }
+}
+
+async function sendSettings() {
+    const minVal = document.getElementById('jarakMin').value;
+    const maxVal = document.getElementById('jarakMax').value;
+
+    if (!minVal || !maxVal) {
+        alert("Harap isi kedua nilai!");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/update-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ min: minVal, max: maxVal })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            alert('Sukses: ' + data.message);
+        } else {
+            alert('Gagal: ' + data.error);
+        }
+    } catch (error) {
+        console.error("Error sending settings:", error);
+        alert("Koneksi server gagal.");
+    }
+}
+
+// Tambahkan atau update fungsi loadPage di Dashboard.js
+function loadPage(page) {
+    const contentArea = document.getElementById('content');
+
+    if (page === 'change-water-level') {
+        contentArea.innerHTML = `
+            <h1>Setting Water Level</h1>
+            <p>Atur batas jarak sensor untuk menentukan persentase ketinggian air.</p>
+            
+            <div style="max-width: 400px; background: #f4f4f4; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; margin-bottom:5px;">Jarak Air Penuh (Min) - cm:</label>
+                    <input type="number" id="jarakMin" value="30" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display:block; margin-bottom:5px;">Jarak Wadah Kosong (Max) - cm:</label>
+                    <input type="number" id="jarakMax" value="200" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc;">
+                </div>
+                <button onclick="updateSensorSettings()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; width:100%;">
+                    Update ke ESP32
+                </button>
+            </div>
+        `;
+    } else if (page === 'Dashboard1') {
+        contentArea.innerHTML = `<h1>Informasi Air</h1><p>Water Steam Generator information :</p>`;
+        // Panggil fungsi untuk menampilkan data sensor di sini
+    } else {
+        contentArea.innerHTML = `<h1>Halaman ${page}</h1><p>Konten untuk halaman ${page} akan muncul di sini.</p>`;
+    }
+}
+
+// Fungsi untuk mengirim data ke Backend
+async function updateSensorSettings() {
+    const minVal = document.getElementById('jarakMin').value;
+    const maxVal = document.getElementById('jarakMax').value;
+
+    if (!minVal || !maxVal) {
+        alert("Harap isi nilai Min dan Max!");
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/update-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ min: minVal, max: maxVal })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            alert("✅ Berhasil: " + data.message);
+        } else {
+            alert("❌ Gagal: " + (data.error || data.message));
+        }
+    } catch (error) {
+        console.error("Error:", error);
+        alert("Terjadi kesalahan koneksi ke server Node.js.");
+    }
+}
+
+// Fungsi pendukung sidebar Anda
+function toggleSubmenu(element) {
+    const submenu = element.nextElementSibling;
+    submenu.style.display = submenu.style.display === "block" ? "none" : "block";
 }
 
 function confirmLogout() {

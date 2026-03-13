@@ -787,7 +787,7 @@ function renderIoT(content) {
   fetchSummary();
   if (window._poll) clearInterval(window._poll);
   window._poll = setInterval(() => {
-    if (!$('wl-status')) { clearInterval(window._poll); window._poll = null; return; }
+    if (!$('wl-val')) { clearInterval(window._poll); window._poll = null; return; }
     fetchSummary();
   }, 5000); // refresh every 5 seconds
 }
@@ -1555,170 +1555,72 @@ function getProjectHTML(type,title){return`<div class="proj-wrap">
   </div>
   <div class="proj-det-body" id="pd-bd-${type}"></div>
 </div>`;}
-// ── Project page cache (avoids re-fetching while drawer is open) ──
-const _pjCache = {}; // { type: [ ...projects ] }
-
-function initProjectPage(t) {
-  const d = document.getElementById('pf-st-' + t);
-  if (d) d.value = new Date().toISOString().split('T')[0];
-  renderPJ(t);
+function initProjectPage(t){const d=document.getElementById('pf-st-'+t);if(d)d.value=new Date().toISOString().split('T')[0];renderPJ(t);}
+const gPJ=t=>JSON.parse(localStorage.getItem('pj_'+t)||'[]');
+const sPJ=(t,l)=>localStorage.setItem('pj_'+t,JSON.stringify(l));
+function renderPJ(type){
+  const list=document.getElementById('pl-'+type),cnt=document.getElementById('pc-'+type);
+  const q=(document.getElementById('ps-'+type)?.value||'').toLowerCase();
+  if(!list)return;
+  let ps=gPJ(type);if(q)ps=ps.filter(p=>p.name.toLowerCase().includes(q));
+  if(cnt)cnt.textContent=ps.length+' project'+(ps.length!==1?'s':'');
+  if(!ps.length){list.innerHTML=`<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q?'No projects match.':'No projects yet — click ＋ to add one!'}</div>`;return;}
+  const col={ongoing:'var(--blue)',recent:'var(--orange)',completed:'var(--green)'};
+  const lbl={ongoing:'ON GOING',recent:'RECENT',completed:'DONE'};
+  list.innerHTML=ps.map((p,i)=>`
+    <div class="proj-card" style="--acc:${col[type]||'var(--blue)'}" onclick="openPD('${type}',${i})">
+      <div class="proj-card-icon">📋</div>
+      <div class="proj-card-body">
+        <div class="proj-card-name">${p.name}</div>
+        <div class="proj-card-meta"><span>📅 ${p.start||'—'}</span><span>🏁 ${p.end||'—'}</span></div>
+        <div class="proj-progress-track"><div class="proj-progress-fill" style="width:${p.progress||0}%"></div></div>
+        <div class="proj-progress-label"><span>Progress</span><span>${p.progress||0}%</span></div>
+      </div>
+      <span class="proj-status ${type}">${lbl[type]}</span>
+      <span class="proj-card-arrow">›</span>
+    </div>`).join('');
 }
-
-// ── Load projects from API ────────────────────────────────────────
-async function renderPJ(type) {
-  const list = document.getElementById('pl-' + type);
-  const cnt  = document.getElementById('pc-' + type);
-  const q    = (document.getElementById('ps-' + type)?.value || '').toLowerCase();
-  if (!list) return;
-
-  // Show loading state
-  list.innerHTML = '<div class="proj-empty" style="color:var(--txt3)">⏳ Loading projects...</div>';
-
-  try {
-    const res = await fetch('/api/projects?type=' + type);
-    const j   = await res.json();
-    if (!j.success) throw new Error(j.message);
-
-    // Cache result so openPD can look up by id
-    _pjCache[type] = j.data;
-
-    let ps = j.data;
-    if (q) ps = ps.filter(p => p.name.toLowerCase().includes(q));
-
-    if (cnt) cnt.textContent = ps.length + ' project' + (ps.length !== 1 ? 's' : '');
-
-    if (!ps.length) {
-      list.innerHTML = `<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q ? 'No projects match.' : 'No projects yet — click ＋ to add one!'}</div>`;
-      return;
-    }
-
-    const col = { ongoing: 'var(--blue)', recent: 'var(--orange)', completed: 'var(--green)' };
-    const lbl = { ongoing: 'ON GOING', recent: 'RECENT', completed: 'DONE' };
-
-    list.innerHTML = ps.map(p => `
-      <div class="proj-card" style="--acc:${col[type] || 'var(--blue)'}" onclick="openPD('${type}','${p.id}')">
-        <div class="proj-card-icon">📋</div>
-        <div class="proj-card-body">
-          <div class="proj-card-name">${p.name}</div>
-          <div class="proj-card-meta">
-            <span>📅 ${p.start_date || '—'}</span>
-            <span>🏁 ${p.end_date || '—'}</span>
-          </div>
-          <div class="proj-progress-track"><div class="proj-progress-fill" style="width:${p.progress || 0}%"></div></div>
-          <div class="proj-progress-label"><span>Progress</span><span>${p.progress || 0}%</span></div>
-        </div>
-        <span class="proj-status ${type}">${lbl[type]}</span>
-        <span class="proj-card-arrow">›</span>
-      </div>`).join('');
-
-  } catch (err) {
-    list.innerHTML = `<div class="proj-empty" style="color:var(--red)">❌ Failed to load: ${err.message}</div>`;
-  }
+function openAPJ(t){document.getElementById('pmo-'+t).classList.add('show');}
+function closeAPJ(t){
+  document.getElementById('pmo-'+t).classList.remove('show');
+  ['pf-nm-','pf-st-','pf-en-','pf-mat-','pf-tl-','pf-nt-'].forEach(f=>{const el=document.getElementById(f+t);if(el)el.value='';});
+  const r=document.getElementById('pr-'+t);if(r)r.value=0;
+  const l=document.getElementById('pp-'+t);if(l)l.textContent='0%';
+  const b=document.getElementById('psb-'+t);if(b)b.style.display='none';
 }
-
-// ── Add project modal ─────────────────────────────────────────────
-function openAPJ(t) { document.getElementById('pmo-' + t).classList.add('show'); }
-
-function closeAPJ(t) {
-  document.getElementById('pmo-' + t).classList.remove('show');
-  ['pf-nm-', 'pf-st-', 'pf-en-', 'pf-mat-', 'pf-tl-', 'pf-nt-'].forEach(f => {
-    const el = document.getElementById(f + t); if (el) el.value = '';
-  });
-  const r = document.getElementById('pr-' + t); if (r) r.value = 0;
-  const l = document.getElementById('pp-' + t); if (l) l.textContent = '0%';
-  const b = document.getElementById('psb-' + t); if (b) b.style.display = 'none';
+function submitPJ(t){
+  const name=document.getElementById('pf-nm-'+t)?.value.trim();
+  if(!name){showPSt(t,'error','❌ Project title is required!');return;}
+  const p={name,start:document.getElementById('pf-st-'+t)?.value,end:document.getElementById('pf-en-'+t)?.value,
+    materials:document.getElementById('pf-mat-'+t)?.value.trim(),tools:document.getElementById('pf-tl-'+t)?.value.trim(),
+    progress:+(document.getElementById('pr-'+t)?.value||0),notes:document.getElementById('pf-nt-'+t)?.value.trim(),
+    created_at:new Date().toISOString()};
+  const l=gPJ(t);l.unshift(p);sPJ(t,l);
+  showPSt(t,'success','✅ Project saved!');setTimeout(()=>{closeAPJ(t);renderPJ(t);},900);
 }
-
-// ── Submit new project to API ─────────────────────────────────────
-async function submitPJ(t) {
-  const name = document.getElementById('pf-nm-' + t)?.value.trim();
-  if (!name) { showPSt(t, 'error', '❌ Project title is required!'); return; }
-
-  const body = {
-    type:       t,
-    name,
-    start_date: document.getElementById('pf-st-'  + t)?.value  || null,
-    end_date:   document.getElementById('pf-en-'  + t)?.value  || null,
-    materials:  document.getElementById('pf-mat-' + t)?.value.trim() || '',
-    tools:      document.getElementById('pf-tl-'  + t)?.value.trim() || '',
-    progress:   +(document.getElementById('pr-'   + t)?.value  || 0),
-    notes:      document.getElementById('pf-nt-'  + t)?.value.trim() || '',
-  };
-
-  showPSt(t, 'loading', '⏳ Saving project...');
-
-  try {
-    const res = await fetch('/api/projects', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
-    const j = await res.json();
-    if (!j.success) throw new Error(j.message);
-
-    showPSt(t, 'success', '✅ Project saved!');
-    setTimeout(() => { closeAPJ(t); renderPJ(t); }, 900);
-  } catch (err) {
-    showPSt(t, 'error', '❌ ' + err.message);
-  }
-}
-
-function showPSt(t, k, m) {
-  const b = document.getElementById('psb-' + t), el = document.getElementById('psm-' + t);
-  if (!b || !el) return;
-  b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + k; el.textContent = m;
-}
-
-// ── Open project detail drawer ────────────────────────────────────
-function openPD(type, id) {
-  // Find project in cache by id (id comes as string from onclick attr)
-  const p = (_pjCache[type] || []).find(x => String(x.id) === String(id));
-  if (!p) return;
-
-  document.getElementById('pd-nm-' + type).textContent = p.name;
-  document.getElementById('pd-dt-' + type).textContent = '📅 ' + (p.start_date || '—') + ' → 🏁 ' + (p.end_date || '—');
-  document.getElementById('pd-bd-' + type).innerHTML = `
-    <div>
-      <div class="proj-info-lbl">PROGRESS</div>
-      <div class="proj-big-pct">${p.progress}%</div>
-      <div class="proj-big-track"><div class="proj-big-fill" style="width:${p.progress}%"></div></div>
-    </div>
+function showPSt(t,k,m){const b=document.getElementById('psb-'+t),el=document.getElementById('psm-'+t);if(!b||!el)return;b.style.display='flex';b.className='de-status-bar de-status-'+k;el.textContent=m;}
+function openPD(type,idx){
+  const p=gPJ(type)[idx];if(!p)return;
+  document.getElementById('pd-nm-'+type).textContent=p.name;
+  document.getElementById('pd-dt-'+type).textContent='📅 '+(p.start||'—')+' → 🏁 '+(p.end||'—');
+  document.getElementById('pd-bd-'+type).innerHTML=`
+    <div><div class="proj-info-lbl">PROGRESS</div><div class="proj-big-pct">${p.progress}%</div>
+      <div class="proj-big-track"><div class="proj-big-fill" style="width:${p.progress}%"></div></div></div>
     <div class="proj-info-grid">
-      <div><div class="proj-info-lbl">START</div><div class="proj-info-val">${p.start_date || '—'}</div></div>
-      <div><div class="proj-info-lbl">EXPECTED END</div><div class="proj-info-val">${p.end_date || '—'}</div></div>
+      <div><div class="proj-info-lbl">START</div><div class="proj-info-val">${p.start||'—'}</div></div>
+      <div><div class="proj-info-lbl">EXPECTED END</div><div class="proj-info-val">${p.end||'—'}</div></div>
     </div>
-    <div><div class="proj-info-lbl">MATERIALS</div><div class="proj-info-val">${p.materials || '—'}</div></div>
-    <div><div class="proj-info-lbl">TOOLS</div><div class="proj-info-val">${p.tools || '—'}</div></div>
-    ${p.notes ? `<div><div class="proj-info-lbl">NOTES</div><div class="proj-info-val">${p.notes}</div></div>` : ''}
-    <div><div class="proj-info-lbl">CREATED</div>
-      <div class="proj-info-val" style="font-family:'DM Mono',monospace;font-size:11px">${new Date(p.created_at).toLocaleString('en-GB')}</div>
-    </div>
-    <button class="proj-del-btn" onclick="delPJ('${type}','${p.id}')">🗑️ Delete Project</button>`;
-
-  document.getElementById('pdo-' + type).classList.add('show');
-  document.getElementById('pdd-' + type).classList.add('show');
-  document.body.style.overflow = 'hidden';
+    <div><div class="proj-info-lbl">MATERIALS</div><div class="proj-info-val">${p.materials||'—'}</div></div>
+    <div><div class="proj-info-lbl">TOOLS</div><div class="proj-info-val">${p.tools||'—'}</div></div>
+    ${p.notes?`<div><div class="proj-info-lbl">NOTES</div><div class="proj-info-val">${p.notes}</div></div>`:''}
+    <div><div class="proj-info-lbl">CREATED</div><div class="proj-info-val" style="font-family:'DM Mono',monospace;font-size:11px">${new Date(p.created_at).toLocaleString('en-GB')}</div></div>
+    <button class="proj-del-btn" onclick="delPJ('${type}',${idx})">🗑️ Delete Project</button>`;
+  document.getElementById('pdo-'+type).classList.add('show');
+  document.getElementById('pdd-'+type).classList.add('show');
+  document.body.style.overflow='hidden';
 }
-
-function closePD(t) {
-  document.getElementById('pdo-' + t)?.classList.remove('show');
-  document.getElementById('pdd-' + t)?.classList.remove('show');
-  document.body.style.overflow = '';
-}
-
-// ── Delete project via API ────────────────────────────────────────
-async function delPJ(type, id) {
-  if (!confirm('Delete this project? This cannot be undone.')) return;
-  try {
-    const res = await fetch('/api/projects/' + id, { method: 'DELETE' });
-    const j   = await res.json();
-    if (!j.success) throw new Error(j.message);
-    closePD(type);
-    renderPJ(type);
-  } catch (err) {
-    alert('❌ Failed to delete: ' + err.message);
-  }
-}
+function closePD(t){document.getElementById('pdo-'+t)?.classList.remove('show');document.getElementById('pdd-'+t)?.classList.remove('show');document.body.style.overflow='';}
+function delPJ(t,i){if(!confirm('Delete this project? This cannot be undone.'))return;const l=gPJ(t);l.splice(i,1);sPJ(t,l);closePD(t);renderPJ(t);}
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeDetail();closeSensorModal();['ongoing','recent','completed'].forEach(t=>{closeAPJ(t);closePD(t);});}
@@ -1731,95 +1633,255 @@ document.addEventListener('keydown',e=>{
 function getWaterLevelSettingHTML() {
   return `<div class="de-wrap">
   <div class="de-header">
-    <div><div class="de-title">Water Level Setting</div><div class="de-sub">Configure water level thresholds and alert limits</div></div>
+    <div><div class="de-title">Water Level Setting</div>
+    <div class="de-sub">Drag the <span style="color:#c99a0a;font-weight:700">WARN</span> and <span style="color:#dc3545;font-weight:700">DANGER</span> lines on the tube to set thresholds</div></div>
     <div class="de-date" id="wls-datetime">--</div>
   </div>
 
-  <!-- Current readings -->
   <div class="de-card" style="margin-bottom:16px">
-    <div class="de-card-title"><span class="de-card-ico">📡</span> Current Readings <button class="de-refresh-btn" onclick="refreshWLSReadings()">↻ Refresh</button></div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px" id="wls-readings">
-      <div class="wls-stat"><div class="wls-stat-lbl">TANK S1</div><div class="wls-stat-val" id="wls-s1">—</div><div class="wls-stat-unit">%</div></div>
-      <div class="wls-stat"><div class="wls-stat-lbl">TANK S2</div><div class="wls-stat-val" id="wls-s2">—</div><div class="wls-stat-unit">%</div></div>
-      <div class="wls-stat"><div class="wls-stat-lbl">PRESSURE 1</div><div class="wls-stat-val" id="wls-p1">—</div><div class="wls-stat-unit">bar</div></div>
-      <div class="wls-stat"><div class="wls-stat-lbl">PRESSURE 2</div><div class="wls-stat-val" id="wls-p2">—</div><div class="wls-stat-unit">bar</div></div>
-    </div>
-  </div>
-
-  <!-- Threshold settings -->
-  <div class="de-card" style="margin-bottom:16px">
-    <div class="de-card-title"><span class="de-card-ico">⚠️</span> Alert Thresholds</div>
-    <div class="de-grid">
-      <div class="de-field">
-        <label class="de-label">WARNING LEVEL <span class="de-unit">(%)</span></label>
-        <input class="de-input" type="number" id="wls-warn" min="0" max="100" step="1" placeholder="e.g. 70">
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">Show WARNING pill above this value</div>
-      </div>
-      <div class="de-field">
-        <label class="de-label">DANGER LEVEL <span class="de-unit">(%)</span></label>
-        <input class="de-input" type="number" id="wls-crit" min="0" max="100" step="1" placeholder="e.g. 90">
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">Show DANGER pill above this value</div>
-      </div>
-      <div class="de-field">
-        <label class="de-label">MIN SAFE LEVEL <span class="de-unit">(%)</span></label>
-        <input class="de-input" type="number" id="wls-min" min="0" max="100" step="1" placeholder="e.g. 10">
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">Alert when tank drops below this</div>
-      </div>
-      <div class="de-field">
-        <label class="de-label">MAX CAPACITY <span class="de-unit">(%)</span></label>
-        <input class="de-input" type="number" id="wls-max" min="0" max="100" step="1" placeholder="e.g. 100">
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">Tank full at this percentage</div>
-      </div>
+    <div class="de-card-title" style="justify-content:space-between;margin-bottom:16px">
+      <div><span class="de-card-ico">📡</span> Live Tank Visualization</div>
+      <button class="de-refresh-btn" onclick="refreshWLSReadings()">↻ Refresh</button>
     </div>
 
-    <!-- Visual threshold preview -->
-    <div style="margin:4px 0 20px">
-      <div class="de-label" style="margin-bottom:8px">THRESHOLD PREVIEW</div>
-      <div style="position:relative;height:28px;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg)">
-        <div id="wls-safe-zone"  style="position:absolute;left:0;top:0;bottom:0;background:rgba(24,169,106,.18);transition:width .4s"></div>
-        <div id="wls-warn-zone"  style="position:absolute;top:0;bottom:0;background:rgba(201,154,10,.22);transition:left .4s,width .4s"></div>
-        <div id="wls-crit-zone"  style="position:absolute;top:0;bottom:0;right:0;background:rgba(220,53,69,.22);transition:left .4s"></div>
-        <div id="wls-warn-line"  style="position:absolute;top:0;bottom:0;width:2px;background:var(--yellow);transition:left .4s"></div>
-        <div id="wls-crit-line"  style="position:absolute;top:0;bottom:0;width:2px;background:var(--red);transition:left .4s"></div>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 8px;pointer-events:none">
-          <span style="font-size:9px;font-weight:600;color:var(--green)">SAFE</span>
-          <span style="font-size:9px;font-weight:600;color:var(--yellow)" id="wls-warn-lbl">WARN</span>
-          <span style="font-size:9px;font-weight:600;color:var(--red)" id="wls-crit-lbl">DANGER</span>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start">
+
+      <!-- ══ TUBES COLUMN ══ -->
+      <div style="display:flex;gap:40px;flex-shrink:0">
+
+        <!-- SENSOR 1 -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+
+          <!-- Tube row: ruler + tube -->
+          <div style="display:flex;align-items:flex-start;gap:5px">
+            <!-- ruler (top=0.3m full, bottom=2.0m empty) -->
+            <div style="display:flex;flex-direction:column;justify-content:space-between;height:220px;padding:2px 0;text-align:right">
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">0.3m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">0.7m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">1.2m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">1.6m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">2.0m</span>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:space-between;height:220px;padding:2px 0">
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+            </div>
+            <!-- TUBE S1 — water fills from TOP, sensor at BOTTOM -->
+            <div id="wls-tube-wrap-s1"
+              style="width:68px;height:220px;border:2px solid #2b7de9;border-radius:10px 10px 6px 6px;position:relative;background:var(--bg);cursor:ns-resize;user-select:none"
+              title="Drag WARN or DANGER line">
+              <!-- water fills from top -->
+              <div id="wls-tube-s1"
+                style="position:absolute;top:0;left:0;right:0;height:0%;background:linear-gradient(180deg,#3b9de8,#bfdffa);transition:height 1.6s cubic-bezier(.34,1.2,.64,1);pointer-events:none;border-radius:8px 8px 0 0">
+                <div style="position:absolute;bottom:-3px;left:0;right:0;height:6px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);border-radius:50%;animation:wsurf 3s ease-in-out infinite"></div>
+                <div class="bbl" style="width:3px;height:3px;left:28%;animation-duration:2.6s;animation-direction:reverse"></div>
+                <div class="bbl" style="width:2px;height:2px;left:66%;animation-duration:3.3s;animation-delay:.9s;animation-direction:reverse"></div>
+              </div>
+              <!-- WARN line S1 — draggable, position from top -->
+              <div id="wls-drag-warn-s1" data-tube="s1" data-type="warn"
+                style="position:absolute;left:-2px;right:-2px;height:14px;top:30%;transform:translateY(-50%);cursor:ns-resize;z-index:10;display:flex;align-items:center">
+                <div style="position:absolute;left:0;right:0;height:3px;background:var(--yellow);border-radius:2px;box-shadow:0 0 6px rgba(201,154,10,.6)"></div>
+                <div style="position:absolute;left:-26px;top:50%;transform:translateY(-50%);background:var(--yellow);color:#7a5c00;font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none">WARN</div>
+                <div style="position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:10px;height:18px;background:var(--yellow);border-radius:3px;display:grid;place-items:center;pointer-events:none">
+                  <div style="width:6px;height:1px;background:rgba(0,0,0,.3);box-shadow:0 3px 0 rgba(0,0,0,.3)"></div>
+                </div>
+              </div>
+              <!-- DANGER line S1 — draggable -->
+              <div id="wls-drag-crit-s1" data-tube="s1" data-type="crit"
+                style="position:absolute;left:-2px;right:-2px;height:14px;top:10%;transform:translateY(-50%);cursor:ns-resize;z-index:11;display:flex;align-items:center">
+                <div style="position:absolute;left:0;right:0;height:3px;background:var(--red);border-radius:2px;box-shadow:0 0 6px rgba(220,53,69,.6)"></div>
+                <div style="position:absolute;left:-32px;top:50%;transform:translateY(-50%);background:var(--red);color:#fff;font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none">DANGER</div>
+                <div style="position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:10px;height:18px;background:var(--red);border-radius:3px;display:grid;place-items:center;pointer-events:none">
+                  <div style="width:6px;height:1px;background:rgba(255,255,255,.5);box-shadow:0 3px 0 rgba(255,255,255,.5)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- HC-SR04 sensor BELOW tube -->
+          <svg width="60" height="36" viewBox="0 0 60 36" style="filter:drop-shadow(0 -2px 5px rgba(43,125,233,.35));margin-top:2px">
+            <!-- signal waves going UP -->
+            <path d="M18 12 Q16 5 10 2"  stroke="#2b7de9" stroke-width="1.5" fill="none" opacity=".45" stroke-dasharray="2,2"/>
+            <path d="M30 12 L30 0"        stroke="#2b7de9" stroke-width="1.5" fill="none" opacity=".65" stroke-dasharray="2,2"/>
+            <path d="M42 12 Q44 5 50 2"  stroke="#2b7de9" stroke-width="1.5" fill="none" opacity=".45" stroke-dasharray="2,2"/>
+            <rect x="5" y="14" width="50" height="20" rx="5" fill="#2b7de9" stroke="#1a6dd8" stroke-width="1.2"/>
+            <rect x="11" y="18" width="10" height="11" rx="2.5" fill="#bfdffa" opacity=".85"/>
+            <rect x="39" y="18" width="10" height="11" rx="2.5" fill="#bfdffa" opacity=".85"/>
+            <text x="30" y="27" text-anchor="middle" font-size="6.5" fill="white" font-family="DM Mono,monospace" font-weight="700">HC-SR04</text>
+          </svg>
+          <!-- pulse dots below sensor -->
+          <div style="display:flex;gap:4px;margin-top:1px">
+            <div style="width:4px;height:4px;border-radius:50%;background:#2b7de9;animation:wlsPulse 1.2s ease-in-out infinite"></div>
+            <div style="width:4px;height:4px;border-radius:50%;background:#2b7de9;animation:wlsPulse 1.2s ease-in-out .25s infinite"></div>
+            <div style="width:4px;height:4px;border-radius:50%;background:#2b7de9;animation:wlsPulse 1.2s ease-in-out .5s infinite"></div>
+          </div>
+
+          <!-- Stats -->
+          <div style="text-align:center;margin-top:4px">
+            <div style="font-size:9px;font-weight:700;color:#2b7de9;letter-spacing:1px">SENSOR 1</div>
+            <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#2b7de9" id="wls-s1-pct">—%</div>
+            <div style="font-size:10px;color:var(--txt3)" id="wls-s1-m">— m depth</div>
+            <div style="font-size:9px;color:var(--txt3)" id="wls-s1-raw">dist: — cm</div>
+          </div>
+        </div>
+
+        <!-- SENSOR 2 -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+
+          <div style="display:flex;align-items:flex-start;gap:5px">
+            <div style="display:flex;flex-direction:column;justify-content:space-between;height:220px;padding:2px 0;text-align:right">
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">0.3m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">0.7m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">1.2m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">1.6m</span>
+              <span style="font-family:'DM Mono',monospace;font-size:7.5px;color:var(--txt3)">2.0m</span>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:space-between;height:220px;padding:2px 0">
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+              <div style="width:6px;height:1px;background:var(--border2)"></div>
+            </div>
+            <div id="wls-tube-wrap-s2"
+              style="width:68px;height:220px;border:2px solid #6f52d9;border-radius:10px 10px 6px 6px;position:relative;background:var(--bg);cursor:ns-resize;user-select:none">
+              <div id="wls-tube-s2"
+                style="position:absolute;top:0;left:0;right:0;height:0%;background:linear-gradient(180deg,#7c3aed,#d8b4fe);transition:height 1.6s cubic-bezier(.34,1.2,.64,1);pointer-events:none;border-radius:8px 8px 0 0">
+                <div style="position:absolute;bottom:-3px;left:0;right:0;height:6px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);border-radius:50%;animation:wsurf 3s ease-in-out infinite"></div>
+                <div class="bbl" style="width:3px;height:3px;left:38%;animation-duration:2.9s;animation-direction:reverse"></div>
+                <div class="bbl" style="width:2px;height:2px;left:72%;animation-duration:3.6s;animation-delay:1.1s;animation-direction:reverse"></div>
+              </div>
+              <div id="wls-drag-warn-s2" data-tube="s2" data-type="warn"
+                style="position:absolute;left:-2px;right:-2px;height:14px;top:30%;transform:translateY(-50%);cursor:ns-resize;z-index:10;display:flex;align-items:center">
+                <div style="position:absolute;left:0;right:0;height:3px;background:var(--yellow);border-radius:2px;box-shadow:0 0 6px rgba(201,154,10,.6)"></div>
+                <div style="position:absolute;left:-26px;top:50%;transform:translateY(-50%);background:var(--yellow);color:#7a5c00;font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none">WARN</div>
+                <div style="position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:10px;height:18px;background:var(--yellow);border-radius:3px;display:grid;place-items:center;pointer-events:none">
+                  <div style="width:6px;height:1px;background:rgba(0,0,0,.3);box-shadow:0 3px 0 rgba(0,0,0,.3)"></div>
+                </div>
+              </div>
+              <div id="wls-drag-crit-s2" data-tube="s2" data-type="crit"
+                style="position:absolute;left:-2px;right:-2px;height:14px;top:10%;transform:translateY(-50%);cursor:ns-resize;z-index:11;display:flex;align-items:center">
+                <div style="position:absolute;left:0;right:0;height:3px;background:var(--red);border-radius:2px;box-shadow:0 0 6px rgba(220,53,69,.6)"></div>
+                <div style="position:absolute;left:-32px;top:50%;transform:translateY(-50%);background:var(--red);color:#fff;font-size:8px;font-weight:800;padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none">DANGER</div>
+                <div style="position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:10px;height:18px;background:var(--red);border-radius:3px;display:grid;place-items:center;pointer-events:none">
+                  <div style="width:6px;height:1px;background:rgba(255,255,255,.5);box-shadow:0 3px 0 rgba(255,255,255,.5)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <svg width="60" height="36" viewBox="0 0 60 36" style="filter:drop-shadow(0 -2px 5px rgba(111,82,217,.35));margin-top:2px">
+            <path d="M18 12 Q16 5 10 2"  stroke="#6f52d9" stroke-width="1.5" fill="none" opacity=".45" stroke-dasharray="2,2"/>
+            <path d="M30 12 L30 0"        stroke="#6f52d9" stroke-width="1.5" fill="none" opacity=".65" stroke-dasharray="2,2"/>
+            <path d="M42 12 Q44 5 50 2"  stroke="#6f52d9" stroke-width="1.5" fill="none" opacity=".45" stroke-dasharray="2,2"/>
+            <rect x="5" y="14" width="50" height="20" rx="5" fill="#6f52d9" stroke="#5b3fc9" stroke-width="1.2"/>
+            <rect x="11" y="18" width="10" height="11" rx="2.5" fill="#d8b4fe" opacity=".85"/>
+            <rect x="39" y="18" width="10" height="11" rx="2.5" fill="#d8b4fe" opacity=".85"/>
+            <text x="30" y="27" text-anchor="middle" font-size="6.5" fill="white" font-family="DM Mono,monospace" font-weight="700">HC-SR04</text>
+          </svg>
+          <div style="display:flex;gap:4px;margin-top:1px">
+            <div style="width:4px;height:4px;border-radius:50%;background:#6f52d9;animation:wlsPulse 1.2s ease-in-out infinite"></div>
+            <div style="width:4px;height:4px;border-radius:50%;background:#6f52d9;animation:wlsPulse 1.2s ease-in-out .25s infinite"></div>
+            <div style="width:4px;height:4px;border-radius:50%;background:#6f52d9;animation:wlsPulse 1.2s ease-in-out .5s infinite"></div>
+          </div>
+
+          <div style="text-align:center;margin-top:4px">
+            <div style="font-size:9px;font-weight:700;color:#6f52d9;letter-spacing:1px">SENSOR 2</div>
+            <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#6f52d9" id="wls-s2-pct">—%</div>
+            <div style="font-size:10px;color:var(--txt3)" id="wls-s2-m">— m depth</div>
+            <div style="font-size:9px;color:var(--txt3)" id="wls-s2-raw">dist: — cm</div>
+          </div>
+        </div>
+
+      </div><!-- end tubes column -->
+
+      <!-- ══ SETTINGS COLUMN ══ -->
+      <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:14px">
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+          <div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;margin-bottom:10px">CURRENT THRESHOLDS</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:16px;height:3px;background:var(--yellow);border-radius:2px"></div>
+                <span style="font-size:12px;font-weight:600;color:var(--yellow)">WARNING</span>
+              </div>
+              <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--yellow)" id="wls-warn-display">70%</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:16px;height:3px;background:var(--red);border-radius:2px"></div>
+                <span style="font-size:12px;font-weight:600;color:var(--red)">DANGER</span>
+              </div>
+              <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--red)" id="wls-crit-display">90%</span>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:10px;color:var(--txt3);padding:7px 10px;background:var(--surface);border-radius:7px;border:1px solid var(--border)">
+            💡 Drag the lines on the tube. Sensor sits at the bottom pointing up. Water fills from top when level is high.
+          </div>
+        </div>
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+          <div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;margin-bottom:10px">SENSOR DISTANCE MAPPING</div>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:10px;line-height:1.5">
+            Sensor at bottom measures distance UP to water surface.<br>
+            <strong style="color:var(--blue)">Short distance = high water = 100%</strong>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div>
+              <div style="font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.8px;margin-bottom:4px">100% WHEN DISTANCE IS</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input class="de-input" type="number" id="wls-dist-full" min="1" step="1" placeholder="30" style="width:80px;padding:7px 10px;font-size:13px" oninput="updateWLSMapPreview()">
+                <span style="font-size:12px;color:var(--txt3)">cm → Tank full</span>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:600;color:var(--txt3);letter-spacing:.8px;margin-bottom:4px">0% WHEN DISTANCE IS</div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input class="de-input" type="number" id="wls-dist-empty" min="1" step="1" placeholder="200" style="width:80px;padding:7px 10px;font-size:13px" oninput="updateWLSMapPreview()">
+                <span style="font-size:12px;color:var(--txt3)">cm → Tank empty</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+          <div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;margin-bottom:10px">PRESSURE LIMITS</div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:1">
+              <div style="font-size:10px;color:var(--txt3);margin-bottom:4px">WARN (bar)</div>
+              <input class="de-input" type="number" id="wls-p-warn" min="0" step="0.1" placeholder="0.8" style="padding:7px 10px;font-size:13px">
+            </div>
+            <div style="flex:1">
+              <div style="font-size:10px;color:var(--txt3);margin-bottom:4px">MAX (bar)</div>
+              <input class="de-input" type="number" id="wls-p-max" min="0" step="0.1" placeholder="1.2" style="padding:7px 10px;font-size:13px">
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+          <div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;margin-bottom:6px">NOTES</div>
+          <textarea class="de-input de-textarea" id="wls-notes" placeholder="Configuration notes..." style="min-height:60px"></textarea>
+        </div>
+
+        <input type="hidden" id="wls-warn">
+        <input type="hidden" id="wls-crit">
+
+        <div class="de-status-bar" id="wls-sb" style="display:none"><span id="wls-sm"></span></div>
+        <div class="de-actions" style="justify-content:flex-start;gap:8px">
+          <button class="de-btn de-btn-ghost" onclick="resetWLS()">🔄 Reset</button>
+          <button class="de-btn de-btn-primary" onclick="saveWLS()">💾 Save Settings</button>
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-top:3px;padding:0 2px">
-        <span style="font-size:9px;color:var(--txt3)">0%</span>
-        <span style="font-size:9px;color:var(--txt3)">100%</span>
-      </div>
+
     </div>
 
-    <div class="de-status-bar" id="wls-sb" style="display:none"><span id="wls-sm"></span></div>
-    <div class="de-actions">
-      <button class="de-btn de-btn-ghost" onclick="resetWLS()">🔄 Reset to Default</button>
-      <button class="de-btn de-btn-primary" onclick="saveWLS()">💾 Save Settings</button>
-    </div>
-  </div>
-
-  <!-- Pressure settings -->
-  <div class="de-card">
-    <div class="de-card-title"><span class="de-card-ico">🔧</span> Pressure Limits</div>
-    <div class="de-grid">
-      <div class="de-field">
-        <label class="de-label">PRESSURE WARNING <span class="de-unit">(bar)</span></label>
-        <input class="de-input" type="number" id="wls-p-warn" min="0" step="0.1" placeholder="e.g. 0.8">
-      </div>
-      <div class="de-field">
-        <label class="de-label">PRESSURE MAX <span class="de-unit">(bar)</span></label>
-        <input class="de-input" type="number" id="wls-p-max" min="0" step="0.1" placeholder="e.g. 1.2">
-      </div>
-      <div class="de-field de-full">
-        <label class="de-label">NOTES</label>
-        <textarea class="de-input de-textarea" id="wls-notes" placeholder="Notes about this configuration..."></textarea>
-      </div>
-    </div>
-    <div class="de-actions">
-      <button class="de-btn de-btn-primary" onclick="saveWLS()">💾 Save All Settings</button>
-    </div>
+    <style>
+      @keyframes wlsPulse { 0%,100%{opacity:.2;transform:scale(.8)} 50%{opacity:1;transform:scale(1.2)} }
+    </style>
   </div>
 </div>`;
 }
@@ -1835,75 +1897,117 @@ function initWaterLevelSetting() {
 
   // Load saved settings
   const saved = JSON.parse(localStorage.getItem('wls_settings') || '{}');
-  const defaults = { warn:70, crit:90, min:10, max:100, pWarn:0.8, pMax:1.2, notes:'' };
+  const defaults = { warn:70, crit:90, pWarn:0.8, pMax:1.2, notes:'', distFull:30, distEmpty:200 };
   const cfg = { ...defaults, ...saved };
 
-  document.getElementById('wls-warn').value  = cfg.warn;
-  document.getElementById('wls-crit').value  = cfg.crit;
-  document.getElementById('wls-min').value   = cfg.min;
-  document.getElementById('wls-max').value   = cfg.max;
-  document.getElementById('wls-p-warn').value = cfg.pWarn;
-  document.getElementById('wls-p-max').value  = cfg.pMax;
-  document.getElementById('wls-notes').value  = cfg.notes;
+  // Apply to hidden inputs & display
+  _wlsSetThreshold('warn', cfg.warn);
+  _wlsSetThreshold('crit', cfg.crit);
+  document.getElementById('wls-dist-full').value  = cfg.distFull;
+  document.getElementById('wls-dist-empty').value = cfg.distEmpty;
+  document.getElementById('wls-p-warn').value     = cfg.pWarn;
+  document.getElementById('wls-p-max').value      = cfg.pMax;
+  document.getElementById('wls-notes').value      = cfg.notes;
 
-  // Live preview on input
-  ['wls-warn','wls-crit'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateWLSPreview);
-  });
-  updateWLSPreview();
-
-  // Load current readings
+  updateWLSMapPreview();
+  initWLSDrag();
   refreshWLSReadings();
 }
 
-function updateWLSPreview() {
-  const warn = +(document.getElementById('wls-warn')?.value || 70);
-  const crit = +(document.getElementById('wls-crit')?.value || 90);
-  const wPct = Math.min(warn, 100);
-  const cPct = Math.min(crit, 100);
+// ── Set a threshold value and update all visuals ──────────────
+function _wlsSetThreshold(type, pct) {
+  pct = Math.round(Math.max(0, Math.min(100, pct)));
+  const input = document.getElementById('wls-' + type);
+  if (input) input.value = pct;
 
-  const safeZ  = document.getElementById('wls-safe-zone');
-  const warnZ  = document.getElementById('wls-warn-zone');
-  const critZ  = document.getElementById('wls-crit-zone');
-  const warnL  = document.getElementById('wls-warn-line');
-  const critL  = document.getElementById('wls-crit-line');
-  const warnLbl = document.getElementById('wls-warn-lbl');
-  const critLbl = document.getElementById('wls-crit-lbl');
+  const display = document.getElementById('wls-' + type + '-display');
+  if (display) display.textContent = pct + '%';
 
-  if (safeZ) safeZ.style.width = wPct + '%';
-  if (warnZ) { warnZ.style.left = wPct + '%'; warnZ.style.width = Math.max(0, cPct - wPct) + '%'; }
-  if (critZ) critZ.style.left = cPct + '%';
-  if (warnL) warnL.style.left = wPct + '%';
-  if (critL) critL.style.left = cPct + '%';
-  if (warnLbl) warnLbl.style.left = wPct + '%';
-  if (critLbl) critLbl.style.left = cPct + '%';
+  // Tube is now top-to-bottom: 100% = line near top, 0% = line near bottom
+  // top% = (100 - pct)%
+  ['s1','s2'].forEach(s => {
+    const el = document.getElementById('wls-drag-' + type + '-' + s);
+    if (el) el.style.top = (100 - pct) + '%';
+  });
+}
+
+// ── Drag logic (top-based) ─────────────────────────────────────
+function initWLSDrag() {
+  ['s1','s2'].forEach(sensor => {
+    ['warn','crit'].forEach(type => {
+      const handle = document.getElementById('wls-drag-' + type + '-' + sensor);
+      const tube   = document.getElementById('wls-tube-wrap-' + sensor);
+      if (!handle || !tube) return;
+
+      let dragging = false;
+
+      const onMove = (clientY) => {
+        const rect = tube.getBoundingClientRect();
+        const relY = clientY - rect.top;
+        // relY=0 → top → 100%, relY=height → bottom → 0%
+        let pct = Math.round((1 - relY / rect.height) * 100);
+        pct = Math.max(0, Math.min(100, pct));
+
+        const warnVal = +document.getElementById('wls-warn').value || 0;
+        const critVal = +document.getElementById('wls-crit').value || 100;
+        if (type === 'warn' && pct >= critVal) pct = critVal - 1;
+        if (type === 'crit' && pct <= warnVal) pct = warnVal + 1;
+
+        _wlsSetThreshold(type, pct);
+      };
+
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault(); dragging = true; document.body.style.cursor = 'ns-resize';
+      });
+      document.addEventListener('mousemove', e => { if (dragging) onMove(e.clientY); });
+      document.addEventListener('mouseup', () => {
+        if (dragging) { dragging = false; document.body.style.cursor = ''; }
+      });
+      handle.addEventListener('touchstart', e => { e.preventDefault(); dragging = true; }, { passive: false });
+      document.addEventListener('touchmove', e => {
+        if (dragging) { e.preventDefault(); onMove(e.touches[0].clientY); }
+      }, { passive: false });
+      document.addEventListener('touchend', () => { dragging = false; });
+    });
+  });
+}
+
+function updateWLSPreview() { /* kept for compatibility — drag handles update directly */ }
+
+function updateWLSMapPreview() {
+  const full  = +(document.getElementById('wls-dist-full')?.value  || 30);
+  const empty = +(document.getElementById('wls-dist-empty')?.value || 200);
+  // Optionally refresh readings with new mapping
+  refreshWLSReadings();
 }
 
 function saveWLS() {
-  const warn  = +document.getElementById('wls-warn')?.value;
-  const crit  = +document.getElementById('wls-crit')?.value;
-  if (!warn || !crit) { showWLSSt('error', '❌ Please fill in Warning and Danger levels!'); return; }
-  if (warn >= crit)   { showWLSSt('error', '❌ Warning level must be lower than Danger level!'); return; }
+  const warn      = +document.getElementById('wls-warn')?.value;
+  const crit      = +document.getElementById('wls-crit')?.value;
+  const distFull  = +document.getElementById('wls-dist-full')?.value;
+  const distEmpty = +document.getElementById('wls-dist-empty')?.value;
+
+  if (!warn || !crit)        { showWLSSt('error', '❌ Threshold values missing — drag the lines first!'); return; }
+  if (warn >= crit)          { showWLSSt('error', '❌ Warning must be lower than Danger!'); return; }
+  if (!distFull || !distEmpty) { showWLSSt('error', '❌ Fill in both distance values!'); return; }
+  if (distFull >= distEmpty) { showWLSSt('error', '❌ Full distance must be less than Empty distance!'); return; }
 
   const cfg = {
-    warn, crit,
-    min:   +document.getElementById('wls-min')?.value  || 10,
-    max:   +document.getElementById('wls-max')?.value  || 100,
+    warn, crit, distFull, distEmpty,
     pWarn: +document.getElementById('wls-p-warn')?.value || 0.8,
     pMax:  +document.getElementById('wls-p-max')?.value  || 1.2,
-    notes: document.getElementById('wls-notes')?.value || '',
+    notes: document.getElementById('wls-notes')?.value   || '',
     savedAt: new Date().toISOString(),
   };
   localStorage.setItem('wls_settings', JSON.stringify(cfg));
-  showWLSSt('success', '✅ Settings saved successfully!');
-  updateWLSPreview();
+  showWLSSt('success', '✅ Settings saved!');
 }
 
 function resetWLS() {
   if (!confirm('Reset all settings to default values?')) return;
   localStorage.removeItem('wls_settings');
   initWaterLevelSetting();
-  showWLSSt('success', '✅ Reset to default values.');
+  showWLSSt('success', '✅ Reset to defaults.');
 }
 
 function showWLSSt(type, msg) {
@@ -1917,11 +2021,29 @@ async function refreshWLSReadings() {
   try {
     const j = await (await fetch('/api/iot/water-level')).json();
     if (j.success && j.data?.length) {
-      const d = j.data[0];
-      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; };
-      set('wls-s1', d.s1); set('wls-s2', d.s2); set('wls-p1', d.p1); set('wls-p2', d.p2);
+      const d        = j.data[0];
+      const cfg      = JSON.parse(localStorage.getItem('wls_settings') || '{}');
+      const distFull  = cfg.distFull  || 30;
+      const distEmpty = cfg.distEmpty || 200;
+      const totalRange = distEmpty - distFull;
+
+      ['s1','s2'].forEach(key => {
+        const rawPct = +(d[key] ?? 0);
+        const distCm = distEmpty - (rawPct / 100) * totalRange;
+        const waterM = ((distEmpty - distCm) / 100).toFixed(2);
+
+        const tube = document.getElementById('wls-tube-' + key);
+        if (tube) tube.style.height = rawPct + '%'; // fills from top via CSS (top:0)
+
+        const pel = document.getElementById('wls-' + key + '-pct');
+        const mel = document.getElementById('wls-' + key + '-m');
+        const rel = document.getElementById('wls-' + key + '-raw');
+        if (pel) pel.textContent = rawPct + '%';
+        if (mel) mel.textContent = waterM + ' m depth';
+        if (rel) rel.textContent = 'dist: ' + distCm.toFixed(0) + ' cm';
+      });
     }
-  } catch { /* silent fail - ESP may not be connected */ }
+  } catch { /* silent — ESP may not be connected */ }
 }
 
 function initReportingForm() {

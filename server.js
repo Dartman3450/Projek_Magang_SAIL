@@ -6,6 +6,8 @@ require('dotenv').config();
 
 const iotRoutes  = require('./routes/iotRoutes');
 const authRoutes = require('./routes/auth.route');
+const projectsRoute = require('./routes/projects.route');
+
 const { poolIoT } = require('./db');
 
 const app = express();
@@ -18,6 +20,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use('/api/iot',  iotRoutes);
 app.use("/api/webauthn", require("./routes/webauthn.route"));
 app.use("/api/auth", require("./routes/auth.route"));
+app.use('/api/projects', projectsRoute);
 
 const MQTT_BROKER = process.env.MQTT_BROKER || 'mqtt://192.168.0.211';
 
@@ -183,9 +186,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server SAIL berjalan di http://localhost:${PORT}`);
 });
-
-const ALLOWED_IPS = [
-  '127.0.0.1',          // localhost (your own PC via browser)q
-  '::1',                // localhost IPv6
-  '192.168.0.131',     // your PC (WiFi)
-];

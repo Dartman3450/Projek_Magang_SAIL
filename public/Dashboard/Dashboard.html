@@ -524,15 +524,15 @@
   </div>
   <nav class="nav">
     <div class="nav-section-label">Main Menu</div>
-    <div class="nav-item active" onclick="loadPage('iot')"><span class="ico">📡</span> Dashboard IoT</div>
+    <div class="nav-item active" onclick="loadPage('iot')" data-page="iot"><span class="ico">📡</span> Dashboard IoT</div>
 
-    <div class="nav-section-label">Project</div>
-    <div class="nav-group">
+    <div class="nav-section-label" data-section="project">Project</div>
+    <div class="nav-group" data-section="project">
       <div class="nav-group-head" onclick="toggleNav(this)"><span class="ico">📋</span><span>Project Activity</span><span class="arr">▾</span></div>
       <div class="nav-sub">
-        <div class="nav-sub-item" onclick="loadPage('recent')">Recent Project</div>
-        <div class="nav-sub-item" onclick="loadPage('completed')">Completed Project</div>
-        <div class="nav-sub-item" onclick="loadPage('ongoing')">On Going Project</div>
+        <div class="nav-sub-item" onclick="loadPage('recent')"    data-page="recent">Recent Project</div>
+        <div class="nav-sub-item" onclick="loadPage('completed')" data-page="completed">Completed Project</div>
+        <div class="nav-sub-item" onclick="loadPage('ongoing')"   data-page="ongoing">On Going Project</div>
       </div>
     </div>
 
@@ -540,21 +540,22 @@
     <div class="nav-group">
       <div class="nav-group-head" onclick="toggleNav(this)"><span class="ico">🗄️</span><span>Data &amp; Information</span><span class="arr">▾</span></div>
       <div class="nav-sub">
-        <div class="nav-sub-item" onclick="loadPage('production')">Data Entry Production</div>
-        <div class="nav-sub-item" onclick="loadPage('utility')">Data Entry Utility</div>
-        <div class="nav-sub-item" onclick="loadPage('laboratorium')">Data Entry Laboratorium</div>
-        <div class="nav-sub-item" onclick="loadPage('limbah')">Data Entry Limbah</div>
+        <div class="nav-sub-item" onclick="loadPage('production')"   data-page="production">Data Entry Production</div>
+        <div class="nav-sub-item" onclick="loadPage('utility')"      data-page="utility">Data Entry Utility</div>
+        <div class="nav-sub-item" onclick="loadPage('laboratorium')" data-page="laboratorium">Data Entry Laboratorium</div>
+        <div class="nav-sub-item" onclick="loadPage('limbah')"       data-page="limbah">Data Entry Limbah</div>
       </div>
     </div>
 
-    <div class="nav-item" onclick="loadPage('reporting')"><span class="ico">📊</span> Reporting</div>
+    <div class="nav-item" onclick="loadPage('reporting')" data-page="reporting"><span class="ico">📊</span> Reporting</div>
 
     <div class="nav-section-label">Settings</div>
     <div class="nav-group">
       <div class="nav-group-head" onclick="toggleNav(this)"><span class="ico">⚙️</span><span>Settings</span><span class="arr">▾</span></div>
       <div class="nav-sub">
-        <div class="nav-sub-item" onclick="loadPage('change-password')">Change Password</div>
-        <div class="nav-sub-item" onclick="loadPage('water-level-setting')">Change Water Level</div>
+        <div class="nav-sub-item" onclick="loadPage('change-password')"       data-page="change-password">Change Password</div>
+        <div class="nav-sub-item" onclick="loadPage('water-level-setting')"   data-page="water-level-setting">Change Water Level</div>
+        <div class="nav-sub-item" onclick="loadPage('tank-dimension-setting')" data-page="tank-dimension-setting">Change Containers Volume</div>
       </div>
     </div>
   </nav>
@@ -610,6 +611,15 @@ function toggleNav(el) {
   el.nextElementSibling.classList.toggle('show');
 }
 
+// ── Role-based access control ──────────────────────────────────────
+const ROLE_ACCESS = {
+  admin:     null, // null = all pages allowed
+  scientist: ['iot', 'laboratorium', 'reporting', 'change-password'],
+  utility:   ['iot', 'utility',      'reporting', 'change-password'],
+  limbah: ['iot', 'limbah',      'reporting', 'change-password'],
+};
+// ───────────────────────────────────────────────────────────────────
+
 function loadPage(page) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const map = {
@@ -625,6 +635,7 @@ function loadPage(page) {
     'change-email':['Change Email','SAIL / Setting / Email'],
     'change-password':['Change Password','SAIL / Setting / Password'],
     'water-level-setting':['Water Level Setting','SAIL / Setting / Water Level'],
+    'tank-dimension-setting':['Change Containers Volume','SAIL / Setting / Sensor Manager'],
   };
   const [title, crumb] = map[page] || [page,'SAIL'];
   set('page-title', title);
@@ -651,6 +662,9 @@ function loadPage(page) {
   } else if (page === 'water-level-setting') {
     content.innerHTML = getWaterLevelSettingHTML();
     initWaterLevelSetting();
+  } else if (page === 'tank-dimension-setting') {
+    content.innerHTML = getTankDimensionHTML();
+    initTankDimensionSetting();
   } else if (page === 'reporting') {
     content.innerHTML = getReporting();
     initReportingForm();
@@ -769,13 +783,13 @@ function showOverlays(show) {
 function renderIoT(content) {
   content.innerHTML = getIoTHTML();
   initWidgets();
+  renderTankCards();   // build dynamic tanks from localStorage
   fetchSummary();
   if (window._poll) clearInterval(window._poll);
   window._poll = setInterval(() => {
-    if (!$('wl-val')) { clearInterval(window._poll); return; }
+    if (!$('wl-status')) { clearInterval(window._poll); window._poll = null; return; }
     fetchSummary();
-    // table removed — data via detail drawer
-  }, 30000);
+  }, 5000); // refresh every 5 seconds
 }
 
 function getIoTHTML() {
@@ -789,34 +803,30 @@ function getIoTHTML() {
   return `
   <div class="sensor-grid">
 
-    <!-- TANGKI AIR -->
+    <!-- TANGKI AIR — DYNAMIC MULTI SENSOR -->
     <div class="s-card" style="--acc:var(--blue)">
       <div class="s-bar"></div>
       ${ov.replace('ov-ID','ov-wl')}
       <div class="s-label">Water Level</div>
-      <div class="s-header">
-        <div>
-          <div class="s-num" id="wl-val">—</div>
-          <div class="s-unit">cm</div>
-          <div class="s-pill st-wait" id="wl-status">—</div>
-        <button class="s-detail-btn" onclick="openDetail('water-level')">Detail ↗</button>
-        </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="s-pill st-wait" id="wl-status" style="margin:0">—</div>
+        <button class="s-detail-btn" style="position:static" onclick="openDetail('water-level')">Detail ↗</button>
       </div>
-      <div class="s-viz tank-wrap">
-        <div class="tank-col">
-          <div class="tank">
-            <div class="tank-water" id="tank-water" style="height:0%">
-              <div class="bbl" style="width:4px;height:4px;left:22%;animation-duration:2.8s"></div>
-              <div class="bbl" style="width:3px;height:3px;left:58%;animation-duration:3.2s;animation-delay:1s"></div>
-            </div>
-          </div>
-          <div class="tank-pct" id="tank-pct">—</div>
+      <!-- tanks rendered dynamically by renderTankCards() -->
+      <div id="wl-tanks-container" style="display:flex;gap:8px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap;min-height:130px"></div>
+      <!-- volume summary -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:9px;font-weight:700;color:var(--txt3);letter-spacing:1px">TOTAL VOLUME</span>
+          <span style="font-size:9px;color:var(--txt3)" id="wl-time">—</span>
         </div>
-        <div class="tank-ruler"><span>MAX</span><span>75</span><span>50</span><span>25</span><span>0</span></div>
-        <div class="s-rows">
-          <div class="irow"><span class="ik">LEVEL</span><span class="iv" id="wl-level">—</span></div>
-          <div class="irow"><span class="ik">PERCENT</span><span class="iv" id="wl-pct2">—</span></div>
-          <div class="irow"><span class="ik">UPDATE</span><span class="iv" id="wl-time">—</span></div>
+        <div id="wl-vol-rows" style="display:flex;flex-direction:column;gap:3px"></div>
+        <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:9px;font-weight:700;color:var(--txt3)">GRAND TOTAL</span>
+          <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--txt)" id="wl-vol-total">— L</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:4px">
+          <button onclick="loadPage('tank-dimension-setting')" style="font-size:9px;padding:2px 10px;background:#ebf2fd;border:1px solid #c3d9fa;border-radius:5px;color:var(--blue);font-weight:600;cursor:pointer;font-family:inherit">⚙ Kelola Sensor</button>
         </div>
       </div>
     </div>
@@ -1072,15 +1082,98 @@ function showOverlays(show) {
 }
 
 // ── Apply data ──────────────────────────────────────
+// ── SENSOR COLOR PALETTE ─────────────────────────────────
+const SENSOR_COLORS = [
+  { border:'#2b7de9', water:'linear-gradient(180deg,#bfdffa,#3b9de8)', text:'var(--blue)',   label:'#2b7de9' },
+  { border:'#7c3aed', water:'linear-gradient(180deg,#d8b4fe,#7c3aed)', text:'var(--purple)', label:'#7c3aed' },
+  { border:'#18a96a', water:'linear-gradient(180deg,#6ee7b7,#059669)', text:'var(--green)',  label:'#18a96a' },
+  { border:'#e07b2a', water:'linear-gradient(180deg,#fdba74,#c2410c)', text:'var(--orange)', label:'#e07b2a' },
+  { border:'#c99a0a', water:'linear-gradient(180deg,#fde68a,#b45309)', text:'var(--yellow)', label:'#c99a0a' },
+  { border:'#dc3545', water:'linear-gradient(180deg,#fca5a5,#b91c1c)', text:'var(--red)',    label:'#dc3545' },
+];
+
+function getSensors() {
+  const saved = localStorage.getItem('tank_sensors');
+  if (saved) return JSON.parse(saved);
+  // Default: 2 sensors
+  return [
+    { id:'s1', name:'Sensor 1', key:'s1', panjang:1, lebar:1, tinggi:1 },
+    { id:'s2', name:'Sensor 2', key:'s2', panjang:1, lebar:1, tinggi:1 },
+  ];
+}
+
+function renderTankCards() {
+  const container = document.getElementById('wl-tanks-container');
+  if (!container) return;
+  const sensors = getSensors();
+  container.innerHTML = sensors.map((s, i) => {
+    const col = SENSOR_COLORS[i % SENSOR_COLORS.length];
+    return `
+      <div style="flex:1;min-width:70px;display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-size:8px;font-weight:700;color:${col.label};letter-spacing:.8px;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.name.toUpperCase()}</div>
+        <div style="display:flex;align-items:flex-end;gap:3px">
+          <div class="tank" style="border-color:${col.border};width:42px;height:90px">
+            <div id="tank-water-${s.id}" style="position:absolute;bottom:0;left:0;right:0;background:${col.water};height:0%;transition:height 1.8s cubic-bezier(.34,1.2,.64,1)">
+              <div class="bbl" style="width:3px;height:3px;left:25%;animation-duration:${2.5+i*.3}s"></div>
+              <div class="bbl" style="width:2px;height:2px;left:65%;animation-duration:${3+i*.2}s;animation-delay:.8s"></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;justify-content:space-between;height:90px;padding:1px 0">
+            <span style="font-family:'DM Mono',monospace;font-size:6px;color:var(--txt3)">MAX</span>
+            <span style="font-family:'DM Mono',monospace;font-size:6px;color:var(--txt3)">50</span>
+            <span style="font-family:'DM Mono',monospace;font-size:6px;color:var(--txt3)">0</span>
+          </div>
+        </div>
+        <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:8px;color:${col.label}">—</div>
+        <div id="tank-vol-${s.id}" style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:${col.label}">— L</div>
+        <div style="font-size:7px;color:var(--txt3)">${s.panjang}×${s.lebar}×${s.tinggi}m</div>
+      </div>
+      ${i < sensors.length - 1 ? '<div style="width:1px;height:70px;background:var(--border);align-self:center"></div>' : ''}
+    `;
+  }).join('');
+}
+
 function applyWL(wl) {
-  if(!wl) return;
-  const v = +(wl.s1 ?? wl.tinggi_air ?? wl.water_level ?? 0);
-  const pct = clamp(v, 0, 100); // s1 is already 0-100%
-  set('wl-val', v); set('wl-level', v+'%');
-  set('wl-pct2', pct+'%'); set('wl-time', fmtT(wl.created_at));
-  set('tank-pct', pct+'%');
-  const tw=$('tank-water'); if(tw) tw.style.height=pct+'%';
-  pill('wl-status', v, 70, 90);
+  if (!wl) return;
+  set('wl-time', fmtT(wl.created_at));
+  const sensors = getSensors();
+  let grandTotal = 0;
+  let sumPct = 0;
+  const volRows = document.getElementById('wl-vol-rows');
+  const volRowsHTML = [];
+
+  sensors.forEach((s, i) => {
+    // Get value: try s.key from wl data (s1, s2, s3...) fallback to first available
+    const raw = wl[s.key] ?? wl['s'+(i+1)] ?? wl.tinggi_air ?? wl.water_level ?? 0;
+    const pct = clamp(+raw, 0, 100);
+    sumPct += pct;
+
+    // Update tank visual
+    const tw = document.getElementById('tank-water-' + s.id);
+    if (tw) tw.style.height = pct + '%';
+    const tp = document.getElementById('tank-pct-' + s.id);
+    if (tp) tp.textContent = pct + '%';
+
+    // Compute volume
+    const liter = Math.round(+(s.panjang||1) * +(s.lebar||1) * +(s.tinggi||1) * 1000);
+    const vol   = Math.round(liter * pct / 100);
+    grandTotal += vol;
+    const tv = document.getElementById('tank-vol-' + s.id);
+    if (tv) tv.textContent = vol.toLocaleString('id-ID') + ' L';
+
+    const col = SENSOR_COLORS[i % SENSOR_COLORS.length];
+    volRowsHTML.push(`
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:9px;color:${col.label};font-weight:600">${s.name}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--txt)">${vol.toLocaleString('id-ID')} L <span style="color:var(--txt3);font-size:8px">(${pct}%)</span></span>
+      </div>`);
+  });
+
+  if (volRows) volRows.innerHTML = volRowsHTML.join('');
+  set('wl-vol-total', grandTotal.toLocaleString('id-ID') + ' L');
+
+  const avg = sensors.length ? sumPct / sensors.length : 0;
+  pill('wl-status', avg, 70, 90);
 }
 
 function applyWF(wf) {
@@ -1209,20 +1302,43 @@ function closeLogout() {
   document.getElementById('logout-modal').style.display   = 'none';
 }
 function doLogout() {
-  // User confirmed — clear session data from browser
   localStorage.removeItem('isLoggedin');
   localStorage.removeItem('user_id');
   localStorage.removeItem('email');
-  // Redirect to logout success page (which then has a button to go back to login)
+  localStorage.removeItem('role');
   window.location.href = '../Dashboard/Logout_Success.html';
 }
 
-window._poll = setInterval(() => {
-    if (!$('wl-val')) { clearInterval(window._poll); return; }
-    fetchSummary();
-  }, 5000);  
+// ── Hide nav items the current role cannot access ──
+function filterNav() {
+  const role  = localStorage.getItem('role') || 'admin';
+  const allow = ROLE_ACCESS[role]; // null = admin, sees everything
+  if (!allow) return;              // admin — nothing to hide
+
+  // Hide individual nav items (sub-items and top-level items)
+  document.querySelectorAll('[data-page]').forEach(el => {
+    const page = el.getAttribute('data-page');
+    if (!allow.includes(page)) {
+      el.style.display = 'none';
+    }
+  });
+
+  // If ALL sub-items in a nav-group are hidden, hide the whole group + its section label
+  document.querySelectorAll('.nav-group').forEach(group => {
+    const visibleItems = group.querySelectorAll('.nav-sub-item:not([style*="display: none"])');
+    if (visibleItems.length === 0) {
+      group.style.display = 'none';
+      // Also hide the section label before this group
+      const prev = group.previousElementSibling;
+      if (prev && prev.classList.contains('nav-section-label')) {
+        prev.style.display = 'none';
+      }
+    }
+  });
+}
 
 // ══ BOOT ════════════════════════════════════════════
+filterNav();
 loadPage('iot');
 
 // ═══════════════════════════════════════════════════════════
@@ -1439,75 +1555,173 @@ function getProjectHTML(type,title){return`<div class="proj-wrap">
   </div>
   <div class="proj-det-body" id="pd-bd-${type}"></div>
 </div>`;}
-function initProjectPage(t){const d=document.getElementById('pf-st-'+t);if(d)d.value=new Date().toISOString().split('T')[0];renderPJ(t);}
-const gPJ=t=>JSON.parse(localStorage.getItem('pj_'+t)||'[]');
-const sPJ=(t,l)=>localStorage.setItem('pj_'+t,JSON.stringify(l));
-function renderPJ(type){
-  const list=document.getElementById('pl-'+type),cnt=document.getElementById('pc-'+type);
-  const q=(document.getElementById('ps-'+type)?.value||'').toLowerCase();
-  if(!list)return;
-  let ps=gPJ(type);if(q)ps=ps.filter(p=>p.name.toLowerCase().includes(q));
-  if(cnt)cnt.textContent=ps.length+' project'+(ps.length!==1?'s':'');
-  if(!ps.length){list.innerHTML=`<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q?'No projects match.':'No projects yet — click ＋ to add one!'}</div>`;return;}
-  const col={ongoing:'var(--blue)',recent:'var(--orange)',completed:'var(--green)'};
-  const lbl={ongoing:'ON GOING',recent:'RECENT',completed:'DONE'};
-  list.innerHTML=ps.map((p,i)=>`
-    <div class="proj-card" style="--acc:${col[type]||'var(--blue)'}" onclick="openPD('${type}',${i})">
-      <div class="proj-card-icon">📋</div>
-      <div class="proj-card-body">
-        <div class="proj-card-name">${p.name}</div>
-        <div class="proj-card-meta"><span>📅 ${p.start||'—'}</span><span>🏁 ${p.end||'—'}</span></div>
-        <div class="proj-progress-track"><div class="proj-progress-fill" style="width:${p.progress||0}%"></div></div>
-        <div class="proj-progress-label"><span>Progress</span><span>${p.progress||0}%</span></div>
-      </div>
-      <span class="proj-status ${type}">${lbl[type]}</span>
-      <span class="proj-card-arrow">›</span>
-    </div>`).join('');
+// ── Project page cache (avoids re-fetching while drawer is open) ──
+const _pjCache = {}; // { type: [ ...projects ] }
+
+function initProjectPage(t) {
+  const d = document.getElementById('pf-st-' + t);
+  if (d) d.value = new Date().toISOString().split('T')[0];
+  renderPJ(t);
 }
-function openAPJ(t){document.getElementById('pmo-'+t).classList.add('show');}
-function closeAPJ(t){
-  document.getElementById('pmo-'+t).classList.remove('show');
-  ['pf-nm-','pf-st-','pf-en-','pf-mat-','pf-tl-','pf-nt-'].forEach(f=>{const el=document.getElementById(f+t);if(el)el.value='';});
-  const r=document.getElementById('pr-'+t);if(r)r.value=0;
-  const l=document.getElementById('pp-'+t);if(l)l.textContent='0%';
-  const b=document.getElementById('psb-'+t);if(b)b.style.display='none';
+
+// ── Load projects from API ────────────────────────────────────────
+async function renderPJ(type) {
+  const list = document.getElementById('pl-' + type);
+  const cnt  = document.getElementById('pc-' + type);
+  const q    = (document.getElementById('ps-' + type)?.value || '').toLowerCase();
+  if (!list) return;
+
+  // Show loading state
+  list.innerHTML = '<div class="proj-empty" style="color:var(--txt3)">⏳ Loading projects...</div>';
+
+  try {
+    const res = await fetch('/api/projects?type=' + type);
+    const j   = await res.json();
+    if (!j.success) throw new Error(j.message);
+
+    // Cache result so openPD can look up by id
+    _pjCache[type] = j.data;
+
+    let ps = j.data;
+    if (q) ps = ps.filter(p => p.name.toLowerCase().includes(q));
+
+    if (cnt) cnt.textContent = ps.length + ' project' + (ps.length !== 1 ? 's' : '');
+
+    if (!ps.length) {
+      list.innerHTML = `<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q ? 'No projects match.' : 'No projects yet — click ＋ to add one!'}</div>`;
+      return;
+    }
+
+    const col = { ongoing: 'var(--blue)', recent: 'var(--orange)', completed: 'var(--green)' };
+    const lbl = { ongoing: 'ON GOING', recent: 'RECENT', completed: 'DONE' };
+
+    list.innerHTML = ps.map(p => `
+      <div class="proj-card" style="--acc:${col[type] || 'var(--blue)'}" onclick="openPD('${type}','${p.id}')">
+        <div class="proj-card-icon">📋</div>
+        <div class="proj-card-body">
+          <div class="proj-card-name">${p.name}</div>
+          <div class="proj-card-meta">
+            <span>📅 ${p.start_date || '—'}</span>
+            <span>🏁 ${p.end_date || '—'}</span>
+          </div>
+          <div class="proj-progress-track"><div class="proj-progress-fill" style="width:${p.progress || 0}%"></div></div>
+          <div class="proj-progress-label"><span>Progress</span><span>${p.progress || 0}%</span></div>
+        </div>
+        <span class="proj-status ${type}">${lbl[type]}</span>
+        <span class="proj-card-arrow">›</span>
+      </div>`).join('');
+
+  } catch (err) {
+    list.innerHTML = `<div class="proj-empty" style="color:var(--red)">❌ Failed to load: ${err.message}</div>`;
+  }
 }
-function submitPJ(t){
-  const name=document.getElementById('pf-nm-'+t)?.value.trim();
-  if(!name){showPSt(t,'error','❌ Project title is required!');return;}
-  const p={name,start:document.getElementById('pf-st-'+t)?.value,end:document.getElementById('pf-en-'+t)?.value,
-    materials:document.getElementById('pf-mat-'+t)?.value.trim(),tools:document.getElementById('pf-tl-'+t)?.value.trim(),
-    progress:+(document.getElementById('pr-'+t)?.value||0),notes:document.getElementById('pf-nt-'+t)?.value.trim(),
-    created_at:new Date().toISOString()};
-  const l=gPJ(t);l.unshift(p);sPJ(t,l);
-  showPSt(t,'success','✅ Project saved!');setTimeout(()=>{closeAPJ(t);renderPJ(t);},900);
+
+// ── Add project modal ─────────────────────────────────────────────
+function openAPJ(t) { document.getElementById('pmo-' + t).classList.add('show'); }
+
+function closeAPJ(t) {
+  document.getElementById('pmo-' + t).classList.remove('show');
+  ['pf-nm-', 'pf-st-', 'pf-en-', 'pf-mat-', 'pf-tl-', 'pf-nt-'].forEach(f => {
+    const el = document.getElementById(f + t); if (el) el.value = '';
+  });
+  const r = document.getElementById('pr-' + t); if (r) r.value = 0;
+  const l = document.getElementById('pp-' + t); if (l) l.textContent = '0%';
+  const b = document.getElementById('psb-' + t); if (b) b.style.display = 'none';
 }
-function showPSt(t,k,m){const b=document.getElementById('psb-'+t),el=document.getElementById('psm-'+t);if(!b||!el)return;b.style.display='flex';b.className='de-status-bar de-status-'+k;el.textContent=m;}
-function openPD(type,idx){
-  const p=gPJ(type)[idx];if(!p)return;
-  document.getElementById('pd-nm-'+type).textContent=p.name;
-  document.getElementById('pd-dt-'+type).textContent='📅 '+(p.start||'—')+' → 🏁 '+(p.end||'—');
-  document.getElementById('pd-bd-'+type).innerHTML=`
-    <div><div class="proj-info-lbl">PROGRESS</div><div class="proj-big-pct">${p.progress}%</div>
-      <div class="proj-big-track"><div class="proj-big-fill" style="width:${p.progress}%"></div></div></div>
-    <div class="proj-info-grid">
-      <div><div class="proj-info-lbl">START</div><div class="proj-info-val">${p.start||'—'}</div></div>
-      <div><div class="proj-info-lbl">EXPECTED END</div><div class="proj-info-val">${p.end||'—'}</div></div>
+
+// ── Submit new project to API ─────────────────────────────────────
+async function submitPJ(t) {
+  const name = document.getElementById('pf-nm-' + t)?.value.trim();
+  if (!name) { showPSt(t, 'error', '❌ Project title is required!'); return; }
+
+  const body = {
+    type:       t,
+    name,
+    start_date: document.getElementById('pf-st-'  + t)?.value  || null,
+    end_date:   document.getElementById('pf-en-'  + t)?.value  || null,
+    materials:  document.getElementById('pf-mat-' + t)?.value.trim() || '',
+    tools:      document.getElementById('pf-tl-'  + t)?.value.trim() || '',
+    progress:   +(document.getElementById('pr-'   + t)?.value  || 0),
+    notes:      document.getElementById('pf-nt-'  + t)?.value.trim() || '',
+  };
+
+  showPSt(t, 'loading', '⏳ Saving project...');
+
+  try {
+    const res = await fetch('/api/projects', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+    const j = await res.json();
+    if (!j.success) throw new Error(j.message);
+
+    showPSt(t, 'success', '✅ Project saved!');
+    setTimeout(() => { closeAPJ(t); renderPJ(t); }, 900);
+  } catch (err) {
+    showPSt(t, 'error', '❌ ' + err.message);
+  }
+}
+
+function showPSt(t, k, m) {
+  const b = document.getElementById('psb-' + t), el = document.getElementById('psm-' + t);
+  if (!b || !el) return;
+  b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + k; el.textContent = m;
+}
+
+// ── Open project detail drawer ────────────────────────────────────
+function openPD(type, id) {
+  // Find project in cache by id (id comes as string from onclick attr)
+  const p = (_pjCache[type] || []).find(x => String(x.id) === String(id));
+  if (!p) return;
+
+  document.getElementById('pd-nm-' + type).textContent = p.name;
+  document.getElementById('pd-dt-' + type).textContent = '📅 ' + (p.start_date || '—') + ' → 🏁 ' + (p.end_date || '—');
+  document.getElementById('pd-bd-' + type).innerHTML = `
+    <div>
+      <div class="proj-info-lbl">PROGRESS</div>
+      <div class="proj-big-pct">${p.progress}%</div>
+      <div class="proj-big-track"><div class="proj-big-fill" style="width:${p.progress}%"></div></div>
     </div>
-    <div><div class="proj-info-lbl">MATERIALS</div><div class="proj-info-val">${p.materials||'—'}</div></div>
-    <div><div class="proj-info-lbl">TOOLS</div><div class="proj-info-val">${p.tools||'—'}</div></div>
-    ${p.notes?`<div><div class="proj-info-lbl">NOTES</div><div class="proj-info-val">${p.notes}</div></div>`:''}
-    <div><div class="proj-info-lbl">CREATED</div><div class="proj-info-val" style="font-family:'DM Mono',monospace;font-size:11px">${new Date(p.created_at).toLocaleString('en-GB')}</div></div>
-    <button class="proj-del-btn" onclick="delPJ('${type}',${idx})">🗑️ Delete Project</button>`;
-  document.getElementById('pdo-'+type).classList.add('show');
-  document.getElementById('pdd-'+type).classList.add('show');
-  document.body.style.overflow='hidden';
+    <div class="proj-info-grid">
+      <div><div class="proj-info-lbl">START</div><div class="proj-info-val">${p.start_date || '—'}</div></div>
+      <div><div class="proj-info-lbl">EXPECTED END</div><div class="proj-info-val">${p.end_date || '—'}</div></div>
+    </div>
+    <div><div class="proj-info-lbl">MATERIALS</div><div class="proj-info-val">${p.materials || '—'}</div></div>
+    <div><div class="proj-info-lbl">TOOLS</div><div class="proj-info-val">${p.tools || '—'}</div></div>
+    ${p.notes ? `<div><div class="proj-info-lbl">NOTES</div><div class="proj-info-val">${p.notes}</div></div>` : ''}
+    <div><div class="proj-info-lbl">CREATED</div>
+      <div class="proj-info-val" style="font-family:'DM Mono',monospace;font-size:11px">${new Date(p.created_at).toLocaleString('en-GB')}</div>
+    </div>
+    <button class="proj-del-btn" onclick="delPJ('${type}','${p.id}')">🗑️ Delete Project</button>`;
+
+  document.getElementById('pdo-' + type).classList.add('show');
+  document.getElementById('pdd-' + type).classList.add('show');
+  document.body.style.overflow = 'hidden';
 }
-function closePD(t){document.getElementById('pdo-'+t)?.classList.remove('show');document.getElementById('pdd-'+t)?.classList.remove('show');document.body.style.overflow='';}
-function delPJ(t,i){if(!confirm('Delete this project? This cannot be undone.'))return;const l=gPJ(t);l.splice(i,1);sPJ(t,l);closePD(t);renderPJ(t);}
+
+function closePD(t) {
+  document.getElementById('pdo-' + t)?.classList.remove('show');
+  document.getElementById('pdd-' + t)?.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+// ── Delete project via API ────────────────────────────────────────
+async function delPJ(type, id) {
+  if (!confirm('Delete this project? This cannot be undone.')) return;
+  try {
+    const res = await fetch('/api/projects/' + id, { method: 'DELETE' });
+    const j   = await res.json();
+    if (!j.success) throw new Error(j.message);
+    closePD(type);
+    renderPJ(type);
+  } catch (err) {
+    alert('❌ Failed to delete: ' + err.message);
+  }
+}
 
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeDetail();['ongoing','recent','completed'].forEach(t=>{closeAPJ(t);closePD(t);});}
+  if(e.key==='Escape'){closeDetail();closeSensorModal();['ongoing','recent','completed'].forEach(t=>{closeAPJ(t);closePD(t);});}
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -1803,6 +2017,270 @@ function loadReportHistory() {
         ${r.aksi && r.aksi !== '—' ? `<div style="font-size:11px;color:var(--txt3);padding:6px 10px;background:var(--surface);border-radius:6px;border:1px solid var(--border)">✅ Action: ${r.aksi}</div>` : ''}
         <div style="margin-top:6px"><span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--txt3)">${catLabel[r.kategori]||r.kategori}</span></div>
       </div>`).join('') + '</div>';
+}
+
+
+// ═══════════════════════════════════════════════════════════
+// SENSOR MANAGER — Add / Edit / Delete sensors dynamically
+// Data tersimpan di localStorage('tank_sensors')
+// Dashboard membaca otomatis tanpa ubah kode
+// ═══════════════════════════════════════════════════════════
+
+const SENSOR_COL_NAMES = ['Biru','Ungu','Hijau','Oranye','Kuning','Merah'];
+
+function getTankDimensionHTML() {
+  return `<div class="de-wrap">
+  <div class="de-header">
+    <div>
+      <div class="de-title">Change Containers Volume</div>
+      <div class="de-sub">Add, edit, or delete sensors — the dashboard automatically updates.</div>
+    </div>
+    <div class="de-date" id="tds-dt">--</div>
+  </div>
+
+  <!-- SENSOR LIST -->
+  <div class="de-card" style="margin-bottom:16px">
+    <div class="de-card-title" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px"><span class="de-card-ico">📡</span> Daftar Sensor Aktif</div>
+      <button class="de-btn de-btn-primary" style="padding:6px 16px;font-size:12px" onclick="openAddSensor()">＋ Tambah Sensor</button>
+    </div>
+    <div id="sensor-list-wrap"></div>
+  </div>
+
+  <!-- STATUS -->
+  <div class="de-status-bar" id="tds-sb" style="display:none"><span id="tds-sm"></span></div>
+
+  <!-- ADD / EDIT MODAL -->
+  <div id="sensor-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center">
+    <div style="background:var(--surface);border-radius:16px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.22)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px 14px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1">
+        <div style="font-size:15px;font-weight:700;color:var(--txt)" id="sensor-modal-title">Tambah Sensor Baru</div>
+        <button onclick="closeSensorModal()" style="width:30px;height:30px;border-radius:7px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:13px;color:var(--txt2);display:grid;place-items:center">✕</button>
+      </div>
+      <div style="padding:20px 22px 22px">
+
+        <!-- Preview mini tank -->
+        <div style="display:flex;justify-content:center;margin-bottom:20px">
+          <div style="text-align:center">
+            <div id="modal-tank-preview" style="width:56px;height:80px;border:2px solid var(--blue);border-radius:4px 4px 8px 8px;position:relative;overflow:hidden;background:var(--bg);margin:0 auto 6px">
+              <div id="modal-tank-water" style="position:absolute;bottom:0;left:0;right:0;height:50%;background:linear-gradient(180deg,#bfdffa,#3b9de8);transition:height .5s">
+                <div style="position:absolute;top:-3px;left:0;right:0;height:5px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);border-radius:50%;animation:wsurf 3s ease-in-out infinite"></div>
+              </div>
+            </div>
+            <div style="font-size:10px;color:var(--txt3)" id="modal-tank-vol-label">1.000 L</div>
+          </div>
+        </div>
+
+        <div class="de-grid">
+          <div class="de-field de-full">
+            <label class="de-label">NAMA SENSOR / KOLAM *</label>
+            <input class="de-input" type="text" id="sf-name" placeholder="Contoh: Kolam Utama, Tangki A...">
+          </div>
+          <div class="de-field">
+            <label class="de-label">KUNCI DATA API *</label>
+            <input class="de-input" type="text" id="sf-key" placeholder="s1, s2, s3 ...">
+            <div style="font-size:10px;color:var(--txt3);margin-top:3px">Sesuaikan dengan field dari ESP/API</div>
+          </div>
+          <div class="de-field">
+            <label class="de-label">LOKASI</label>
+            <input class="de-input" type="text" id="sf-loc" placeholder="Lantai 1, Area A...">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:var(--blue)">PANJANG <span class="de-unit">(m)</span></label>
+            <input class="de-input" type="number" id="sf-p" min="0.1" step="0.1" value="1" oninput="previewModalTank()">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:var(--green)">LEBAR <span class="de-unit">(m)</span></label>
+            <input class="de-input" type="number" id="sf-l" min="0.1" step="0.1" value="1" oninput="previewModalTank()">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:var(--orange)">TINGGI <span class="de-unit">(m)</span></label>
+            <input class="de-input" type="number" id="sf-t" min="0.1" step="0.1" value="1" oninput="previewModalTank()">
+          </div>
+          <div class="de-field de-full">
+            <label class="de-label">CATATAN</label>
+            <textarea class="de-input de-textarea" id="sf-note" placeholder="Keterangan tambahan..." style="min-height:60px"></textarea>
+          </div>
+        </div>
+
+        <!-- Volume preview in modal -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+          <div><div style="font-size:9px;color:var(--txt3)">Volume</div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--blue)" id="modal-m3">— m³</div></div>
+          <div><div style="font-size:9px;color:var(--txt3)">Kapasitas</div><div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:600;color:var(--green)" id="modal-liter">— L</div></div>
+          <div><div style="font-size:9px;color:var(--txt3)">Dimensi</div><div style="font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--orange)" id="modal-dim">—</div></div>
+        </div>
+
+        <div class="de-actions">
+          <button class="de-btn de-btn-ghost" onclick="closeSensorModal()">Batal</button>
+          <button class="de-btn de-btn-primary" onclick="saveSensor()">💾 Simpan Sensor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function initTankDimensionSetting() {
+  if (window._tdsClock) clearInterval(window._tdsClock);
+  window._tdsClock = setInterval(() => {
+    const el = document.getElementById('tds-dt');
+    if (!el) { clearInterval(window._tdsClock); return; }
+    el.textContent = new Date().toLocaleString('id-ID');
+  }, 1000);
+  renderSensorList();
+}
+
+// ── Render sensor list in settings page ──────────────────
+function renderSensorList() {
+  const wrap = document.getElementById('sensor-list-wrap');
+  if (!wrap) return;
+  const sensors = getSensors();
+  if (!sensors.length) {
+    wrap.innerHTML = '<div class="de-empty">Belum ada sensor. Klik "+ Tambah Sensor"</div>';
+    return;
+  }
+  wrap.innerHTML = sensors.map((s, i) => {
+    const col = SENSOR_COLORS[i % SENSOR_COLORS.length];
+    const liter = Math.round(+(s.panjang||1) * +(s.lebar||1) * +(s.tinggi||1) * 1000);
+    return `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--bg);border-left:4px solid ${col.label}">
+      <!-- mini tank icon -->
+      <div style="width:32px;height:44px;border:1.5px solid ${col.label};border-radius:3px 3px 5px 5px;position:relative;overflow:hidden;flex-shrink:0;background:var(--surface)">
+        <div style="position:absolute;bottom:0;left:0;right:0;height:55%;background:${col.water}"></div>
+      </div>
+      <!-- info -->
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--txt)">${s.name}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:3px">
+          <span style="font-size:10px;color:var(--txt3)">🔑 Key: <strong style="color:${col.label}">${s.key}</strong></span>
+          <span style="font-size:10px;color:var(--txt3)">📐 ${s.panjang}m × ${s.lebar}m × ${s.tinggi}m</span>
+          <span style="font-size:10px;color:var(--txt3)">💧 ${liter.toLocaleString('id-ID')} L</span>
+          ${s.loc ? `<span style="font-size:10px;color:var(--txt3)">📍 ${s.loc}</span>` : ''}
+        </div>
+        ${s.note ? `<div style="font-size:10px;color:var(--txt3);margin-top:2px;font-style:italic">${s.note}</div>` : ''}
+      </div>
+      <!-- actions -->
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="openEditSensor(${i})" style="padding:5px 10px;background:#ebf2fd;border:1px solid #c3d9fa;border-radius:7px;color:var(--blue);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">✏️ Edit</button>
+        ${sensors.length > 1
+          ? `<button onclick="deleteSensor(${i})" style="padding:5px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;color:var(--red);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">🗑</button>`
+          : `<button disabled style="padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--txt3);font-size:11px;cursor:not-allowed;font-family:inherit" title="Minimal 1 sensor">🗑</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Modal helpers ─────────────────────────────────────────
+let _editIdx = -1;
+
+function openAddSensor() {
+  _editIdx = -1;
+  document.getElementById('sensor-modal-title').textContent = '➕ Tambah Sensor Baru';
+  ['sf-name','sf-key','sf-loc','sf-note'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('sf-p').value = 1;
+  document.getElementById('sf-l').value = 1;
+  document.getElementById('sf-t').value = 1;
+  // suggest next key
+  const sensors = getSensors();
+  document.getElementById('sf-key').value = 's' + (sensors.length + 1);
+  document.getElementById('sf-name').value = 'Sensor ' + (sensors.length + 1);
+  previewModalTank();
+  const ov = document.getElementById('sensor-modal-overlay');
+  ov.style.display = 'flex';
+}
+
+function openEditSensor(idx) {
+  _editIdx = idx;
+  const s = getSensors()[idx];
+  if (!s) return;
+  document.getElementById('sensor-modal-title').textContent = '✏️ Edit Sensor: ' + s.name;
+  document.getElementById('sf-name').value = s.name;
+  document.getElementById('sf-key').value  = s.key;
+  document.getElementById('sf-loc').value  = s.loc  || '';
+  document.getElementById('sf-note').value = s.note || '';
+  document.getElementById('sf-p').value = s.panjang || 1;
+  document.getElementById('sf-l').value = s.lebar   || 1;
+  document.getElementById('sf-t').value = s.tinggi  || 1;
+  previewModalTank();
+  document.getElementById('sensor-modal-overlay').style.display = 'flex';
+}
+
+function closeSensorModal() {
+  document.getElementById('sensor-modal-overlay').style.display = 'none';
+}
+
+function previewModalTank() {
+  const p = +(document.getElementById('sf-p')?.value) || 0;
+  const l = +(document.getElementById('sf-l')?.value) || 0;
+  const t = +(document.getElementById('sf-t')?.value) || 0;
+  const m3    = +(p * l * t).toFixed(3);
+  const liter = Math.round(m3 * 1000);
+  const setEl = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  setEl('modal-m3',    m3 + ' m³');
+  setEl('modal-liter', liter.toLocaleString('id-ID') + ' L');
+  setEl('modal-dim',   p + '×' + l + '×' + t + 'm');
+  setEl('modal-tank-vol-label', liter.toLocaleString('id-ID') + ' L');
+  // scale preview tank height
+  const tw = document.getElementById('modal-tank-water');
+  if (tw) tw.style.height = Math.max(20, Math.min(90, t * 40)) + '%';
+}
+
+function saveSensor() {
+  const name = document.getElementById('sf-name')?.value.trim();
+  const key  = document.getElementById('sf-key')?.value.trim();
+  const p    = +(document.getElementById('sf-p')?.value);
+  const l    = +(document.getElementById('sf-l')?.value);
+  const t    = +(document.getElementById('sf-t')?.value);
+
+  if (!name) { showTDSSt('error', '❌ Nama sensor wajib diisi!'); return; }
+  if (!key)  { showTDSSt('error', '❌ Kunci data API wajib diisi!'); return; }
+  if (!p || !l || !t || p<=0 || l<=0 || t<=0) { showTDSSt('error', '❌ Dimensi harus lebih dari 0!'); return; }
+
+  const sensors = getSensors();
+
+  // Check duplicate key (allow same key on edit)
+  const dupIdx = sensors.findIndex(s => s.key === key);
+  if (dupIdx !== -1 && dupIdx !== _editIdx) {
+    showTDSSt('error', `❌ Kunci "${key}" sudah dipakai sensor lain!`); return;
+  }
+
+  const sensorObj = {
+    id:      _editIdx >= 0 ? sensors[_editIdx].id : 'sensor_' + Date.now(),
+    name, key, panjang: p, lebar: l, tinggi: t,
+    loc:  document.getElementById('sf-loc')?.value.trim()  || '',
+    note: document.getElementById('sf-note')?.value.trim() || '',
+  };
+
+  if (_editIdx >= 0) {
+    sensors[_editIdx] = sensorObj;
+  } else {
+    sensors.push(sensorObj);
+  }
+
+  localStorage.setItem('tank_sensors', JSON.stringify(sensors));
+  closeSensorModal();
+  renderSensorList();
+  const liter = Math.round(p * l * t * 1000).toLocaleString('id-ID');
+  showTDSSt('success', _editIdx >= 0
+    ? `✅ Sensor "${name}" diperbarui — ${liter} L`
+    : `✅ Sensor "${name}" ditambahkan! Wadah baru muncul di dashboard.`);
+}
+
+function deleteSensor(idx) {
+  const sensors = getSensors();
+  if (sensors.length <= 1) return;
+  if (!confirm(`Hapus sensor "${sensors[idx].name}"? Wadahnya akan hilang dari dashboard.`)) return;
+  sensors.splice(idx, 1);
+  localStorage.setItem('tank_sensors', JSON.stringify(sensors));
+  renderSensorList();
+  showTDSSt('success', '✅ Sensor dihapus. Dashboard otomatis diperbarui.');
+}
+
+function showTDSSt(type, msg) {
+  const b = document.getElementById('tds-sb'), m = document.getElementById('tds-sm');
+  if (!b || !m) return;
+  b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + type; m.textContent = msg;
+  if (type !== 'error') setTimeout(() => { if (b) b.style.display = 'none'; }, 4000);
 }
 
 </script>

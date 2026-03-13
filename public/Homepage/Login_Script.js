@@ -14,7 +14,7 @@ async function login(event) {
     const data = await res.json();
 
     if (!res.ok) {
-      alert(data.message || "Login gagal");
+      alert(data.message || "Login failed!");
       return;
     }
 
@@ -27,7 +27,7 @@ async function login(event) {
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    alert("Server mati / ga nyambung");
+    alert("Server is offline");
   }
 }
 

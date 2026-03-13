@@ -188,7 +188,7 @@ router.post("/login/verify", async (req, res) => {
     });
 
     if (!verification.verified) {
-      return res.status(401).json({ success: false, message: "Fingerprint tidak cocok" });
+      return res.status(401).json({ success: false, message: "Fingerprint not registered!" });
     }
 
     await pool.query(
@@ -205,7 +205,7 @@ router.post("/login/verify", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Login berhasil!",
+      message: "Login Success!",
       user: userResult.rows[0],
     });
   } catch (err) {

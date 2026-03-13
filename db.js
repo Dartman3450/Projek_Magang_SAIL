@@ -26,7 +26,5 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
-// ✅ Default export (pool) — for: const pool = require('../db')
-// ✅ Named export (poolIoT) — for: const { poolIoT } = require('../db')
 module.exports = pool;
 module.exports.poolIoT = poolIoT;

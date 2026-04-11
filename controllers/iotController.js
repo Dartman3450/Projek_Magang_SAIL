@@ -9,7 +9,7 @@ const LIMIT = 100;
 async function getSummary(req, res) {
   try {
     const [wlRes, wfRes, envRes, patTotalRes, patListRes] = await Promise.all([
-      poolIoT.query('SELECT id, s1, s2, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'),
+      poolIoT.query('SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'),
       poolIoT.query('SELECT id, rate, total, created_at FROM laporan_water_flow ORDER BY created_at DESC LIMIT 1'),
       poolIoT.query('SELECT id, t, h, raw, stat, created_at FROM laporan_lingkungan ORDER BY created_at DESC LIMIT 1'),
       poolIoT.query("SELECT COUNT(*) AS total FROM laporan_patroli WHERE created_at >= CURRENT_DATE"),
@@ -45,7 +45,7 @@ async function getSummary(req, res) {
 async function getWaterLevel(req, res) {
   try {
     const { rows } = await poolIoT.query(
-      'SELECT id, s1, s2, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT $1',
+      'SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT $1',
       [LIMIT]
     );
     res.json({ success: true, data: rows });
@@ -61,7 +61,7 @@ async function getWaterLevel(req, res) {
 async function getLatestWaterLevel(req, res) {
   try {
     const { rows } = await poolIoT.query(
-      'SELECT id, s1, s2, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'
+      'SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'
     );
     res.json({ success: true, data: rows[0] || null });
   } catch (err) {

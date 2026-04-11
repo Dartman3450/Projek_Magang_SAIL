@@ -32,13 +32,11 @@ const mqttClient = mqtt.connect(MQTT_BROKER, {
 
 mqttClient.on('connect', () => {
   console.log('✅ MQTT terhubung ke', MQTT_BROKER);
-
-  // Subscribe ke semua topic sensor ESP32
   const topics = [
-    'sensor/water_level',   // ESP32 Water Level + Flow (gabungan)
-    'sensor/water_flow',    // ESP32 Water Level + Flow (gabungan)
-    'sensor/lingkungan',    // ESP32 DHT22 + MiCS gas
-    'patroli/laporan',      // ESP32 RFID patroli
+    'sensor/water_level',
+    'sensor/water_flow',
+    'sensor/lingkungan',
+    'patroli/laporan',
   ];
   mqttClient.subscribe(topics, { qos: 1 }, (err) => {
     if (err) console.error('❌ Subscribe gagal:', err.message);
@@ -50,10 +48,6 @@ mqttClient.on('error',  err  => console.error('❌ MQTT error:',  err.message));
 mqttClient.on('close',  ()   => console.warn ('⚠️  MQTT terputus, reconnecting...'));
 mqttClient.on('offline',()   => console.warn ('⚠️  MQTT offline'));
 
-// ═══════════════════════════════════════════════════════════════
-//  MQTT → PostgreSQL Bridge
-//  Setiap pesan MQTT yang masuk langsung di-INSERT ke tabel DB
-// ═══════════════════════════════════════════════════════════════
 mqttClient.on('message', async (topic, message) => {
   let data;
   try {
@@ -65,25 +59,33 @@ mqttClient.on('message', async (topic, message) => {
 
   try {
     // ── sensor/water_level ──────────────────────────────────────
-    // Payload: {"s1":int,"s2":int,"p1":int,"p2":int}
+    // ESP32 kirim: {"s1":int,"s2":int,"p1":int,"p2":int}
+    // Kolom DB   : s1_cm, s2_cm, p1, p2
     if (topic === 'sensor/water_level') {
-      const { s1, s2, p1, p2 } = data;
-      if (s1 == null || s2 == null) { console.warn('WL: field s1/s2 tidak ada'); return; }
+      // ✅ FIX: terima s1/s2 (ESP32 lama) ATAU s1_cm/s2_cm (ESP32 baru)
+      const s1Val = data.s1_cm ?? data.s1;
+      const s2Val = data.s2_cm ?? data.s2;
+      const p1Val = data.p1;
+      const p2Val = data.p2;
+
+      if (s1Val == null || s2Val == null) {
+        console.warn('WL: field s1/s2 tidak ada di payload:', JSON.stringify(data));
+        return;
+      }
 
       await poolIoT.query(
-        'INSERT INTO laporan_water_level (s1, s2, p1, p2) VALUES ($1, $2, $3, $4)',
+        'INSERT INTO laporan_water_level (s1_cm, s2_cm, p1, p2) VALUES ($1, $2, $3, $4)',
         [
-          Math.max(0, Math.min(100, parseInt(s1))),
-          Math.max(0, Math.min(100, parseInt(s2))),
-          p1 != null ? parseInt(p1) : 1,
-          p2 != null ? parseInt(p2) : 1,
+          Math.max(0, Math.min(9999, parseInt(s1Val))),
+          Math.max(0, Math.min(9999, parseInt(s2Val))),
+          p1Val != null ? parseInt(p1Val) : 1,
+          p2Val != null ? parseInt(p2Val) : 1,
         ]
       );
-      console.log(`💧 WL saved: s1=${s1}% s2=${s2}% p1=${p1} p2=${p2}`);
+      console.log(`💧 WL saved: s1_cm=${s1Val} s2_cm=${s2Val} p1=${p1Val} p2=${p2Val}`);
     }
 
     // ── sensor/water_flow ───────────────────────────────────────
-    // Payload: {"rate":float,"total":int}
     else if (topic === 'sensor/water_flow') {
       const { rate, total } = data;
       if (rate == null) { console.warn('WF: field rate tidak ada'); return; }
@@ -99,17 +101,15 @@ mqttClient.on('message', async (topic, message) => {
     }
 
     // ── sensor/lingkungan ───────────────────────────────────────
-    // Payload: {"h":float,"t":float,"raw":int,"stat":"string"}
     else if (topic === 'sensor/lingkungan') {
       const { h, t, raw, stat } = data;
       if (h == null || t == null) { console.warn('ENV: field h/t tidak ada'); return; }
 
-      // Validasi nilai wajar
       const tVal   = parseFloat(t);
       const hVal   = parseFloat(h);
       const rawVal = parseInt(raw ?? 0);
-      if (tVal < -40 || tVal > 85) { console.warn(`ENV: suhu tidak wajar (${tVal}°C)`); return; }
-      if (hVal <   0 || hVal > 100){ console.warn(`ENV: kelembapan tidak wajar (${hVal}%)`); return; }
+      if (tVal < -40 || tVal > 85)  { console.warn(`ENV: suhu tidak wajar (${tVal}°C)`); return; }
+      if (hVal <   0 || hVal > 100) { console.warn(`ENV: kelembapan tidak wajar (${hVal}%)`); return; }
 
       await poolIoT.query(
         'INSERT INTO laporan_lingkungan (t, h, raw, stat) VALUES ($1, $2, $3, $4)',
@@ -119,15 +119,14 @@ mqttClient.on('message', async (topic, message) => {
     }
 
     // ── patroli/laporan ─────────────────────────────────────────
-    // Payload: {"pos":int,"status":"Aman|Rusak|Aneh|Bahaya"}
     else if (topic === 'patroli/laporan') {
       const { pos, status } = data;
       if (pos == null || !status) { console.warn('PAT: field pos/status tidak ada'); return; }
 
       const validStatus = ['Aman', 'Rusak', 'Aneh', 'Bahaya'];
       const posVal = parseInt(pos);
-      if (posVal < 1 || posVal > 4) { console.warn(`PAT: pos tidak valid (${pos})`); return; }
-      if (!validStatus.includes(status)) { console.warn(`PAT: status tidak valid (${status})`); return; }
+      if (posVal < 1 || posVal > 4)       { console.warn(`PAT: pos tidak valid (${pos})`); return; }
+      if (!validStatus.includes(status))   { console.warn(`PAT: status tidak valid (${status})`); return; }
 
       await poolIoT.query(
         'INSERT INTO laporan_patroli (pos, status) VALUES ($1, $2)',
@@ -141,36 +140,23 @@ mqttClient.on('message', async (topic, message) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════════════
-//  Endpoint: Status MQTT (dipakai halaman setting dashboard)
-// ═══════════════════════════════════════════════════════════════
 app.get('/api/mqtt/status', (req, res) => {
   res.json({ connected: mqttClient.connected });
 });
 
-// ═══════════════════════════════════════════════════════════════
-//  Endpoint: Kirim setting range water level ke ESP32
-//  Body: { "min": 30, "max": 200 }
-//  Publish ke: sensor/settings
-// ═══════════════════════════════════════════════════════════════
 app.post('/api/update-settings', (req, res) => {
   const { min, max } = req.body;
-
-  if (min == null || max == null) {
+  if (min == null || max == null)
     return res.status(400).json({ error: 'Field min dan max diperlukan' });
-  }
+
   const minVal = parseInt(min);
   const maxVal = parseInt(max);
-
-  if (isNaN(minVal) || isNaN(maxVal)) {
+  if (isNaN(minVal) || isNaN(maxVal))
     return res.status(400).json({ error: 'min dan max harus berupa angka' });
-  }
-  if (minVal >= maxVal) {
+  if (minVal >= maxVal)
     return res.status(400).json({ error: 'min harus lebih kecil dari max' });
-  }
 
   const payload = JSON.stringify({ min: minVal, max: maxVal });
-
   mqttClient.publish('sensor/settings', payload, { qos: 1, retain: true }, (err) => {
     if (err) {
       console.error('❌ Publish sensor/settings gagal:', err.message);
@@ -181,7 +167,6 @@ app.post('/api/update-settings', (req, res) => {
   });
 });
 
-// ── Start Server ────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server SAIL berjalan di http://localhost:${PORT}`);

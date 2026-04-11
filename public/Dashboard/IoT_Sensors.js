@@ -271,13 +271,13 @@ function initIoT() {
   _loadPatroliList();
   _loadTable('water-level');
 
-  // Auto-refresh tiap 30 detik
+  // Auto-refresh tiap 5 detik
   window._iotRefreshTimer = setInterval(() => {
     if (!document.getElementById('wl-val')) { clearInterval(window._iotRefreshTimer); return; }
     _loadSummary();
     _loadPatroliList();
     _loadTable(window._activeTab || 'water-level');
-  }, 30000);
+  }, 5000);
 }
 
 // ── Helpers ──────────────────────────────────────────────────

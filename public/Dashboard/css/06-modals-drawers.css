@@ -1,0 +1,134 @@
+/* ═══════════════════════════════════════════════════
+   06-modals-drawers.css
+   Semua overlay, modal, dan drawer:
+   IoT Detail Drawer, Project Modal, Update Modal,
+   Summary Drawer, Sensor Modal, Logout Modal
+   ═══════════════════════════════════════════════════ */
+
+/* ─── IoT Detail Drawer ──────────────────────────── */
+.detail-overlay       { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.42); z-index: 100; }
+.detail-overlay.show  { display: block; animation: fadeIn .22s ease; }
+.detail-drawer        { position: fixed; right: -540px; top: 0; bottom: 0; width: 520px; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -16px 0 48px rgba(0,0,0,.16); z-index: 101; display: flex; flex-direction: column; transition: right .3s cubic-bezier(.4,0,.2,1); }
+.detail-drawer.show   { right: 0; }
+.detail-header        { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); }
+.detail-title         { font-size: 15px; font-weight: 700; color: var(--txt); }
+.detail-close         { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 14px; color: var(--txt2); display: grid; place-items: center; transition: all .15s; }
+.detail-close:hover   { background: #fef2f2; color: var(--red); border-color: #fecaca; }
+.detail-tabs          { display: flex; gap: 6px; padding: 12px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.detail-tab           { padding: 5px 14px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--txt2); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .15s; }
+.detail-tab.active    { background: var(--blue); color: #fff; border-color: var(--blue); box-shadow: 0 2px 8px rgba(43,125,233,.25); }
+.detail-body          { flex: 1; overflow-y: auto; padding: 18px 22px; }
+.detail-stat-grid     { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.detail-stat          { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 13px 15px; transition: box-shadow .15s; }
+.detail-stat:hover    { box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+.detail-stat-label    { font-size: 9px; font-weight: 700; letter-spacing: 1.4px; color: var(--txt3); text-transform: uppercase; margin-bottom: 5px; }
+.detail-stat-value    { font-family: 'DM Mono', monospace; font-size: 24px; font-weight: 500; color: var(--blue); }
+.detail-stat-unit     { font-size: 10px; color: var(--txt3); margin-top: 3px; }
+.detail-tbl-title     { font-size: 11px; font-weight: 700; color: var(--txt2); margin-bottom: 8px; }
+.detail-ts            { font-size: 11px; color: var(--txt3); padding: 8px 12px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px; }
+
+/* ─── IoT Table Section ──────────────────────────── */
+.tbl-section  { margin-top: 4px; }
+.iot-tabs     { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.iot-tab      { padding: 6px 15px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--txt2); font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 500; cursor: pointer; transition: all .18s; }
+.iot-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); box-shadow: 0 3px 10px rgba(43,125,233,.2); }
+.tbl-wrap     { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: auto; max-height: 240px; }
+table         { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th      { position: sticky; top: 0; padding: 10px 13px; text-align: left; font-size: 9px; font-weight: 600; color: var(--txt3); background: var(--surface); border-bottom: 1px solid var(--border); letter-spacing: 1.5px; text-transform: uppercase; white-space: nowrap; }
+tbody tr      { border-bottom: 1px solid var(--border); transition: background .12s; }
+tbody tr:last-child { border: none; }
+tbody tr:hover { background: var(--bg); }
+td            { padding: 8px 13px; font-size: 12px; white-space: nowrap; color: var(--txt); }
+.td-id        { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--blue); background: #ebf2fd; padding: 2px 7px; border-radius: 4px; }
+.tbl-empty    { padding: 32px; text-align: center; color: var(--txt3); font-size: 12px; }
+
+/* ─── Project Modal & Overlay ────────────────────── */
+.proj-modal-overlay       { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200; }
+.proj-modal-overlay.show  { display: flex; align-items: center; justify-content: center; animation: fadeIn .2s ease; }
+.proj-modal               { background: var(--surface); border-radius: 16px; width: 540px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,.22); animation: modalPop .25s cubic-bezier(.34,1.2,.64,1); }
+.proj-modal-head          { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.proj-modal-title         { font-size: 15px; font-weight: 700; color: var(--txt); }
+.proj-modal-close         { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 13px; color: var(--txt2); display: grid; place-items: center; transition: all .15s; }
+.proj-modal-close:hover   { background: #fef2f2; color: var(--red); border-color: #fecaca; }
+.proj-modal-body          { padding: 20px 24px 24px; }
+.proj-modal-grid          { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 4px; }
+.proj-modal-full          { grid-column: 1 / -1; }
+.fp-modal                 { max-width: 1100px !important; }
+.method-chip:has(input:checked) { background: var(--blue) !important; border-color: var(--blue) !important; color: #fff !important; }
+.method-chip:hover              { border-color: var(--blue) !important; color: var(--blue); }
+
+/* ─── Project Detail Drawer ──────────────────────── */
+.proj-det-overlay      { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 150; }
+.proj-det-overlay.show { display: block; animation: fadeIn .2s ease; }
+.proj-det-drawer       { position: fixed; right: -580px; top: 0; bottom: 0; width: 560px; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -12px 0 40px rgba(0,0,0,.14); z-index: 151; display: flex; flex-direction: column; transition: right .3s cubic-bezier(.4,0,.2,1); overflow-y: auto; }
+.proj-det-drawer.show  { right: 0; }
+.proj-det-head         { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 18px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.proj-det-name         { font-size: 16px; font-weight: 700; color: var(--txt); }
+.proj-det-date         { font-size: 11px; color: var(--txt3); margin-top: 3px; }
+.proj-det-body         { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.proj-info-lbl         { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); margin-bottom: 6px; }
+.proj-info-val         { font-size: 13px; color: var(--txt2); line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.proj-info-grid        { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.proj-big-track        { height: 10px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 8px; }
+.proj-big-fill         { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width 1s ease; }
+.proj-big-pct          { font-family: 'DM Mono', monospace; font-size: 26px; font-weight: 500; color: var(--blue); margin-bottom: 6px; }
+.proj-del-btn          { padding: 10px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: var(--red); font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; font-family: 'DM Sans', sans-serif; transition: all .15s; }
+.proj-del-btn:hover    { background: #fee2e2; }
+.proj-range            { width: 100%; accent-color: var(--blue); cursor: pointer; margin-top: 6px; }
+
+/* ─── Update Form Modal ──────────────────────────── */
+.upd-overlay      { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; }
+.upd-overlay.show { display: flex; animation: fadeIn .2s ease; }
+.upd-modal        { background: var(--surface); border-radius: 16px; width: 780px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,.25); animation: modalPop .25s cubic-bezier(.34,1.2,.64,1); }
+.upd-modal-head   { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; background: var(--surface); border-radius: 16px 16px 0 0; }
+.upd-modal-title  { font-size: 15px; font-weight: 700; color: var(--txt); }
+.upd-modal-sub    { font-size: 11px; color: var(--txt3); margin-top: 2px; }
+.upd-modal-close  { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 13px; color: var(--txt2); display: grid; place-items: center; transition: all .15s; }
+.upd-modal-close:hover { background: #fef2f2; color: var(--red); border-color: #fecaca; }
+.upd-modal-body   { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.upd-fields-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.upd-field        { display: flex; flex-direction: column; gap: 5px; }
+.upd-label        { font-size: 9px; font-weight: 700; letter-spacing: 1px; color: var(--txt3); text-transform: uppercase; }
+.upd-input        { width: 100%; padding: 8px 11px; border: 1.5px solid var(--border); border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 12px; color: var(--txt); background: var(--bg); outline: none; transition: border-color .2s, box-shadow .2s; }
+.upd-input:focus  { border-color: var(--blue); background: var(--surface); box-shadow: 0 0 0 3px rgba(43,125,233,.1); }
+.upd-modal-foot   { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; background: var(--surface); border-radius: 0 0 16px 16px; }
+
+/* ─── Edit Project Modal ─────────────────────────── */
+.edit-overlay      { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 310; align-items: center; justify-content: center; }
+.edit-overlay.show { display: flex; animation: fadeIn .2s ease; }
+
+/* ─── Completed Summary Drawer ───────────────────── */
+.summ-overlay       { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.38); z-index: 250; }
+.summ-overlay.show  { display: block; animation: fadeIn .2s ease; }
+.summ-drawer        { position: fixed; right: -900px; top: 0; bottom: 0; width: 880px; background: var(--surface); border-left: 1px solid var(--border); box-shadow: -12px 0 40px rgba(0,0,0,.14); z-index: 251; display: flex; flex-direction: column; transition: right .3s cubic-bezier(.4,0,.2,1); }
+.summ-drawer.show   { right: 0; }
+.summ-head          { display: flex; align-items: flex-start; justify-content: space-between; padding: 22px 24px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.summ-body          { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.summ-section       { margin-bottom: 18px; }
+.summ-section-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--txt3); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.summ-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.summ-entry-card    { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 8px; }
+.summ-entry-num     { font-size: 10px; font-weight: 700; color: var(--blue); letter-spacing: .5px; margin-bottom: 8px; }
+.summ-entry-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.summ-kv            { display: flex; flex-direction: column; gap: 2px; }
+.summ-k             { font-size: 9px; color: var(--txt3); font-weight: 600; letter-spacing: .6px; text-transform: uppercase; }
+.summ-v             { font-size: 12px; color: var(--txt2); font-weight: 500; word-break: break-word; }
+.summ-badge         { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 100px; font-size: 10px; font-weight: 700; background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+/* ─── Sensor Add/Edit Modal ──────────────────────── */
+#sensor-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 500; align-items: center; justify-content: center; }
+
+/* ─── Set Point Modal ────────────────────────────── */
+.setpoint-grid         { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.setpoint-section      { grid-column: 1 / -1; margin-top: 16px; }
+.setpoint-section-title { font-size: 11px; font-weight: 700; color: var(--blue); background: #ebf2fd; padding: 7px 12px; border-radius: 6px; margin-bottom: 10px; letter-spacing: .5px; }
+.sp-modal              { max-width: 820px !important; }
+
+/* ─── CIP Modal ──────────────────────────────────── */
+.cip-modal             { max-width: 560px !important; }
+.cip-blank-note        { padding: 14px 16px; background: #fef9ec; border: 1px solid #fde047; border-radius: 8px; font-size: 12px; color: #92400e; margin-bottom: 16px; line-height: 1.5; }
+.cip-grid              { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+/* ─── Logout Modal ───────────────────────────────── */
+#logout-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9999; align-items: center; justify-content: center; }
+#logout-modal   { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px 28px; width: 320px; z-index: 10000; box-shadow: 0 20px 60px rgba(0,0,0,.2); text-align: center; }

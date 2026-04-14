@@ -1,0 +1,50 @@
+/* ═══════════════════════════════════════════════════
+   03-topbar.css
+   Topbar atas: judul halaman, breadcrumb, ESP badge, jam
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Topbar Container ───────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.topbar-left  { display: flex; flex-direction: column; gap: 2px; }
+.topbar-page  { font-size: 16px; font-weight: 600; color: var(--txt); }
+.topbar-crumb { font-size: 11px; color: var(--txt3); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+/* ─── ESP Status Badge ───────────────────────────── */
+.esp-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  border: 1px solid;
+  transition: all .4s;
+}
+.esp-badge.waiting   { background: #fef9ec; border-color: #f0d078; color: #9a7200; }
+.esp-badge.connected { background: #edfaf4; border-color: #8edcba; color: #0e7a4a; }
+.esp-badge.error     { background: #fef2f2; border-color: #f0a0a0; color: #b91c1c; }
+
+.esp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.esp-badge.waiting   .esp-dot { background: #d4a017; animation: espPulse 1.8s infinite; }
+.esp-badge.connected .esp-dot { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.esp-badge.error     .esp-dot { background: var(--red); }
+
+@keyframes espPulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+
+/* ─── Clock ──────────────────────────────────────── */
+.clock-txt {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--txt3);
+}

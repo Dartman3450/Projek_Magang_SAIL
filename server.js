@@ -11,11 +11,13 @@ const projectsRoute = require('./routes/projects.route');
 const { poolIoT } = require('./db');
 
 const app = express();
+const dataentryRoute = require('./routes/dataentry.route');
+ 
 
+app.use('/api/dataentry', dataentryRoute);
 app.use(cors());
 app.use(express.json());
-
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/iot',  iotRoutes);
 app.use("/api/webauthn", require("./routes/webauthn.route"));

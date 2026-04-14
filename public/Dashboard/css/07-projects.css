@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════
+   07-projects.css
+   Halaman Project: card, list, progress, buttons,
+   status badges, FAB button, Finish Production rows
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Page Wrapper ───────────────────────────────── */
+.proj-wrap   { padding: 4px 0; animation: deIn .3s ease; }
+.proj-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+.proj-title  { font-size: 18px; font-weight: 600; color: var(--txt); }
+.proj-sub    { font-size: 12px; color: var(--txt3); margin-top: 2px; }
+
+/* ─── Count Badge & Search ───────────────────────── */
+.proj-count-badge { font-size: 11px; font-weight: 600; color: var(--blue); background: #ebf2fd; border: 1px solid #c3d9fa; padding: 4px 12px; border-radius: 100px; }
+.proj-search      { width: 100%; padding: 9px 14px; border: 1.5px solid var(--border); border-radius: 9px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--txt); background: var(--surface); outline: none; transition: border-color .2s, box-shadow .2s; margin-bottom: 16px; }
+.proj-search:focus       { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,125,233,.1); }
+.proj-search::placeholder { color: var(--txt3); }
+
+/* ─── Project List & Empty State ─────────────────── */
+.proj-list      { display: flex; flex-direction: column; gap: 10px; }
+.proj-empty     { text-align: center; padding: 60px 20px; color: var(--txt3); font-size: 13px; }
+.proj-empty-ico { font-size: 36px; opacity: .4; margin-bottom: 10px; }
+
+/* ─── Project Card ───────────────────────────────── */
+.proj-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: all .18s;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.proj-card::before    { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--acc, var(--blue)); }
+.proj-card:hover      { box-shadow: 0 4px 18px rgba(0,0,0,.08); border-color: var(--border2); transform: translateY(-1px); }
+.proj-card-icon       { width: 40px; height: 40px; border-radius: 10px; background: #ebf2fd; display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
+.proj-card-body       { flex: 1; min-width: 0; }
+.proj-card-name       { font-size: 14px; font-weight: 600; color: var(--txt); margin-bottom: 3px; }
+.proj-card-meta       { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--txt3); }
+.proj-card-arrow      { font-size: 18px; color: var(--txt3); flex-shrink: 0; transition: transform .15s; }
+.proj-card:hover .proj-card-arrow { transform: translateX(4px); color: var(--blue); }
+.proj-card-divider    { width: 100%; height: 1px; background: var(--border); margin: 6px 0; }
+
+/* ─── Progress Bar ───────────────────────────────── */
+.proj-progress-track { height: 5px; background: var(--bg); border-radius: 3px; border: 1px solid var(--border); overflow: hidden; margin-top: 8px; }
+.proj-progress-fill  { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--blue), var(--green)); transition: width .8s ease; }
+.proj-progress-label { font-size: 10px; color: var(--txt3); margin-top: 3px; display: flex; justify-content: space-between; }
+
+/* ─── Status Badges ──────────────────────────────── */
+.proj-status          { display: inline-flex; align-items: center; font-size: 8px; font-weight: 700; letter-spacing: .6px; padding: 2px 7px; border-radius: 100px; border: 1px solid; margin-top: 5px; }
+.proj-status.ongoing  { background: var(--soft-blue); color: var(--blue); border-color: #bfdbfe; }
+.proj-status.completed { background: var(--soft-green); color: #16a34a; border-color: #bbf7d0; }
+.proj-status.ready    { background: #dcfce7; color: #16a34a; border-color: #86efac; }
+.proj-status.recent   { background: #fef9ec; color: #92400e; border-color: #fde68a; }
+
+/* ─── Action Buttons on Card ─────────────────────── */
+.proj-card-actions  { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; width: 100%; margin-top: 4px; }
+.pj-btn             { padding: 5px 10px; border-radius: 7px; font-size: 10px; font-weight: 600; cursor: pointer; border: 1px solid; font-family: 'DM Sans', sans-serif; transition: all .15s; white-space: nowrap; }
+.pj-btn:disabled    { opacity: .45; cursor: not-allowed; }
+
+.pj-btn-edit:hover:not(:disabled)     { background: var(--blue);   color: #fff; }
+.pj-btn-update:hover:not(:disabled)   { background: #16a34a;       color: #fff; }
+.pj-btn-complete:hover:not(:disabled) { background: #d97706;       color: #fff; }
+.pj-btn-cip:hover:not(:disabled)      { background: #ca8a04;       color: #fff; }
+.pj-btn-end:hover:not(:disabled)      { background: var(--red);    color: #fff; }
+.pj-btn-finish:hover:not(:disabled)   { background: #7c3aed;       color: #fff; }
+
+.pj-btn-edit    { background: #ebf2fd;  border-color: #c3d9fa;  color: var(--blue); }
+.pj-btn-update  { background: #f0fdf4;  border-color: #bbf7d0;  color: #16a34a; }
+.pj-btn-complete { background: #fef9ec; border-color: #fde68a;  color: #92400e; }
+.pj-btn-cip     { background: #fef3c7;  border-color: #fde047;  color: #ca8a04; }
+.pj-btn-end     { background: #fef2f2;  border-color: #fecaca;  color: var(--red); }
+.pj-btn-finish  { background: #fdf4ff;  border-color: #e9d5ff;  color: #7c3aed; }
+
+/* ─── FAB Button ─────────────────────────────────── */
+.proj-fab       { position: fixed; bottom: 28px; right: 28px; width: 52px; height: 52px; border-radius: 50%; background: var(--blue); color: #fff; border: none; font-size: 26px; cursor: pointer; box-shadow: 0 4px 20px rgba(43,125,233,.5); display: grid; place-items: center; transition: all .2s; z-index: 50; font-family: sans-serif; line-height: 1; }
+.proj-fab:hover { background: #1a6dd8; transform: scale(1.1); }
+
+/* ─── Finish Production Rows ─────────────────────── */
+.fp-item        { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto; gap: 8px; padding: 12px; background: var(--bg); border-radius: 8px; align-items: end; margin-bottom: 8px; }
+.fp-item-remove { padding: 8px 12px; border-radius: 6px; border: 1.5px solid #fecaca; background: #fef2f2; color: var(--red); font-size: 12px; cursor: pointer; font-weight: 600; }
+.fp-item-remove:hover { background: var(--red); color: #fff; }
+.fp-add-btn     { width: 100%; padding: 10px; border-radius: 8px; border: 1.5px dashed var(--border2); background: var(--bg); color: var(--txt2); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; margin-bottom: 14px; font-family: 'DM Sans', sans-serif; }
+.fp-add-btn:hover { border-color: var(--blue); color: var(--blue); background: #ebf2fd; }
+
+/* ─── Placeholder Pages ──────────────────────────── */
+.page-placeholder      { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; gap: 12px; color: var(--txt3); }
+.page-placeholder .ph-ico { font-size: 40px; opacity: .4; }
+.page-placeholder h2   { font-size: 18px; color: var(--txt2); font-weight: 500; }
+.page-placeholder p    { font-size: 12px; }

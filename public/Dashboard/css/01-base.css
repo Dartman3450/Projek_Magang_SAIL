@@ -1,0 +1,75 @@
+/* ═══════════════════════════════════════════════════
+   01-base.css
+   Variabel global, reset, layout utama (body, main, content)
+   ═══════════════════════════════════════════════════ */
+
+/* ─── CSS Variables ─────────────────────────────── */
+:root {
+  /* Warna */
+  --bg:         #f4f6f8;
+  --surface:    #ffffff;
+  --border:     #e4e8ed;
+  --border2:    #cfd6de;
+  --txt:        #1a202c;
+  --txt2:       #4a5568;
+  --txt3:       #a0aec0;
+  --blue:       #2b7de9;
+  --green:      #18a96a;
+  --orange:     #e07b2a;
+  --yellow:     #c99a0a;
+  --purple:     #6f52d9;
+  --red:        #dc3545;
+
+  /* Soft variants */
+  --soft-blue:  #e3f0ff;
+  --soft-green: #d1fae5;
+
+  /* Layout */
+  --sidebar:    230px;
+  --radius:     12px;
+}
+
+/* ─── Reset ─────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Body & Root Layout ─────────────────────────── */
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--txt);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ─── Main Area ──────────────────────────────────── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Content Area ───────────────────────────────── */
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 26px;
+  background: var(--bg);
+}
+
+/* ─── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border2); border-radius: 4px; }
+
+/* ─── Animations Global ──────────────────────────── */
+@keyframes fadeIn   { from { opacity: 0 }                              to { opacity: 1 } }
+@keyframes modalPop { from { opacity: 0; transform: scale(.94) }       to { opacity: 1; transform: scale(1) } }
+@keyframes deIn     { from { opacity: 0; transform: translateY(8px) }  to { opacity: 1; transform: translateY(0) } }
+@keyframes dots     { 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
+.dots::after        { content: ''; animation: dots 1.8s steps(4,end) infinite; }

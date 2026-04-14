@@ -1,0 +1,288 @@
+/* ═══════════════════════════════════════════════════
+   04-sensor-cards.css
+   Sensor cards IoT: water level, tank visual,
+   water flow pipe, thermometer, humidity gauge,
+   gas bar, patroli ring, ESP waiting overlay
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Sensor Grid Layout ─────────────────────────── */
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+/* ─── Tank Cards Grid (responsive by count) ──────── */
+#wl-tanks-container {
+  display: grid !important;
+  gap: 10px;
+  width: 100%;
+}
+#wl-tanks-container.tanks-1  { grid-template-columns: 1fr; }
+#wl-tanks-container.tanks-2  { grid-template-columns: repeat(2, 1fr); }
+#wl-tanks-container.tanks-3,
+#wl-tanks-container.tanks-4,
+#wl-tanks-container.tanks-5  { grid-template-columns: repeat(2, 1fr); }
+#wl-tanks-container.tanks-6,
+#wl-tanks-container.tanks-7,
+#wl-tanks-container.tanks-8  { grid-template-columns: repeat(3, 1fr); }
+#wl-tanks-container.tanks-9,
+#wl-tanks-container.tanks-10 { grid-template-columns: repeat(4, 1fr); }
+#wl-tanks-container           { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+
+/* ─── Tank Card Cell ─────────────────────────────── */
+.tank-card-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 10px 10px;
+  gap: 4px;
+  min-width: 0;
+  transition: box-shadow .2s, border-color .2s;
+}
+.tank-card-cell:hover { box-shadow: 0 4px 14px rgba(0,0,0,.07); border-color: var(--border2); }
+
+/* ─── Sensor Card (s-card) ───────────────────────── */
+.s-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow .2s, border-color .2s;
+}
+.s-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.07); border-color: var(--border2); }
+
+/* ─── Colored top bar on card ────────────────────── */
+.s-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--acc, var(--blue));
+  border-radius: var(--radius) var(--radius) 0 0;
+  opacity: .7;
+}
+
+/* ─── ESP Waiting Overlay (per card) ─────────────── */
+.esp-waiting-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: rgba(244,246,248,.88);
+  border-radius: var(--radius);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  z-index: 5;
+  backdrop-filter: blur(1px);
+}
+.esp-waiting-overlay.show { display: flex; }
+.esp-wait-icon { font-size: 20px; opacity: .45; }
+.esp-wait-txt  { font-size: 11px; font-weight: 600; color: var(--txt3); letter-spacing: .3px; }
+.esp-wait-sub  { font-size: 10px; color: var(--txt3); opacity: .65; }
+
+/* ─── Card Label / Number / Unit / Status Pill ───── */
+.s-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  color: var(--txt3);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.s-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.s-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--acc, var(--blue));
+}
+.s-unit { font-size: 11px; color: var(--txt3); margin-top: 3px; }
+.s-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .8px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  margin-top: 7px;
+  border: 1px solid;
+}
+.st-ok   { background: #edfaf4; color: #0e7a4a; border-color: #8edcba; }
+.st-warn { background: #fef9ec; color: #9a7200; border-color: #f0d078; }
+.st-crit { background: #fef2f2; color: #b91c1c; border-color: #f0a0a0; }
+.st-wait { background: var(--bg); color: var(--txt3); border-color: var(--border2); }
+
+/* ─── Info Rows inside cards ─────────────────────── */
+.s-rows { display: flex; flex-direction: column; gap: 4px; }
+.irow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.irow:last-child { border: none; }
+.ik { font-size: 9px; color: var(--txt3); font-weight: 600; letter-spacing: .4px; }
+.iv { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--txt2); }
+
+/* ─── Tank Visual (vertikal) ─────────────────────── */
+.s-viz.tank-wrap { display: flex; align-items: flex-end; gap: 9px; height: 128px; margin-top: 4px; }
+.tank-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.tank {
+  width: 50px;
+  height: 98px;
+  border: 1.5px solid var(--border2);
+  border-radius: 4px 4px 6px 6px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+.tank-water {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, #bfdffa, #3b9de8);
+  transition: height 1.8s cubic-bezier(.34,1.2,.64,1);
+}
+@keyframes wsurf {
+  0%,100% { transform: translateX(-20%) scaleX(1.4); }
+  50%      { transform: translateX(10%)  scaleX(.8); }
+}
+.bbl {
+  position: absolute;
+  bottom: 5px;
+  background: rgba(255,255,255,.5);
+  border-radius: 50%;
+  animation: bblUp 3s ease-in infinite;
+}
+@keyframes bblUp {
+  0%   { transform: translateY(0);    opacity: .6; }
+  100% { transform: translateY(-90px); opacity: 0; }
+}
+
+/* ─── Water Flow Pipe ────────────────────────────── */
+.pipe-wrap    { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.pipe-row     { display: flex; align-items: center; gap: 0; }
+.pipe-cap     { width: 10px; height: 22px; background: var(--border2); }
+.pipe-cap.l   { border-radius: 6px 0 0 6px; }
+.pipe-cap.r   { border-radius: 0 6px 6px 0; }
+.pipe-seg     { flex: 1; height: 22px; background: var(--bg); border-top: 1.5px solid var(--border2); border-bottom: 1.5px solid var(--border2); overflow: hidden; position: relative; }
+.fp {
+  position: absolute;
+  width: 18px;
+  background: linear-gradient(90deg, transparent, var(--green), transparent);
+  border-radius: 2px;
+  animation: flowR .9s linear infinite;
+}
+@keyframes flowR { from { transform: translateX(-20px) } to { transform: translateX(120px) } }
+.fan-hub      { width: 36px; height: 36px; border-radius: 50%; background: var(--surface); border: 1.5px solid var(--border2); display: grid; place-items: center; flex-shrink: 0; }
+.fan-svg      { animation: spin 4s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg) } }
+.pipe-stats   { display: flex; justify-content: space-between; }
+.ps           { display: flex; flex-direction: column; gap: 2px; }
+.psl          { font-size: 8px; color: var(--txt3); font-weight: 600; letter-spacing: .8px; }
+.psv          { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--green); font-weight: 600; }
+
+/* ─── Thermometer ────────────────────────────────── */
+.thermo-wrap  { display: flex; align-items: flex-end; gap: 8px; margin-top: 8px; }
+.thermo-col   { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.thermo-tube  { width: 12px; height: 80px; background: var(--bg); border: 1.5px solid var(--border2); border-radius: 6px 6px 0 0; border-bottom: none; overflow: hidden; display: flex; align-items: flex-end; }
+.thermo-merc  { width: 100%; background: linear-gradient(180deg, #f97316, #dc2626); transition: height 1.4s ease; border-radius: 4px 4px 0 0; }
+.thermo-neck  { width: 6px; height: 6px; background: var(--border2); margin: 0 auto; }
+.thermo-bulb  { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #93c5fd, #1d4ed8); border: 1.5px solid var(--border2); transition: background .8s; }
+.thermo-scale { display: flex; flex-direction: column; justify-content: space-between; height: 80px; padding: 2px 0; }
+.thermo-scale span { font-family: 'DM Mono', monospace; font-size: 8px; color: var(--txt3); }
+
+/* ─── Humidity Gauge ─────────────────────────────── */
+.hum-wrap    { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.gauge-outer { display: flex; flex-direction: column; align-items: center; }
+#g-num       { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 600; color: var(--yellow); }
+
+/* ─── Gas Bar ────────────────────────────────────── */
+.gas-wrap    { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.gbar-track  { height: 14px; background: var(--bg); border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+.gbar-fill   { height: 100%; border-radius: 8px; transition: width 1.2s ease, background .8s; }
+.gas-ptcl    { display: flex; align-items: flex-end; gap: 3px; height: 36px; }
+.gp {
+  flex: 1;
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+  animation: gRise .8s ease-in-out infinite alternate;
+}
+@keyframes gRise { from { transform: scaleY(.5) } to { transform: scaleY(1) } }
+
+/* ─── Patroli Ring ───────────────────────────────── */
+.pat-wrap       { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.pat-ring-outer { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
+.pat-ring-num   { position: absolute; inset: 0; display: grid; place-items: center; font-family: 'DM Mono', monospace; font-size: 18px; color: var(--blue); }
+.pat-list       { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.pat-row        { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg); border-radius: 6px; border-left: 2px solid var(--blue); }
+.pat-name       { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px; color: var(--txt); }
+.pat-time       { font-family: 'DM Mono', monospace; font-size: 9px; color: var(--blue); }
+
+/* ─── Detail Button ──────────────────────────────── */
+.s-detail-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  padding: 4px 10px;
+  background: #ebf2fd;
+  border: 1px solid #c3d9fa;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--blue);
+  font-family: 'DM Sans', sans-serif;
+  transition: all .16s;
+  white-space: nowrap;
+  z-index: 2;
+}
+.s-detail-btn:hover {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+  box-shadow: 0 3px 10px rgba(43,125,233,.3);
+}
+
+/* ─── Dashboard Bottom Widgets Grid ──────────────── */
+.dash-new-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+.d-widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow .2s, border-color .2s;
+}
+.d-widget:hover     { box-shadow: 0 4px 16px rgba(0,0,0,.07); border-color: var(--border2); }
+.d-widget-bar       { position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--wacc, var(--blue)); border-radius: var(--radius) var(--radius) 0 0; }
+.d-widget-label     { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: var(--txt3); text-transform: uppercase; margin-bottom: 10px; }
+.d-widget-num       { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--wacc, var(--blue)); margin-bottom: 2px; }
+.d-widget-unit      { font-size: 11px; color: var(--txt3); margin-bottom: 10px; }
+
+/* ─── Dashboard Sparkline & Donut Widgets (v3) ───── */
+.d-sparkline    { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-top: 6px; }
+.d-sparkbar     { flex: 1; border-radius: 3px 3px 0 0; min-height: 4px; transition: height .5s ease; opacity: .7; }
+.d-sparkbar:hover { opacity: 1; }
+.d-mini-list    { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.d-mini-row     { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.d-mini-row:last-child { border: none; }
+.d-mini-k       { font-size: 11px; color: var(--txt2); font-weight: 500; }
+.d-mini-v       { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--txt2); }
+.d-donut-wrap   { display: flex; align-items: center; gap: 16px; margin-top: 6px; }
+.d-donut-legend { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.d-legend-row   { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--txt2); }
+.d-legend-dot   { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

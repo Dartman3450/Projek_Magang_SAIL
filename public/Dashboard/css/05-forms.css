@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════
+   05-forms.css
+   Form & Data Entry: input, label, button, table,
+   status bar, change password
+   ═══════════════════════════════════════════════════ */
+
+/* ─── Page Wrap & Header ─────────────────────────── */
+.de-wrap   { padding: 4px 0; animation: deIn .3s ease; }
+.de-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.de-title  { font-size: 18px; font-weight: 600; color: var(--txt); }
+.de-sub    { font-size: 12px; color: var(--txt3); margin-top: 2px; }
+.de-date   { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--txt3); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; }
+
+/* ─── Card Container ─────────────────────────────── */
+.de-card       { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; }
+.de-card-title { font-size: 13px; font-weight: 600; color: var(--txt2); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+.de-card-ico   { font-size: 15px; }
+.de-refresh-btn { margin-left: auto; background: none; border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; font-size: 11px; color: var(--txt3); cursor: pointer; transition: all .15s; }
+.de-refresh-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* ─── Grid & Fields ──────────────────────────────── */
+.de-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.de-field { display: flex; flex-direction: column; gap: 6px; }
+.de-full  { grid-column: 1 / -1; }
+
+/* ─── Labels ─────────────────────────────────────── */
+.de-label { font-size: 10px; font-weight: 600; letter-spacing: 1px; color: var(--txt3); text-transform: uppercase; }
+.de-unit  { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--txt3); }
+
+/* ─── Input with Unit Suffix ─────────────────────── */
+.de-input-wrap { display: flex; align-items: stretch; border: 1.5px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; transition: border-color .2s, box-shadow .2s; }
+.de-input-wrap:focus-within { border-color: var(--blue); background: var(--surface); box-shadow: 0 0 0 3px rgba(43,125,233,.10); }
+.de-input-wrap .de-input    { border: none !important; background: transparent !important; box-shadow: none !important; border-radius: 0 !important; flex: 1; }
+.de-input-unit { display: flex; align-items: center; padding: 0 10px; font-size: 11px; font-weight: 600; color: var(--txt3); background: var(--bg); border-left: 1px solid var(--border); white-space: nowrap; flex-shrink: 0; }
+.de-input-wrap:focus-within .de-input-unit { background: var(--surface); }
+
+/* ─── Base Input ─────────────────────────────────── */
+.de-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--txt);
+  background: var(--bg);
+  outline: none;
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.de-input:focus       { border-color: var(--blue); background: var(--surface); box-shadow: 0 0 0 3px rgba(43,125,233,.10); }
+.de-input::placeholder { color: var(--txt3); }
+.de-select  { cursor: pointer; }
+.de-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+/* ─── Ghost / Set-Point Style ────────────────────── */
+.de-input.sp-ghost             { color: var(--txt3); font-style: italic; background: rgba(160,174,192,.07); }
+.de-input.sp-ghost::placeholder { color: var(--txt3); opacity: .7; }
+.de-entry-note { padding: 10px 14px; background: #fef9ec; border: 1px solid #fde047; border-radius: 8px; font-size: 11px; color: #92400e; margin-bottom: 16px; line-height: 1.5; }
+
+/* ─── Status Bar ─────────────────────────────────── */
+.de-status-bar     { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; margin-bottom: 16px; }
+.de-status-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+.de-status-error   { background: #fef2f2; color: #dc2626;  border: 1px solid #fecaca; }
+.de-status-loading { background: #eff6ff; color: var(--blue); border: 1px solid #bfdbfe; }
+
+/* ─── Action Buttons ─────────────────────────────── */
+.de-actions    { display: flex; justify-content: flex-end; gap: 10px; }
+.de-btn        { padding: 9px 20px; border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; border: none; }
+.de-btn-primary      { background: var(--blue); color: #fff; }
+.de-btn-primary:hover { background: #1a6dd8; transform: translateY(-1px); box-shadow: 0 3px 12px rgba(43,125,233,.3); }
+.de-btn-ghost        { background: transparent; color: var(--txt2); border: 1.5px solid var(--border); }
+.de-btn-ghost:hover  { background: var(--bg); }
+
+/* ─── Data Table ─────────────────────────────────── */
+.de-table-wrap    { overflow-x: auto; }
+.de-table         { width: 100%; border-collapse: collapse; font-size: 12px; }
+.de-table th      { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--txt3); border-bottom: 1px solid var(--border); background: var(--bg); }
+.de-table td      { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--txt2); }
+.de-table tr:last-child td { border-bottom: none; }
+.de-table tr:hover td      { background: var(--bg); }
+.de-empty         { text-align: center; padding: 32px; color: var(--txt3); font-size: 13px; }
+
+/* ─── Change Password ────────────────────────────── */
+.cp-input-wrap              { position: relative; display: flex; align-items: center; }
+.cp-input-wrap .de-input    { padding-right: 38px; }
+.cp-eye                     { position: absolute; right: 12px; cursor: pointer; font-size: 15px; color: var(--txt3); user-select: none; transition: color .15s; }
+.cp-eye:hover               { color: var(--blue); }
+.cp-rules                   { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+.cp-rule                    { font-size: 12px; color: var(--txt3); transition: color .2s; }
+
+/* ─── Project Select Dropdown ────────────────────── */
+.de-proj-select-wrap        { margin-bottom: 20px; }
+.de-proj-select-wrap select { width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--txt); background: var(--surface); outline: none; transition: border-color .2s; cursor: pointer; }
+.de-proj-select-wrap select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43,125,233,.1); }

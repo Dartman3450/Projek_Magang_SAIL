@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Login – SAIL</title>
-  <link rel="stylesheet" href="sail-unified.css">
+  <link rel="stylesheet" href="/Homepage/sail-unified.css">
   <style>
     .page-center {
       display: flex;
@@ -87,12 +87,7 @@
   </div>
 
   <div class="page-center">
-
-    <!-- KIRI: Slot gambar -->
     <div class="hero-side">
-      <!-- Uncomment & ganti src jika sudah punya gambar: -->
-      <!-- <img src="../assets/hero.jpg" alt="SAIL Hero"> -->
-
       <div class="hero-placeholder">
         <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
           <rect x="8" y="8" width="64" height="64" rx="12" stroke="white" stroke-width="3"/>
@@ -101,11 +96,9 @@
         </svg>
         <span>Tempatkan gambar di sini</span>
       </div>
-
       <div class="hero-overlay"></div>
     </div>
 
-    <!-- KANAN: Form login -->
     <div class="form-side">
       <div class="card">
         <div class="card-accent"></div>
@@ -113,7 +106,8 @@
           <div class="card-icon">🔐</div>
           <div class="card-title">Welcome Back</div>
           <div class="card-desc">Sign in to your account to access the operational dashboard.</div>
-          <form onsubmit="login(event)">
+          
+          <form id="loginForm">
             <div class="form-group">
               <label class="form-label" for="email">Email Address</label>
               <input class="form-input" type="email" id="email" placeholder="user@sail.id" required>
@@ -124,18 +118,19 @@
             </div>
             <button type="submit" class="btn-primary">Sign In</button>
           </form>
+
         </div>
         <div class="card-footer">
           <div style="display:flex; gap:24px;">
-            <a href="../Register/Register_Page.html" class="card-link">Create account</a>
+            <a href="/register" class="card-link">Create account</a>
             <a href="#" class="card-link">Forgot password?</a>
           </div>
           <div class="card-note">Only registered users can access the system</div>
         </div>
       </div>
     </div>
-
   </div>
-  <script src="Login_Script.js"></script>
+
+  <script src="/Homepage/Login_Script.js"></script>
 </body>
 </html>

@@ -149,8 +149,13 @@ async function getPatroli(req, res) {
 }
 
 // ✅ All functions exported with correct names matching iotRoutes.js
+async function getLatest(req, res) {
+  return getSummary(req, res);
+}
+
 module.exports = {
   getDashboardSummary: getSummary,
+  getLatest,
   getWaterLevel,
   getLatestWaterLevel,
   getWaterFlow,

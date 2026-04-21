@@ -1,7 +1,7 @@
 const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcrypt');
-const pool    = require('../db');
+const {pool}    = require('../db');
 
 // ═══════════════════════════════════════════════
 // LOGIN
@@ -106,8 +106,8 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Validate role — only allow known roles, default to 'utility' if not provided
-    const allowedRoles = ['admin', 'scientist', 'utility'];
+    // Validate role — semua role yang diizinkan sistem
+    const allowedRoles = ['admin', 'superadmin', 'scientist', 'utility', 'limbah', 'PPIC', 'Produksi'];
     const userRole = allowedRoles.includes(role) ? role : 'utility';
 
     // Check if email already exists

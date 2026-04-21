@@ -26,5 +26,7 @@ pool.query('SELECT NOW()', (err, res) => {
   }
 });
 
-module.exports = pool;
-module.exports.poolIoT = poolIoT;
+// Named exports — gunakan destructuring saat import:
+//   const { pool }    = require('../db');   ← untuk controller/route biasa
+//   const { poolIoT } = require('./db');    ← untuk iotController & server.js
+module.exports = { pool, poolIoT };

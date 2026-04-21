@@ -4,10 +4,12 @@
 
 // Role descriptions shown below the dropdown
 const ROLE_HINTS = {
-  utility:   'Access: Dashboard, Data Entry Utility, Reporting, Settings',
-  scientist: 'Access: Dashboard, Data Entry Laboratory, Reporting, Settings',
-  admin:     'Access: All pages and features',
-  limbah: 'Access: Dashboard, Data entry Limbah, Reporting, Settings',
+  utility:    'Akses: Dashboard IoT, Data Entry Utility, Reporting, Settings',
+  scientist:  'Akses: Dashboard IoT, Data Entry Laboratorium, Reporting, Settings',
+  Produksi:   'Akses: Dashboard IoT, Data Entry Production, Reporting, Settings',
+  PPIC:       'Akses: Dashboard IoT, Data Entry Production, Data Entry Utility , Data Entry Laboratorium, Data Entry LimbahReporting, Settings',
+  limbah:     'Akses: Dashboard IoT, Data Entry Limbah, Reporting, Settings',
+  superadmin: 'Akses: Semua halaman dan fitur (level tertinggi)',
 };
 
 // Updates the hint text when user changes the role dropdown
@@ -49,8 +51,8 @@ async function register(event) {
   }
 
   btn.disabled = true;
-  btn.textContent = 'Creating account…';
-  showStatus('loading', 'Registering account…');
+  btn.textContent = 'Membuat akun…';
+  showStatus('loading', '⏳ Mendaftarkan akun…');
 
   try {
     const res = await fetch('/api/auth/register', {
@@ -68,21 +70,23 @@ async function register(event) {
       return;
     }
 
-    // Save user info to localStorage for fingerprint registration next
-    localStorage.setItem('user_id', data.user_id);
-    localStorage.setItem('email',   email);
-    localStorage.setItem('role',    role);
+    // Jangan set localStorage — user harus login manual dulu di homepage
+    // Bersihkan kalau ada sisa session lama
+    localStorage.removeItem('isLoggedin');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('email');
+    localStorage.removeItem('role');
 
-    showStatus('success', 'Account created! Redirecting to fingerprint setup…');
+    showStatus('success', '✅ Akun berhasil dibuat! Silakan login dengan email dan password Anda.');
 
-    // Redirect to fingerprint registration after short delay
+    // Redirect ke homepage (login form) setelah 1.5 detik
     setTimeout(() => {
-      window.location.href = '../Fingerprint_Register/fingerprint_register.html';
-    }, 1000);
+      window.location.href = '/';
+    }, 1500);
 
   } catch (err) {
     console.error('REGISTER ERROR:', err);
-    showStatus('error', 'Cannot connect to server. Is it running?');
+    showStatus('error', '❌ Tidak bisa terhubung ke server. Pastikan server berjalan.');
     btn.disabled = false;
     btn.textContent = 'Create Account →';
   }

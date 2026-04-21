@@ -242,7 +242,7 @@
   font-family: 'DM Sans', sans-serif;
   transition: all .16s;
   white-space: nowrap;
-  z-index: 2;
+  z-index: 10;
 }
 .s-detail-btn:hover {
   background: var(--blue);

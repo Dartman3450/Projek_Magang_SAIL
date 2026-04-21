@@ -1,6 +1,16 @@
+var _pjCache = { ongoing: [], completed: [] };
 // ══ STATE ══════════════════════════════════════════
 let espConnected = false;
 let _activeTab   = 'water-level';
+let _activeReportTab = 'lab';
+let _reportSortBy = 'newest';
+
+// Project management state variables
+let _editPJIdx = -1;
+let _spPJIdx = -1;
+let _cipPJIdx = -1;
+let _fpPJIdx = -1;
+let _updPJIdx = -1, _updType = '';
 
 const API = {
   summary:    '/api/iot/dashboard/summary',
@@ -8,6 +18,166 @@ const API = {
   waterFlow:  '/api/iot/water-flow',
   lingkungan: '/api/iot/lingkungan',
   patroli:    '/api/iot/patroli',
+};
+
+// Lab CIP state
+let _labCIPItems = {}; // menyimpan counter item per uid
+
+// Set Point field definitions (pagination)
+const SP_FIELDS_PAGE1 = [
+  {id:'sp-slurry',     label:'Slurry Ratio',         type:'number', unit:'%'},
+  {id:'sp-hopper',     label:'Hopper Calibration',   type:'text',   unit:''},
+  {id:'sp-density',    label:'Density',              type:'number', unit:'Kg/m³'},
+  {id:'sp-feed',       label:'Feed',                 type:'number', unit:'L/h'},
+  {id:'sp-aroma',      label:'Aroma Flowrate',       type:'number', unit:'L/h',      calculated:true, formula:'External strip rate % * Feed'},
+  {id:'sp-steam',      label:'Stripping Steam',      type:'number', unit:'kg/h',     calculated:true, formula:'Aroma + 0.0933 * Top of Column - 2.3333 + Math.abs(Offset) * Feed * 0.0018'},
+  {id:'sp-prod-out',   label:'Product Out',          type:'number', unit:'L/h'},
+  {id:'sp-cond1',      label:'Condensate #1',        type:'number', unit:'L/h',      calculated:true, formula:'Condenser #1 % * Feed'},
+  {id:'sp-cond2',      label:'Condensate #2',        type:'number', unit:'L/h',      calculated:true, formula:'(External strip rate % - Condenser #1 %) * Feed'},
+  {id:'sp-ext',        label:'Strip Rate External',  type:'number', unit:'%'},
+  {id:'sp-int',        label:'Strip Rate Internal',  type:'text',   unit:'',         calculated:true, formula:'100 * Stripping Steam / Feed'},
+  {id:'sp-cond-rate',  label:'Condenser #1',         type:'number', unit:'%'},
+  {id:'sp-offset',     label:'Offset',               type:'number', unit:'°C'},
+];
+// Set Point field definitions (pagination)
+const SP_FIELDS_PAGE2 = [
+  {id:'sp-temp-feed',  label:'Product Feed',         type:'number', unit:'°C'},
+  {id:'sp-temp-heater',label:'Product Heater',       type:'number', unit:'°C',      calculated:true, formula:'Top of Column + Offset'},
+  {id:'sp-temp-top',   label:'Top of Column',        type:'number', unit:'°C'},
+  {id:'sp-condensed1', label:'Condensed #1',         type:'number', unit:'°C'},
+  {id:'sp-condensed2', label:'Condensed #2',         type:'number', unit:'°C'},
+  {id:'sp-temp-bot',   label:'Bottom of Column',     type:'number', unit:'°C'},
+  {id:'sp-add1',       label:'Product Flowrate',                    type:'text',   unit:''},
+  {id:'sp-add2',       label:'Product Flow Control Valve Position', type:'text',   unit:''},
+  {id:'sp-add3',       label:'CT Steam Pressure',                   type:'text',   unit:''},
+  {id:'sp-add4',       label:'Concentrate Recirculation Flow',      type:'text',   unit:''},
+  {id:'sp-add5',       label:'Product Cooler Temperature',          type:'text',   unit:''},
+  {id:'sp-add6',       label:'CT Discharge Level',                  type:'text',   unit:''},
+  {id:'sp-add7',       label:'Brix Input',                          type:'text',   unit:''},
+  {id:'sp-add8',       label:'Brix Output',                         type:'text',   unit:''},
+  {id:'sp-chilled',    label:'Chilled Water',                       type:'text',   unit:''},
+  {id:'sp-condenser-water', label:'Condenser Water',                type:'text',   unit:''},
+  {id:'sp-system-vacuum',   label:'System Vacuum',                  type:'text',   unit:''},
+  {id:'sp-steam-flow',      label:'Steam Flow',                     type:'text',   unit:''},
+];
+const SP_FIELDS = [...SP_FIELDS_PAGE1, ...SP_FIELDS_PAGE2];
+
+const DE_SECTIONS = [
+  {
+    label: 'Slurry',
+    icon: '🌿',
+    color: '#166534',
+    bg: '#f0fdf4',
+    border: '#86efac',
+    fields: ['sp-slurry', 'sp-hopper', 'sp-density']
+  },
+  {
+    label: 'Flow',
+    icon: '💧',
+    color: '#1e40af',
+    bg: '#eff6ff',
+    border: '#93c5fd',
+    fields: ['sp-feed', 'sp-aroma', 'sp-steam', 'sp-prod-out', 'sp-cond1', 'sp-cond2']
+  },
+  {
+    label: 'Strip Rate',
+    icon: '📊',
+    color: '#6b21a8',
+    bg: '#faf5ff',
+    border: '#c4b5fd',
+    fields: ['sp-ext', 'sp-int', 'sp-cond-rate', 'sp-offset']
+  },
+  {
+    label: 'Temperature',
+    icon: '🌡️',
+    color: '#9a3412',
+    bg: '#fff7ed',
+    border: '#fdba74',
+    fields: ['sp-temp-feed', 'sp-temp-heater', 'sp-temp-top', 'sp-condensed1', 'sp-condensed2', 'sp-temp-bot']
+  },
+  {
+    label: 'Parameter CT',
+    icon: '🔬',
+    color: '#086000',
+    bg: '#455e42',
+    border: '#d1d5db',
+    fields: ['sp-add1', 'sp-add2', 'sp-add3', 'sp-add4', 'sp-add5', 'sp-add6', 'sp-add7', 'sp-add8']
+  },
+  {
+    label: 'Coolants',
+    icon: '🧊',
+    color: '#0e83d1',
+    bg: '#a7d2fc',
+    border: '#d1d5db',
+    fields: ['sp-chilled', 'sp-condenser-water']
+  },
+  {
+    label: 'Pressure',
+    icon: '⚡',
+    color: '#ffe0b7',
+    bg: '#fff4da',
+    border: '#d1d5db',
+    fields: ['sp-system-vacuum', 'sp-steam-flow']
+  }
+];
+
+// ═══════════════════════════════════════════════════════════════
+// CIP MODAL SYSTEM - Checklist definitions (MUST BE BEFORE openCIPModal)
+// ═══════════════════════════════════════════════════════════════
+const CIP_CHECKLISTS = {
+  production: {
+    title: 'CIP Production',
+    sections: [
+      {
+        name: '',
+        items:['Finish Raw Product']
+      },
+      {
+        name: 'SSC + Decanter CIP',
+        items: ['Rinsing Prod', 'Caustic', 'Rinsing Caustic', 'Citric', 'Rinsing Citric', 'Revers', 'Shutdown']
+      },
+      {
+        name: 'Centri + Raw Tank CIP',
+        items: ['Rinsing Prod', 'Caustic', 'Rinsing Caustic', 'Citric', 'Rinsing Citric', 'Shutdown']
+      },
+      {
+        name: 'Filter CIP',
+        items: ['Rinsing', 'Caustic + Rinsing', 'Citric + Rinsing']
+      },
+      {
+        name: 'CT CIP',
+        items: ['Rinsing Prod', 'Caustic', 'Rinsing Caustic', 'Citric', 'Rinsing Citric']
+      },
+      {
+        name: 'Clarified Tank CIP',
+        items: ['Rinsing Prod', 'Caustic', 'Rinsing Caustic', 'Citric', 'Rinsing Citric']
+      },
+      {
+        name: 'Concentrate Tank CIP',
+        items: ['Rinsing Prod', 'Caustic', 'Rinsing Caustic', 'Citric', 'Rinsing Citric']
+      },
+      {
+        name :'Aroma Tank CIP',
+        items: ['Rinsing Hot Water']
+      },
+    ],
+    fields: [
+      { id: 'ph', label: 'PH', type: 'number', step: '0.1' },
+      { id: 'total_chemical', label: 'Total Chemical', type: 'text' }
+    ]
+  },
+  laboratorium: {
+    title: 'Laboratory CIP',
+    sections: [
+      {
+        name: 'General CIP',
+        items: ['Pre-rinse', 'Caustic Wash', 'Intermediate Rinse', 'Acid Wash', 'Final Rinse', 'Sanitization']
+      }
+    ],
+    fields: [
+      { id: 'ph', label: 'PH', type: 'number', step: '0.1' }
+    ]
+  }
 };
 
 // ══ UTILS ══════════════════════════════════════════
@@ -25,13 +195,17 @@ function toggleNav(el) {
   el.classList.toggle('open');
   el.nextElementSibling.classList.toggle('show');
 }
+window.toggleNav = toggleNav;
 
 // ── Role-based access control ──────────────────────────────────────
 const ROLE_ACCESS = {
-  admin:     null, // null = all pages allowed
-  scientist: ['iot', 'laboratorium', 'reporting', 'change-password'],
-  utility:   ['iot', 'utility',      'reporting', 'change-password'],
-  limbah: ['iot', 'limbah',      'reporting', 'change-password'],
+  admin:      null, // null = all pages allowed
+  superadmin: null, // sama seperti admin — akses semua
+  scientist:  ['iot', 'laboratorium', 'reporting', 'change-password'],
+  utility:    ['iot', 'utility',      'reporting', 'change-password'],
+  limbah:     ['iot', 'limbah',       'reporting', 'change-password'],
+  Produksi:   ['iot', 'production',   'reporting', 'change-password'],
+  PPIC:       ['iot', 'production', 'utility', 'laboratorium', 'limbah', 'reporting', 'change-password'],
 };
 // ───────────────────────────────────────────────────────────────────
 
@@ -89,93 +263,177 @@ function loadPage(page) {
   }
 }
 
-function getReporting(state) {
+function getReporting() {
     return `
     <div class="de-wrap">
         <div class="de-header">
             <div>
-                <h2 class="de-title">Report harian</h2>
+                <h2 class="de-title">Report Harian</h2>
                 <p class="de-sub">SAIL / Reporting</p>
             </div>
         </div>
 
-        <div class="de-card">
-            <form id="reportForm">
-                <div class="de-grid">
-                    <div class="de-field de-full">
-                        <label class="de-label">Judul Laporan</label>
-                        <input type="text" class="de-input" placeholder="Contoh: Kerusakan Sensor Tanki A" required>
-                    </div>
+        <!-- Tab Navigation -->
+        <div class="report-tabs" style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0;overflow-x:auto">
+            <button class="report-tab active" data-tab="lab" onclick="switchReportTab('lab', this)">
+                <span style="font-size:16px">🧪</span> Lab
+            </button>
+            <button class="report-tab" data-tab="utility" onclick="switchReportTab('utility', this)">
+                <span style="font-size:16px">⚡</span> Utility
+            </button>
+            <button class="report-tab" data-tab="limbah" onclick="switchReportTab('limbah', this)">
+                <span style="font-size:16px">♻️</span> Limbah
+            </button>
+        </div>
 
-                    <div class="de-field">
-                        <label class="de-label">Kategori Laporan</label>
-                        <select class="de-input de-select">
-                            <option value="teknis">Masalah Teknis</option>
-                            <option value="operasional">Kegiatan Operasional</option>
-                            <option value="keamanan">Keamanan/Patroli</option>
-                            <option value="lainnya">Lainnya</option>
-                        </select>
-                    </div>
-
-                    <div class="de-field">
-                        <label class="de-label">Tingkat Prioritas</label>
-                        <select class="de-input de-select">
-                            <option value="low">Rendah</option>
-                            <option value="medium">Sedang</option>
-                            <option value="high">Tinggi/Urgent</option>
-                        </select>
-                    </div>
+        <!-- Sorting Controls -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label style="font-size:12px;color:var(--txt3);font-weight:600">Urutkan:</label>
+                    <select id="report-sort-select" onchange="changeReportSort(this.value)" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--txt);font-size:12px;cursor:pointer">
+                        <option value="newest">Terbaru</option>
+                        <option value="oldest">Terlama</option>
+                    </select>
                 </div>
-
-                 <div class="Electricity">
-                    <div class="Penggunaan Listrik">
-                        <label class="de-label">Laporan penggunaan listrik</label>
-                        <input type="text" class="de-input" placeholder="Contoh:100 volt / jam" required>
-                    </div>
-
-                 <div class="Utility report">
-                    <div class="Durability & condition">
-                        <label class = "de-label"> Laporan Durability Utility </label>
-                        <select class="de-input de-select">
-                            <option value="Baik">Rendah</option>
-                            <option value="Normal">Sedang</option>
-                            <option value="Rusak">Tinggi/Urgent</option>
-                        </select>
-                    </div>
-                 <div class="Utility report">
-                    <div class="Stok barang">
-                       <label class="de-label">Laporan Stok barang<label><br>
-                       <input type = "text" class="de-input" placeholder="Contoh teh = sisa 100kg">
-                    </div>
-
-                <div class="de-actions">
-                    <button type="submit" class="de-btn de-btn-primary">Kirim Laporan</button>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label style="font-size:12px;color:var(--txt3);font-weight:600">Dari:</label>
+                    <input type="date" id="report-date-from" onchange="renderHarianReports()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--txt);font-size:12px;cursor:pointer">
                 </div>
-            </form>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <label style="font-size:12px;color:var(--txt3);font-weight:600">Sampai:</label>
+                    <input type="date" id="report-date-to" onchange="renderHarianReports()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--txt);font-size:12px;cursor:pointer">
+                </div>
+                <button onclick="clearDateFilters()" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--txt3);font-size:11px;cursor:pointer;font-weight:600">✕ Clear</button>
+            </div>
+            <div style="font-size:11px;color:var(--txt3);font-family:'DM Mono',monospace" id="report-count-label">0 laporan</div>
+        </div>
+
+        <!-- Display Reports Container -->
+        <div id="harian-reports-container">
+            <!-- Will be populated by JavaScript -->
         </div>
     </div>
-    `;
-    // Pastikan kode ini berjalan setelah DOM dimuat
-document.addEventListener('DOMContentLoaded', () => {
-    const navItems = document.querySelectorAll('.nav-item');
-    const mainContent = document.getElementById('mainContent'); // Pastikan ID ini sesuai dengan <section> kamu
 
-    navItems.forEach(item => {
-        item.addEventListener('click', function() {
-            const page = this.getAttribute('data-page');
-            
-            if (page === 'reporting') {
-                // Menghapus tulisan "Under development" dan menggantinya dengan form
-                mainContent.innerHTML = getReporting();
-                
-                // Update judul di atas agar sesuai
-                document.getElementById('pageTitle').innerText = "Reporting";
-                document.getElementById('breadcrumb').innerText = "SAIL / Reporting";
-            }
-        });
-    });
-});
+    <style>
+    .report-tab {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: var(--txt3);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .report-tab:hover {
+        color: var(--txt);
+        background: var(--surface);
+        border-radius: 8px 8px 0 0;
+    }
+    .report-tab.active {
+        color: var(--blue);
+        border-bottom-color: var(--blue);
+        background: var(--surface);
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .report-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    
+    .report-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        transition: all 0.2s;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .report-card:hover {
+        border-color: var(--blue);
+        box-shadow: 0 4px 12px rgba(43, 125, 233, 0.08);
+        transform: translateY(-2px);
+    }
+    
+    .report-card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        gap: 10px;
+    }
+    
+    .report-card-date {
+        font-family: 'DM Mono', monospace;
+        font-size: 11px;
+        color: var(--txt3);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .report-card-badge {
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 10px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    
+    .report-params {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .report-param-row {
+        display: grid;
+        grid-template-columns: 110px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    
+    .report-param-row:last-child {
+        border-bottom: none;
+    }
+    
+    .report-param-label {
+        font-size: 10px;
+        color: var(--txt3);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .report-param-value {
+        font-family: 'DM Mono', monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--blue);
+    }
+
+    @media (max-width: 768px) {
+        .report-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+    `;
 }
+
 
 
 // ══ ESP STATUS ═════════════════════════════════════
@@ -396,44 +654,6 @@ function getIoTHTML() {
       </div>
     </div>
 
-    <!-- PATROLI -->
-    <div class="s-card" style="--acc:var(--blue)">
-      <div class="s-bar"></div>
-      ${ov.replace('ov-ID','ov-pat')}
-      <div class="s-label">Patrol Report</div>
-      <div class="s-header">
-        <div>
-          <div class="s-num" id="pat-total">—</div>
-          <div class="s-unit">total reports</div>
-          <button class="s-detail-btn" onclick="openDetail('patroli')">Detail ↗</button>
-        </div>
-      </div>
-      <div class="s-viz patrol-wrap">
-        <div class="pat-ring-outer">
-          <svg viewBox="0 0 88 88" width="76" height="76">
-            <defs>
-              <linearGradient id="rGrd" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stop-color="#2b7de9"/>
-                <stop offset="100%" stop-color="#18a96a"/>
-              </linearGradient>
-            </defs>
-            <circle cx="44" cy="44" r="35" stroke="#e4e8ed" stroke-width="7" fill="none"/>
-            <circle id="pat-ring" cx="44" cy="44" r="35"
-              stroke="url(#rGrd)" stroke-width="7" fill="none"
-              stroke-dasharray="220" stroke-dashoffset="220"
-              transform="rotate(-90,44,44)"
-              style="transition:stroke-dashoffset 1.6s ease;stroke-linecap:round"/>
-          </svg>
-          <div class="pat-ring-num" id="pat-ring-num">—</div>
-        </div>
-        <div class="pat-list" id="patrol-list">
-          <div style="font-size:11px;color:var(--txt3)">—</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
   <!-- TABLE -->
   <!-- 3 NEW DASHBOARD WIDGETS -->
   <div class="dash-new-grid" id="dash-new-widgets">
@@ -462,7 +682,7 @@ function getIoTHTML() {
     <!-- Widget Filter water -->
     <div class="d-widget" style="--wacc:var(--blue)">
       <div class="d-widget-bar"></div>
-      <div class="d-widget-label">Air Proses/Filter</div>
+      <div class="d-widget-label">Air Feed Slurry</div>
       <div style="display:flex;justify-content:center;align-items:center;height:120px">
         <div style="position:relative;width:100px;height:100px">
           <svg viewBox="0 0 100 100" width="100" height="100">
@@ -482,7 +702,7 @@ function getIoTHTML() {
     <!-- Widget Slurry Water -->
     <div class="d-widget" style="--wacc:var(--purple)">\
       <div class="d-widget-bar"></div>
-      <div class="d-widget-label">Slurry water</div>
+      <div class="d-widget-label">Air EDI</div>
       <div style="display:flex;justify-content:center;align-items:center;height:120px">
         <div style="position:relative;width:100px;height:100px">
           <svg viewBox="0 0 100 100" width="100" height="100">
@@ -1098,29 +1318,11 @@ function applyEnv(env) {
   pill('gas-status', gas, 300, 500);
 }
 
-
-function applyPatroli(total) {
-  const tot = parseInt(total)||0;
-  set('pat-total', tot); set('pat-ring-num', tot);
-  const ring=$('pat-ring');
-  if(ring) ring.style.strokeDashoffset=220-(tot/Math.max(tot,50))*220;
-}
-
-function pill(id, v, warnAt, critAt) {
-  const el=$(id); if(!el) return;
-  if(v==null){el.textContent='—';el.className='s-pill st-wait';return;}
-  let c='st-ok',t='NORMAL';
-  if(critAt!==undefined&&v>=critAt){c='st-crit';t='DANGER';}
-  else if(warnAt!==undefined&&v>=warnAt){c='st-warn';t='WARNING';}
-  el.textContent=t; el.className='s-pill '+c;
-}
-
 // ══ TABLE ══════════════════════════════════════════
 const tabApi = {
   'water-level': API.waterLevel,
   'water-flow':  API.waterFlow,
   'lingkungan':  API.lingkungan,
-  'patroli':     API.patroli,
 };
 
 function swTab(tab, el) {
@@ -1389,82 +1591,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // Also close sidebar when clicking the ghost zone (alternative open)
 // Already handled via onmouseenter="openSidebar()" in HTML
 
-// ══ DEMO MODE ══════════════════════════════════════════════
-// Memungkinkan uji coba banyak tanki virtual dengan hanya 2 sensor fisik.
-// Cara kerja: setiap tanki virtual bisa pakai key yang sama (mis. s1/s2),
-// tapi dengan dimensi berbeda. Demo mode mensimulasikan data sensor tanpa ESP.
-let _demoActive = false;
-let _demoTimer  = null;
-
-function toggleDemoMode() {
-  _demoActive = !_demoActive;
-  const btn   = document.getElementById('demo-btn');
-  const panel = document.getElementById('demo-panel');
-  if (btn)   { btn.style.background = _demoActive ? '#7c3aed' : '#f3f0ff'; btn.style.color = _demoActive ? '#fff' : 'var(--purple)'; btn.textContent = _demoActive ? '⏹ Stop Demo' : '🧪 Demo'; }
-  if (panel) panel.style.display = _demoActive ? 'block' : 'none';
-  if (_demoActive) {
-    _buildDemoSliders();
-    _applyDemo();
-    _demoTimer = setInterval(_applyDemo, 800);
-  } else {
-    if (_demoTimer) { clearInterval(_demoTimer); _demoTimer = null; }
-  }
-}
-
-function _buildDemoSliders() {
-  const wrap = document.getElementById('demo-sliders');
-  if (!wrap) return;
-  const sensors  = getSensors();
-  // Group by physical key — only one slider per unique key
-  const seen = {};
-  const unique = sensors.filter(s => { if (seen[s.key]) return false; seen[s.key]=true; return true; });
-  wrap.innerHTML = unique.map(s => {
-    const tinggiCm  = Math.round(+(s.tinggi||1) * 100);
-    const zeroCm    = +(s.sensorZeroCm ?? 0);
-    const maxDist   = Math.round(tinggiCm * 1.05); // 105% of tank height
-    const defDist   = Math.round(tinggiCm * 0.4);  // default: ~60% penuh
-    const defPct    = Math.max(0, Math.round((tinggiCm - defDist - zeroCm) / Math.max(1, tinggiCm - zeroCm) * 100));
-    return `
-    <div style="background:white;border:1px solid #e9d5ff;border-radius:7px;padding:7px 10px;min-width:140px">
-      <div style="font-size:9px;font-weight:700;color:var(--purple)">📡 key: ${s.key}</div>
-      <div style="font-size:8px;color:var(--txt3);margin-bottom:4px">Jarak sensor (${zeroCm}cm=100%, ${tinggiCm}cm=0%)</div>
-      <input type="range" min="0" max="${maxDist}" value="${defDist}" id="demo-sl-${s.key}"
-        style="width:100%;accent-color:var(--purple)"
-        oninput="_onDemoSlide('${s.key}',+this.value,${tinggiCm},${zeroCm},this)">
-      <div style="display:flex;justify-content:space-between;font-family:'DM Mono',monospace;font-size:10px;margin-top:3px">
-        <span id="demo-lbl-${s.key}" style="color:var(--purple)">${defDist}cm</span>
-        <span id="demo-pct-${s.key}" style="color:var(--green)">${defPct}%</span>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function _onDemoSlide(key, dist, tankCm, zeroCm, el) {
-  const lbl = document.getElementById('demo-lbl-'+key);
-  const pct = document.getElementById('demo-pct-'+key);
-  const range = tankCm - zeroCm;
-  const p = range > 0 ? Math.max(0, Math.min(100, Math.round((tankCm - dist - zeroCm) / range * 100))) : 0;
-  if (lbl) lbl.textContent = dist + 'cm';
-  if (pct) { pct.textContent = p + '%'; pct.style.color = p<=15?'var(--red)':p<=40?'var(--yellow)':'var(--green)'; }
-  _applyDemo();
-}
-window._onDemoSlide = _onDemoSlide;
-
-function _applyDemo() {
-  const sensors = getSensors();
-  const fakeWL  = { created_at: new Date().toISOString() };
-  const seen    = {};
-  sensors.forEach(s => {
-    if (seen[s.key]) return; seen[s.key] = true;
-    const sl = document.getElementById('demo-sl-'+s.key);
-    fakeWL[s.key+'_cm'] = sl ? +sl.value : Math.round(+(s.tinggi||1)*50);
-  });
-  window._lastWLData = fakeWL;
-  applyWL(fakeWL);
-  showOverlays(false);
-  setEspStatus('connected');
-}
-
 // ══ BOOT ════════════════════════════════════════════
 filterNav();
 loadPage('iot');
@@ -1474,55 +1600,322 @@ setTimeout(updateDashWidgets, 500);
 // ═══════════════════════════════════════════════════════════
 // DATA ENTRY
 // ═══════════════════════════════════════════════════════════
- function getDataEntryProduction(key,title,sub,icon){return`<div class="de-wrap">
+function getDataEntryProduction(key,title,sub,icon){
+  return `<div class="de-wrap">
   <div class="de-header"><div><div class="de-title">${title}</div><div class="de-sub">${sub}</div></div></div>
   <div class="de-card">
     <div class="de-card-title"><span class="de-card-ico">${icon}</span> ${title}</div>
-
     <div class="de-proj-select-wrap">
-      <label class="de-label">Pilih Ongoing Project</label>
+      <label class="de-label" style="color:#111;">Pilih Ongoing Project</label>
       <select id="dep-proj-sel-${key}" onchange="loadDEProjForm('${key}')">
         <option value="">-- Pilih project ongoing --</option>
       </select>
     </div>
-
     <div id="dep-form-${key}"></div>
   </div>
-</div>`;}
+</div>`;
+}
 
-function getDataEntryLimbah(key,title,sub,icon){return`<div class="de-wrap">
+// ── FORM UTAMA LIMBAH ─────────────────────────────────────────
+function getDataEntryLimbah(key,title,sub,icon){
+  return `<div class="de-wrap">
   <div class="de-header"><div><div class="de-title">${title}</div><div class="de-sub">${sub}</div></div><div class="de-date" id="de-dt-${key}">--</div></div>
   <div class="de-card">
     <div class="de-card-title"><span class="de-card-ico">${icon}</span> Input Form — ${title}</div>
     <div class="de-grid">
+      
+      <div class="de-field de-full"><label class="de-label" style="color:#111; font-weight:700;">LINK KE PROJECT</label>
+        <select class="de-input de-select" id="limbah-proj-sel" style="margin-top:4px; border-color:var(--blue); background:#ebf2fd;">
+          <option value="">-- Tidak ditautkan ke project (Simpan ke Laporan Harian) --</option>
+        </select>
+        <div style="font-size:10px; color:var(--txt3); margin-top:4px;">💡 Biarkan kosong jika ingin menyimpannya sebagai Laporan Harian biasa.</div>
+      </div>
+
       <div class="de-field"><label class="de-label" style="color:#111;">DATE</label><input class="de-input" type="date" id="${key}-date"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">Volume Limbah<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-vol" placeholder="0" min="0" step="0.1"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">COD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-cod" placeholder="0" min="0" step="0.1"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">BOD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-bod" placeholder="0" min="0" step="0.1"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">TSS<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-tss" placeholder="0" min="0" step="0.1"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">pH</label><input class="de-input" type="number" id="${key}-ph" placeholder="7.0" min="0" max="14" step="0.1"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">Temperatur Effluent<span class="de-unit"> (°C)</span></label><input class="de-input" type="number" id="${key}-temp" placeholder="0" min="0" step="0.1"></div>
+      
+      <div class="de-field"><label class="de-label" style="color:#111;">Awal<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-awal" placeholder="0" oninput="calcLimbahTotal('${key}')"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">Akhir<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-akhir" placeholder="0" oninput="calcLimbahTotal('${key}')"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">Total Volume<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-vol" placeholder="Hasil hitung..." readonly style="background:#f3f4f6; color:var(--blue); font-weight:700;"></div>
+      
+      <div class="de-field"><label class="de-label" style="color:#111;">COD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-cod" placeholder="0"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">BOD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-bod" placeholder="0"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">TSS<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-tss" placeholder="0"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">pH</label><input class="de-input" type="number" id="${key}-ph" placeholder="7.0" step="0.1"></div>
+      
       <div class="de-field de-full"><label class="de-label" style="color:#111;">NOTES</label><textarea class="de-input de-textarea" id="${key}-notes" placeholder="Add notes here..."></textarea></div>
-      <div class="de-field de-full">
-        <label class="de-label" style="color:#111;">FOTO DOKUMENTASI <span style="font-weight:400;color:var(--txt3)">(opsional, bisa beberapa — dikompres otomatis)</span></label>
-        <div class="de-photo-wrap" id="${key}-photo-wrap">
-          <label class="de-photo-drop" onclick="document.getElementById('${key}-photo-input').click()">
-            <input type="file" id="${key}-photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoUpload('${key}',this)">
-            <div class="de-photo-ico">📷</div>
-            <div style="font-size:12px;color:var(--txt2);font-weight:600">Klik untuk pilih foto</div>
-            <div style="font-size:10px;color:var(--txt3);margin-top:2px">JPG / PNG / WEBP — dikompres otomatis</div>
-          </label>
-          <div class="de-photo-preview" id="${key}-photo-preview"></div>
+      ${buildPhotoUpload(key)}
+
+    </div>
+    <div class="de-status-bar" id="${key}-sb" style="display:none"><span id="${key}-sm"></span></div>
+    
+    <div class="de-actions" style="justify-content:space-between; margin-top:20px; align-items:center;">
+      <button class="de-btn de-btn-primary" onclick="openJarTestModal('${key}')" style="background:#0ea5e9; border-color:#0ea5e9; font-size:12px; padding:10px 18px; box-shadow:0 4px 10px rgba(14,165,233,0.3);">🧪 Buka Jar Test</button>
+      
+      <div style="display:flex; gap:10px;">
+        <button class="de-btn de-btn-ghost" onclick="resetDE('${key}')">🔄 Reset</button>
+        <button class="de-btn de-btn-primary" onclick="submitLimbah('${key}')">💾 Save Data</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+// Fungsi bantu hitung otomatis Akhir - Awal untuk Limbah Utama
+function calcLimbahTotal(key) {
+  const awal = parseFloat(document.getElementById(key + '-awal')?.value) || 0;
+  const akhir = parseFloat(document.getElementById(key + '-akhir')?.value) || 0;
+  const volEl = document.getElementById(key + '-vol');
+  if (volEl) {
+    volEl.value = (document.getElementById(key + '-awal').value !== '' || document.getElementById(key + '-akhir').value !== '') 
+      ? (akhir - awal).toFixed(2) : '';
+  }
+}
+
+// 3. Ganti fungsi Reset ini agar kotak Awal, Akhir, Total juga ikut terhapus saat direset
+function resetDE(key){
+  ['vol','awal','akhir','total','cod','bod','tss','ph','temp','notes',
+   'steam','fgtemp','fwtemp','airp','sout','cond','sbd'].forEach(f=>{
+    const el=document.getElementById(key+'-'+f); if(el) el.value='';
+  });
+  const d=document.getElementById(key+'-date'); if(d) d.value=new Date().toISOString().split('T')[0];
+}
+
+function openJarTestModal() {
+  const currentRole = localStorage.getItem('role') || 'limbah';
+  const isAdmin     = ['admin','superadmin'].includes(currentRole);
+  const allProjs    = gPJ('ongoing');
+  const projs       = isAdmin ? allProjs : allProjs.filter(p => {
+    if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+    return p.allowed_roles.includes(currentRole);
+  });
+  let projOptions = '<option value="">-- Simpan ke Laporan Harian --</option>';
+  projs.forEach(p => {
+    const realIdx = allProjs.indexOf(p);
+    projOptions += `<option value="${realIdx}">${p.name}</option>`;
+  });
+
+  const modalHTML = `
+    <div id="jar-modal-wrapper">
+      <div id="jar-modal-overlay" onclick="closeJarTestModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9998;display:flex;align-items:center;justify-content:center;"></div>
+      <div id="jar-modal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;border-radius:12px;width:min(850px,95vw);z-index:9999;box-shadow:0 20px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;max-height:90vh;">
+        
+        <div style="padding:16px 20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+          <span style="font-weight:700; font-size:16px; color:#1e293b;">🧪 Input Jar Test Multi-Sampel</span>
+          <button onclick="closeJarTestModal()" style="border:none; background:none; cursor:pointer; font-size:18px; color:#64748b;">✕</button>
+        </div>
+        
+        <div style="padding:20px; overflow-y:auto; flex:1;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px;">
+            <div class="de-field">
+              <label class="de-label">LINK KE PROJECT</label>
+              <select class="de-input" id="jar-proj-sel" style="border-color:var(--blue); background:#ebf2fd;">${projOptions}</select>
+            </div>
+            <div class="de-field">
+              <label class="de-label">DATE</label>
+              <input class="de-input" type="date" id="jar-date" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:80px 1fr 1fr 1fr 1fr 40px; gap:10px; padding:0 10px 8px; border-bottom:2px solid #eee; margin-bottom:10px; font-size:11px; font-weight:700; color:var(--txt2); text-align:center;">
+            <div>pH</div>
+            <div>PAC (mg)</div>
+            <div>Dozing PAC</div>
+            <div>Polimer (mg)</div>
+            <div>Dozing Polimer</div>
+            <div></div>
+          </div>
+
+          <div id="jar-row-container"></div>
+
+          <button class="de-btn de-btn-ghost" onclick="addJarTestRow()" style="width:100%; margin-top:10px; border-style:dashed; font-size:12px;">＋ Tambah Sampel Pengujian</button>
+          
+          <div style="font-size:11px; font-style:italic; color:var(--txt3); text-align:right; margin-top:15px;">
+            * Volume Sample = 500ml
+          </div>
+        </div>
+        
+        <div style="padding:16px 20px; border-top:1px solid #eee; background:#f8fafc; display:flex; justify-content:space-between;">
+          <button class="de-btn de-btn-ghost" onclick="resetJarModalInputs()">🔄 Clear All</button>
+          <button class="de-btn de-btn-primary" onclick="submitJarTestModal()">💾 Save All Data</button>
         </div>
       </div>
     </div>
-    <div class="de-status-bar" id="${key}-sb" style="display:none"><span id="${key}-sm"></span></div>
-    <div class="de-actions">
-      <button class="de-btn de-btn-ghost" onclick="resetDE('${key}')">🔄 Reset</button>
-      <button class="de-btn de-btn-primary" onclick="submitDE('${key}')">💾 Save Data</button>
+  `;
+  const div = document.createElement('div');
+  div.id = 'jar-modal-root';
+  div.innerHTML = modalHTML;
+  document.body.appendChild(div);
+
+  // Tambahkan baris pertama secara otomatis
+  addJarTestRow();
+}
+
+// 1. Fungsi Tambah Baris (Dilengkapi ID spesifik untuk tiap kotak input)
+function addJarTestRow() {
+  const container = document.getElementById('jar-row-container');
+  const uid = Date.now() + Math.random().toString(36).substr(2, 5);
+  
+  const row = document.createElement('div');
+  row.className = 'jar-data-row';
+  row.id = 'jar-row-' + uid;
+  row.style.cssText = 'display:grid; grid-template-columns:80px 1fr 1fr 1fr 1fr 40px; gap:10px; margin-bottom:8px; align-items:center; background:#fdfdfd; padding:5px; border-radius:6px; border:1px solid #f1f1f1;';
+  
+  row.innerHTML = `
+    <input class="de-input jar-ph" type="number" step="0.1" placeholder="7.0">
+    
+    <input class="de-input jar-pac" id="pac-input-${uid}" type="number" placeholder="mg" oninput="calcJarRowDosing('${uid}', 'pac')">
+    <div style="position:relative">
+      <input class="de-input jar-doz-pac" id="doz-pac-${uid}" readonly style="background:#f3f4f6; padding-right:35px;" placeholder="PPM" data-mode="auto">
+      <button onclick="toggleJarRowMode('${uid}', 'pac')" id="btn-pac-${uid}" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); font-size:7px; padding:2px 4px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:3px; cursor:pointer; font-weight:700;">AUTO</button>
     </div>
-  </div>
-</div>`;}
+    
+    <input class="de-input jar-pol" id="pol-input-${uid}" type="number" placeholder="mg" oninput="calcJarRowDosing('${uid}', 'pol')">
+    <div style="position:relative">
+      <input class="de-input jar-doz-pol" id="doz-pol-${uid}" readonly style="background:#f3f4f6; padding-right:35px;" placeholder="PPM" data-mode="auto">
+      <button onclick="toggleJarRowMode('${uid}', 'pol')" id="btn-pol-${uid}" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); font-size:7px; padding:2px 4px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:3px; cursor:pointer; font-weight:700;">AUTO</button>
+    </div>
+    
+    <button onclick="document.getElementById('jar-row-${uid}').remove()" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px;">✕</button>
+  `;
+  container.appendChild(row);
+}
+window.addJarTestRow = addJarTestRow;
+
+// 2. Fungsi Hitung Otomatis Real-time
+function calcJarRowDosing(uid, type) {
+  // Ambil nilai secara presisi menggunakan ID kotak input
+  const inputEl = document.getElementById(type + '-input-' + uid);
+  if (!inputEl) return;
+  
+  const inputVal = parseFloat(inputEl.value) || 0;
+  const dozEl = document.getElementById('doz-' + type + '-' + uid);
+  const btn = document.getElementById('btn-' + type + '-' + uid);
+  
+  // Jika tombol statusnya AUTO, jalankan rumus
+  if (dozEl && btn && btn.getAttribute('data-mode') === 'auto') {
+    // Rumus: mg * 2
+    dozEl.value = inputVal > 0 ? (inputVal * 2).toFixed(2) : '';
+  }
+}
+window.calcJarRowDosing = calcJarRowDosing;
+
+// 3. Fungsi Switch AUTO/MANUAL
+function toggleJarRowMode(uid, type) {
+  const el = document.getElementById('doz-' + type + '-' + uid);
+  const btn = document.getElementById('btn-' + type + '-' + uid);
+  if (!el || !btn) return;
+  
+  const isAuto = btn.getAttribute('data-mode') === 'auto';
+  
+  if (isAuto) {
+    btn.setAttribute('data-mode', 'manual');
+    el.readOnly = false; el.style.background = 'white'; btn.textContent = 'MAN';
+    btn.style.color = 'var(--orange)'; btn.style.borderColor = 'var(--orange)';
+  } else {
+    btn.setAttribute('data-mode', 'auto');
+    el.readOnly = true; el.style.background = '#f3f4f6'; btn.textContent = 'AUTO';
+    btn.style.color = 'var(--blue)'; btn.style.borderColor = 'var(--blue)';
+    // Langsung hitung ulang saat dikembalikan ke AUTO
+    calcJarRowDosing(uid, type);
+  }
+}
+window.toggleJarRowMode = toggleJarRowMode;
+
+// ─── FUNGSI RESET JAR TEST (MULTI-BARIS) ───────────────
+function resetJarModalInputs() {
+  // 1. Kembalikan ke Laporan Harian (Project kosong)
+  const projSel = document.getElementById('jar-proj-sel');
+  if (projSel) projSel.value = '';
+
+  // 2. Kembalikan tanggal ke hari ini
+  const dateInput = document.getElementById('jar-date');
+  if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+  // 3. Bersihkan semua baris yang ada di dalam wadah (container)
+  const container = document.getElementById('jar-row-container');
+  if (container) {
+    container.innerHTML = ''; 
+  }
+
+  // 4. Munculkan kembali 1 baris kosong yang baru
+  addJarTestRow();
+  
+  showQuickToast('🔄 Form Jar Test dikosongkan.');
+}
+window.resetJarModalInputs = resetJarModalInputs;
+
+// ─── FUNGSI SUBMIT & TUTUP JAR TEST (ANTI-FREEZE) ───────────────
+
+function submitJarTestModal() {
+  const projIdx = document.getElementById('jar-proj-sel').value;
+  const date = document.getElementById('jar-date').value;
+  const rows = document.querySelectorAll('.jar-data-row');
+  
+  const allEntries = [];
+  rows.forEach(row => {
+    const ph = row.querySelector('.jar-ph').value;
+    const pac = row.querySelector('.jar-pac').value;
+    const dozPac = row.querySelector('.jar-doz-pac').value;
+    const pol = row.querySelector('.jar-pol').value;
+    const dozPol = row.querySelector('.jar-doz-pol').value;
+    
+    if (ph || pac || pol) {
+      allEntries.push({ ph, pac, dozPac, pol, dozPol });
+    }
+  });
+
+  if (allEntries.length === 0) {
+    showQuickToast('❌ Isi minimal satu baris data!');
+    return;
+  }
+
+  if (projIdx !== "") {
+    const projs = gPJ('ongoing');
+    const p = projs[+projIdx];
+    if (!p.jarTestHistory) p.jarTestHistory = [];
+    
+    allEntries.forEach((ent, i) => {
+      const suffix = allEntries.length > 1 ? ` (Sampel ${i+1})` : '';
+      p.jarTestHistory.push({
+        saved_at: new Date().toISOString(),
+        fields: [
+          { label: 'pH' + suffix, newVal: ent.ph || '—' },
+          { label: 'Dozing PAC' + suffix, newVal: ent.dozPac || '0' },
+          { label: 'Dozing Polimer' + suffix, newVal: ent.dozPol || '0' }
+        ]
+      });
+    });
+    sPJ('ongoing', projs);
+    showQuickToast('✅ ' + allEntries.length + ' Data Jar Test disimpan ke Project.');
+  } else {
+    const harian = JSON.parse(localStorage.getItem('harian_entries') || '[]');
+    allEntries.forEach((ent, i) => {
+      harian.unshift({
+        id: Date.now() + i,
+        cat: 'limbah',
+        projName: 'Jar Test Harian',
+        data: { 
+          'Tanggal': date, 
+          'pH': ent.ph || '—', 
+          'PAC (mg)': ent.pac || '—',
+          'Doz. PAC': ent.dozPac || '—', 
+          'Polimer (mg)': ent.pol || '—',
+          'Doz. Polimer': ent.dozPol || '—' 
+        },
+        saved_at: new Date().toISOString()
+      });
+    });
+    localStorage.setItem('harian_entries', JSON.stringify(harian));
+    showQuickToast('✅ Data Jar Test masuk Laporan Harian.');
+  }
+
+  closeJarTestModal();
+}
+
+function closeJarTestModal() {
+  document.getElementById('jar-modal-root')?.remove();
+}
+window.closeJarTestModal = closeJarTestModal;
 
 function getDataEntryUtility(key,title,sub,icon){return`<div class="de-wrap">
   <div class="de-header"><div><div class="de-title">${title}</div><div class="de-sub">${sub}</div></div><div class="de-date" id="de-dt-${key}">--</div></div>
@@ -1589,13 +1982,20 @@ function utilSwitchType(key, type) {
     projSub.style.display = '';
     tabH.style.borderColor = 'var(--border)'; tabH.style.background = 'var(--bg)';
     tabP.style.borderColor = 'var(--blue)'; tabP.style.background = '#ebf2fd';
-    // Populate ongoing projects
-    const sel = document.getElementById('util-project-cat-'+key);
-    const projs = gPJ('ongoing');
+    // Populate ongoing projects — filter berdasarkan role
+    const sel         = document.getElementById('util-project-cat-'+key);
+    const currentRole = localStorage.getItem('role') || 'utility';
+    const isAdmin     = ['admin','superadmin'].includes(currentRole);
+    const allProjs    = gPJ('ongoing');
+    const projs       = isAdmin ? allProjs : allProjs.filter(p => {
+      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+      return p.allowed_roles.includes(currentRole);
+    });
     sel.innerHTML = '<option value="">-- Pilih project --</option>';
-    projs.forEach((p,i) => {
+    projs.forEach(p => {
+      const realIdx = allProjs.indexOf(p);
       const opt = document.createElement('option');
-      opt.value = i; opt.textContent = p.name;
+      opt.value = realIdx; opt.textContent = p.name;
       sel.appendChild(opt);
     });
     if (area) area.innerHTML = '';
@@ -1608,7 +2008,54 @@ function utilRenderHarian(key, cat) {
   if (!area) return;
   if (!cat) { area.innerHTML = ''; return; }
 
-  const labels = { solar: '⛽ Solar (Liter)', listrik: '⚡ Listrik (kWh)', air: '💧 Air (m³)' };
+  // Jika kategori AIR → render 3 form sekaligus
+  if (cat === 'air') {
+    const airTypes = [
+      { id: 'air_baku',    label: '💧 Air Baku (m³)' },
+      { id: 'air_proses',  label: '💧 Air Feed Slurry (m³)' },
+      { id: 'air_sibel',   label: '💧 Air Steam Generator (m³)' },
+    ];
+
+    area.innerHTML = airTypes.map(({ id, label }) => {
+      const uid = key + '_' + id;
+      return `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;">
+          <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:16px;">📊 ${label} — Entry Harian</div>
+          <div class="de-grid">
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">TANGGAL</label>
+              <input class="de-input" type="date" id="util-${uid}-date" value="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">AWAL</label>
+              <input class="de-input" type="number" id="util-${uid}-awal" step="0.01" placeholder="Nilai awal..." oninput="utilCalcTotal('${uid}')">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">AKHIR</label>
+              <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." oninput="utilCalcTotal('${uid}')">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">TOTAL <span style="font-weight:400;color:var(--txt3)"></span></label>
+              <input class="de-input" type="number" id="util-${uid}-total" placeholder="Auto-hitung..." readonly style="background:#f3f4f6;color:var(--txt3);">
+            </div>
+            <div class="de-field de-full">
+              <label class="de-label" style="color:#111;">NOTES</label>
+              <textarea class="de-input de-textarea" id="util-${uid}-notes" placeholder="Catatan tambahan..."></textarea>
+            </div>
+            ${buildPhotoUpload(uid)}
+          </div>
+          <div class="de-status-bar" id="util-${uid}-sb" style="display:none"><span id="util-${uid}-sm"></span></div>
+          <div class="de-actions">
+            <button class="de-btn de-btn-ghost" onclick="utilResetHarian('${uid}')">🔄 Reset</button>
+            <button class="de-btn de-btn-primary" onclick="utilSaveHarian('${uid}','${label}')">💾 Simpan</button>
+          </div>
+        </div>`;
+    }).join('');
+    return;
+  }
+
+  // Kategori lain (solar, listrik) → render 1 form seperti biasa
+  const labels = { solar: '⛽ Solar (Liter)', listrik: '⚡ Listrik (kWh)' };
   const label = labels[cat] || cat;
   const uid = key + '_' + cat;
 
@@ -1629,13 +2076,14 @@ function utilRenderHarian(key, cat) {
           <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." oninput="utilCalcTotal('${uid}')">
         </div>
         <div class="de-field">
-          <label class="de-label" style="color:#111;">TOTAL <span style="font-weight:400;color:var(--txt3)">(akhir – awal)</span></label>
+          <label class="de-label" style="color:#111;">TOTAL <span style="font-weight:400;color:var(--txt3)"></span></label>
           <input class="de-input" type="number" id="util-${uid}-total" placeholder="Auto-hitung..." readonly style="background:#f3f4f6;color:var(--txt3);">
         </div>
         <div class="de-field de-full">
           <label class="de-label" style="color:#111;">NOTES</label>
           <textarea class="de-input de-textarea" id="util-${uid}-notes" placeholder="Catatan tambahan..."></textarea>
         </div>
+        ${buildPhotoUpload(uid)}
       </div>
       <div class="de-status-bar" id="util-${uid}-sb" style="display:none"><span id="util-${uid}-sm"></span></div>
       <div class="de-actions">
@@ -1647,10 +2095,31 @@ function utilRenderHarian(key, cat) {
 window.utilRenderHarian = utilRenderHarian;
 
 function utilCalcTotal(uid) {
-  const a = parseFloat(document.getElementById('util-'+uid+'-awal')?.value) || 0;
-  const b = parseFloat(document.getElementById('util-'+uid+'-akhir')?.value) || 0;
+  // Ambil nilai input string untuk mengecek apakah form sudah diisi
+  const strAwal = document.getElementById('util-'+uid+'-awal')?.value;
+  const strAkhir = document.getElementById('util-'+uid+'-akhir')?.value;
+  
+  const a = parseFloat(strAwal) || 0; // Awal
+  const b = parseFloat(strAkhir) || 0; // Akhir
   const t = document.getElementById('util-'+uid+'-total');
-  if (t) t.value = (b - a).toFixed(2);
+  
+  if (t) {
+    if (strAwal !== '' || strAkhir !== '') {
+      // Jika kategori adalah Solar ATAU khusus Air Baku saja
+      // Rumus: AWAL - AKHIR
+      if (uid.includes('solar') || uid.includes('air_baku')) {
+        t.value = (a - b).toFixed(2);
+      } 
+      // Jika kategori Listrik, Air Proses (Feed Slurry), atau Air Sibel (Steam Gen)
+      // Rumus: AKHIR - AWAL
+      else {
+        t.value = (b - a).toFixed(2);
+      }
+    } else {
+      // Kosongkan total jika input awal dan akhir kosong
+      t.value = '';
+    }
+  }
 }
 window.utilCalcTotal = utilCalcTotal;
 
@@ -1665,6 +2134,24 @@ function utilResetHarian(uid) {
 window.utilResetHarian = utilResetHarian;
 
 function utilSaveHarian(uid, cat) {
+  // ── Collect all harian form fields and save to localStorage ──
+  const formArea = document.getElementById('util-form-area-utility');
+  const data = {};
+  if (formArea) {
+    formArea.querySelectorAll('[id^="util-'+uid+'"]').forEach(el => {
+      const key = el.id.replace('util-'+uid+'-','');
+      if (el.value) data[key] = el.value;
+    });
+  }
+  const projName = (()=>{
+    const s = document.getElementById('util-project-cat-utility');
+    return s && s.value ? (gPJ('ongoing')[+s.value]?.name||'') : '';
+  })();
+  const entry = { saved_at: new Date().toISOString(), cat, uid, projName, data };
+  const all = JSON.parse(localStorage.getItem('harian_entries')||'[]');
+  all.push(entry);
+  localStorage.setItem('harian_entries', JSON.stringify(all));
+
   const b = document.getElementById('util-'+uid+'-sb');
   const m = document.getElementById('util-'+uid+'-sm');
   if (b && m) {
@@ -1692,97 +2179,265 @@ function _utilProjField(uid, rowId, label, type='number', unit='') {
 function utilRenderProject(key, idx) {
   const area = document.getElementById('util-form-area-'+key);
   if (!area) return;
+  // Form kosong sebelum pilih project
   if (idx === '') { area.innerHTML = ''; return; }
   const proj = gPJ('ongoing')[+idx];
   if (!proj) { area.innerHTML = ''; return; }
   const uid = key + '_proj_' + idx;
-
-  // Fields from Image 1 (PRODUKSI sheet):
-  // 1-Set point, 2-Water in temperature, 3-Water out temperature, 4-CAP,
-  // 5-Discharge pressure A, 6-Main suction pressure A,
-  // 7-Discharge pressure B, 8-Main suction pressure B,
-  // 9-Unit total capacity, 10-Cir A total capacity, 11-Cir B total Capacity
-  const fields = [
-    {id:'f1',  label:'Set point',             unit:''},
-    {id:'f2',  label:'Water in temperature',  unit:'°C'},
-    {id:'f3',  label:'Water out temperature', unit:'°C'},
-    {id:'f4',  label:'CAP',                   unit:''},
-    {id:'f5',  label:'Discharge pressure A',  unit:''},
-    {id:'f6',  label:'Main suction pressure A', unit:''},
-    {id:'f7',  label:'Discharge pressure B',  unit:''},
-    {id:'f8',  label:'Main suction pressure B', unit:''},
-    {id:'f9',  label:'Unit total capacity',   unit:''},
-    {id:'f10', label:'Cir A total capacity',  unit:''},
-    {id:'f11', label:'Cir B total Capacity',  unit:''},
-  ];
-
-  const rows = fields.map((f, i) =>
-    _utilProjField(uid, f.id, f.label, 'number', f.unit)
-  ).join('');
+  
+  // Load previous entry data if exists
+  const prevData = proj.utilityData?.[uid] || {};
 
   area.innerHTML = `
     <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-        <div style="font-size:13px;font-weight:700;color:#111;">📋 ${proj.name}</div>
-        <div style="font-size:11px;color:var(--txt3);">Ongoing Project — Utility Entry</div>
-      </div>
-
-      <div style="margin-bottom:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="de-field">
-          <label class="de-label" style="color:#111;">TANGGAL</label>
-          <input class="de-input" type="date" id="util-${uid}-date" value="${new Date().toISOString().split('T')[0]}">
-        </div>
-        <div class="de-field">
-          <label class="de-label" style="color:#111;">WAKTU</label>
-          <input class="de-input" type="time" id="util-${uid}-time">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#111;">📋 ${proj.name}</div>
+          <div style="font-size:11px;color:var(--txt3);">Ongoing Project — Utility Entry</div>
         </div>
       </div>
 
-      <!-- Data table matching spreadsheet layout -->
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:14px;">
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="background:#1f2937;">
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:center;width:36px;">No.</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:left;">Bagian</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:left;min-width:140px;">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows}
-          </tbody>
-        </table>
+      <!-- Grid Container 2-Kolom (Kanan-Kiri) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+        <!-- Kolom Kiri: Boiler Fields -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#111;margin:0 0 14px;display:flex;align-items:center;gap:8px;">🔥 Boiler</div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Steam Press</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b1', prevData.b1, 'kPa')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Flue gass temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b2', prevData.b2, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Feed water temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b3', prevData.b3, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Scale monitor temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b4', prevData.b4, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Overheat sensor temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b5', prevData.b5, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">To Next Blowdown</label>
+            ${makeInputField('util-'+uid+'-b6', prevData.b6, 'text')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Conductivity</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'µS/cm')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Air pressure</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'bar')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Ignition count</label>
+            ${makeNumberInput('util-'+uid+'-b9')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Oil L-fire time</label>
+            ${makeInputField('util-'+uid+'-b10', prevData.b10, 'text')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Oil H-fire time</label>
+            ${makeInputField('util-'+uid+'-b11', prevData.b11, 'text')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Fuel Gas Temp (L-fire)</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b12', prevData.b12, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Fuel Gas Temp (H-fire)</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b13', prevData.b13, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Feed Water Avg Temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b14', prevData.b14, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Oil B-Efficiency</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b15', prevData.b15, '%')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#7e1818;background:#FFD1D1;padding:8px 12px;border-radius:6px;font-weight:600;display:inline-block;">O Fuel Consumption</label>
+            ${makeNumberInput('util-'+uid+'-b16')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Steam output</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b17', prevData.b17, 'kg/h')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Surface blowdown</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-b18', prevData.b18, 'L')}
+          </div>
+        </div>
+
+        <!-- Kolom Kanan: Chiller Fields -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#111;margin:0 0 14px;display:flex;align-items:center;gap:8px;">❄️ Chiller</div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Set Point</label>
+            ${makeNumberInput('util-'+uid+'-c1', prevData.c1)}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Water in temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-c2', prevData.c2, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Water out temperature</label>
+            ${makeNumberInputWithUnit('util-'+uid+'-c3', prevData.c3, '°C')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">CAP</label>
+            ${makeNumberInput('util-'+uid+'-c4')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Discharge Pressure A</label>
+            ${makeNumberInput('util-'+uid+'-c5')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Main Suction A</label>
+            ${makeNumberInput('util-'+uid+'-c6')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Discharge Pressure B</label>
+            ${makeNumberInput('util-'+uid+'-c7')}
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Main Suction B</label>
+            ${makeNumberInput('util-'+uid+'-c8')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Unit Total Capacity</label>
+            ${makeNumberInput('util-'+uid+'-c9')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Cir A Capacity</label>
+            ${makeNumberInput('util-'+uid+'-c10')}
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">Cir B Capacity</label>
+            ${makeNumberInput('util-'+uid+'-c11')}
+          </div>
+          <div class="de-field" style="margin-top:8px;">
+            <label class="de-label" style="color:#111;">Catatan Chiller</label>
+            ${makeTextareaField('util-'+uid+'-cnotes', prevData.cnotes)}
+          </div>
+        </div>
+      </div>
       </div>
 
-      <div class="de-field" style="margin-bottom:14px;">
-        <label class="de-label" style="color:#111;">NOTES</label>
-        <textarea class="de-input de-textarea" id="util-${uid}-notes" placeholder="Catatan tambahan..." style="min-height:60px;"></textarea>
+      <!-- NOTES & FOTO di paling bawah (Full Width) -->
+      <div class="de-grid" style="margin-bottom:18px;">
+        <div class="de-field de-full">
+          <label class="de-label" style="color:#111;">Catatan Boiler</label>
+          ${makeTextareaField('util-'+uid+'-notes', prevData.notes)}
+        </div>
       </div>
+
+      ${buildPhotoUpload(uid)}
 
       <div class="de-status-bar" id="util-${uid}-sb" style="display:none"><span id="util-${uid}-sm"></span></div>
       <div class="de-actions">
-        <button class="de-btn de-btn-ghost" onclick="utilResetProj('${uid}',${fields.length})">🔄 Reset</button>
-        <button class="de-btn de-btn-primary" onclick="utilSaveProject('${uid}','${proj.name}')">💾 Simpan</button>
+        <button class="de-btn de-btn-ghost" onclick="utilResetProj('${uid}',11)">🔄 Reset</button>
+        <button class="de-btn de-btn-primary" onclick="utilSaveProject('${uid}','${proj.name.replace(/'/g,"\\'")}')">💾 Simpan</button>
       </div>
     </div>`;
 }
 window.utilRenderProject = utilRenderProject;
 
+// ── Reset Form Utility ──────────────────────────────────────
 function utilResetProj(uid, count) {
-  for (let i = 1; i <= count; i++) {
-    const el = document.getElementById('util-'+uid+'-f'+i);
+  // Reset Boiler fields (b1-b18)
+  for (let i = 1; i <= 18; i++) {
+    const el = document.getElementById('util-'+uid+'-b'+i);
     if (el) el.value = '';
   }
+  // Reset Chiller fields (c1-c11)
+  for (let i = 1; i <= 11; i++) {
+    const el = document.getElementById('util-'+uid+'-c'+i);
+    if (el) el.value = '';
+  }
+  // Reset notes (Boiler & Chiller)
   const notes = document.getElementById('util-'+uid+'-notes');
   if (notes) notes.value = '';
-  const d = document.getElementById('util-'+uid+'-date');
-  if (d) d.value = new Date().toISOString().split('T')[0];
-  const t = document.getElementById('util-'+uid+'-time');
-  if (t) t.value = '';
+  const cnotes = document.getElementById('util-'+uid+'-cnotes');
+  if (cnotes) cnotes.value = '';
 }
 window.utilResetProj = utilResetProj;
 
+// ── Simpan Data Utility (Project) ───────────────────────────
 function utilSaveProject(uid, projName) {
+  // Extract project index from uid (uid format: utility_proj_0)
+  const projIdx = +uid.split('_').pop();
+  const projs = gPJ('ongoing');
+  const proj = projs[projIdx];
+  if (!proj) return;
+  
+  // Load previous entry data for fallback
+  const prevData = proj.utilityData?.[uid] || {};
+  
+  // Collect all form field values
+  const formData = {};
+  
+  // Boiler fields (b1-b18)
+  for (let i = 1; i <= 18; i++) {
+    let val = document.getElementById('util-'+uid+'-b'+i)?.value || '';
+    if (!val || val === '0') {
+      val = prevData['b' + i] || '';
+    }
+    formData['b' + i] = val;
+  }
+  
+  // Chiller fields (c1-c11)
+  for (let i = 1; i <= 11; i++) {
+    let val = document.getElementById('util-'+uid+'-c'+i)?.value || '';
+    if (!val || val === '0') {
+      val = prevData['c' + i] || '';
+    }
+    formData['c' + i] = val;
+  }
+  
+  // Tangkap Catatan Boiler
+  let notes = document.getElementById('util-'+uid+'-notes')?.value || '';
+  if (!notes) notes = prevData.notes || '';
+  formData.notes = notes;
+
+  // Tangkap Catatan Chiller (cnotes)
+  let cnotes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
+  if (!cnotes) cnotes = prevData.cnotes || '';
+  formData.cnotes = cnotes;
+  
+  // Initialize utilityData if doesn't exist
+  if (!proj.utilityData) proj.utilityData = {};
+
+  // ── Record utility history with old→new values ──────
+  const utilHistFields = [];
+  const boilerLabels = {b1:'Steam Press (kPa)',b2:'Flue Gass Temperature (°C)',b3:'Feed Water Temperature (°C)',b4:'Scale Monitor Temperature (°C)',b5:'Overheat Sensor Temperature (°C)',b6:'To Next Blowdown',b7:'Conductivity (µS/cm)',b8:'Air Pressure (bar)',b9:'Ignition Count',b10:'Oil L-fire Time',b11:'Oil H-fire Time',b12:'Fuel Gas Temp (L-fire) (°C)',b13:'Fuel Gas Temp (H-fire) (°C)',b14:'Feed Water Avg Temperature (°C)',b15:'Oil B-Efficiency (%)',b16:'Oil Fuel Consumption',b17:'Steam Output (kg/h)',b18:'Surface Blowdown (L)'};
+  const chillerLabels = {c1:'Set Point',c2:'Water In Temperature (°C)',c3:'Water Out Temperature (°C)',c4:'CAP',c5:'Discharge A',c6:'Suction A',c7:'Discharge B',c8:'Suction B',c9:'Unit Capacity',c10:'Cir A Capacity',c11:'Cir B Capacity'};
+  
+  [...Object.entries(boilerLabels), ...Object.entries(chillerLabels)].forEach(([k, lbl]) => {
+    const oldVal = prevData[k] || '';
+    const newVal = formData[k] || '';
+    if (newVal || oldVal) utilHistFields.push({ label: lbl, oldVal, newVal });
+  });
+
+  // PISAHKAN CATATAN KE DALAM TABEL HISTORY
+  if (notes || prevData.notes) utilHistFields.push({ label: 'Catatan Boiler', oldVal: prevData.notes||'', newVal: notes||'' });
+  if (cnotes || prevData.cnotes) utilHistFields.push({ label: 'Catatan Chiller', oldVal: prevData.cnotes||'', newVal: cnotes||'' });
+
+  if (!proj.utilityHistory) proj.utilityHistory = [];
+  proj.utilityHistory.push({ saved_at: new Date().toISOString(), uid, fields: utilHistFields });
+
+  // Save form data for this uid
+  proj.utilityData[uid] = formData;
+  
+  // Save back to localStorage
+  sPJ('ongoing', projs);
+  
   const b = document.getElementById('util-'+uid+'-sb');
   const m = document.getElementById('util-'+uid+'-sm');
   if (b && m) {
@@ -1798,83 +2453,810 @@ function getDataEntryLaboratorium(key,title,sub,icon){return`<div class="de-wrap
   <div class="de-card">
     <div class="de-card-title"><span class="de-card-ico">${icon}</span> ${title}</div>
 
-    <div class="de-proj-select-wrap">
-      <label class="de-label" style="color:#111;">Pilih Ongoing Project</label>
-      <select id="dep-proj-sel-${key}" onchange="loadDEProjForm('${key}')">
-        <option value="">-- Pilih project ongoing --</option>
-      </select>
-    </div>
-
-    <!-- Boiler Checklist section (Image 2 fields) -->
-    <div id="lab-boiler-section-${key}" style="margin-top:20px;">
-      <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
-        🔥 Boiler Checklist &amp; Penggunaan
-      </div>
-
-      <!-- Date + Time row -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-        <div class="de-field">
-          <label class="de-label" style="color:#111;">TANGGAL</label>
-          <input class="de-input" type="date" id="${key}-boiler-date" value="">
-        </div>
-        <div class="de-field">
-          <label class="de-label" style="color:#111;">WAKTU</label>
-          <input class="de-input" type="time" id="${key}-boiler-time">
-        </div>
-      </div>
-
-      <!-- Fields table matching Image 2 -->
-      <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:16px;">
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="background:#1f2937;">
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:center;width:36px;">No.</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:left;">Bagian</th>
-              <th style="padding:8px 10px;font-size:10px;font-weight:700;color:white;text-align:left;min-width:160px;">Nilai</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">1</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Steam Press</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b1" placeholder="—"><span class="de-input-unit">kPa</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">2</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Flue gass temperature</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b2" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">3</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Feed water temperature</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b3" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">4</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Scale monitor temperature</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b4" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">5</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Overheat sensor temperature</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b5" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">6</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">To next blowdown</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><input class="de-input" type="text" id="${key}-b6" placeholder="—"></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">7</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Conductivity</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b7" placeholder="—"><span class="de-input-unit">µS/cm</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">8</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Air pressure</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b8" placeholder="—"><span class="de-input-unit">bar</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">9</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Ignition count</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><input class="de-input" type="number" step="1" id="${key}-b9" placeholder="—"></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">10</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Oil L-fire time</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><input class="de-input" type="text" id="${key}-b10" placeholder="—"></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">11</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Oil H-fire time</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><input class="de-input" type="text" id="${key}-b11" placeholder="—"></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">12</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Flue Gas temp (L-fire)</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b12" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">13</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Flue Gas temp (H-fire)</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b13" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">14</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Feed water avg temp</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b14" placeholder="—"><span class="de-input-unit">°C</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">15</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Oil B-Eficiency</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b15" placeholder="—"><span class="de-input-unit">%</span></div></td></tr>
-            <tr style="background:#fefce8;"><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:700;">16</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);font-weight:700;">O Fuel consumption</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><input class="de-input" type="number" step="0.01" id="${key}-b16" placeholder="—"></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">17</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Steam output</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b17" placeholder="—"><span class="de-input-unit">kg/h</span></div></td></tr>
-            <tr><td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);text-align:center;font-weight:600;">18</td><td style="padding:6px 10px;font-size:12px;color:#111;border-bottom:1px solid var(--border);">Surface blowdown</td><td style="padding:4px 8px;border-bottom:1px solid var(--border);"><div class="de-input-wrap"><input class="de-input" type="number" step="0.01" id="${key}-b18" placeholder="—"><span class="de-input-unit">L</span></div></td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="de-field" style="margin-bottom:14px;">
-        <label class="de-label" style="color:#111;">NOTES</label>
-        <textarea class="de-input de-textarea" id="${key}-boiler-notes" placeholder="Catatan tambahan..." style="min-height:60px;"></textarea>
-      </div>
-
-      <div class="de-status-bar" id="${key}-boiler-sb" style="display:none"><span id="${key}-boiler-sm"></span></div>
-      <div class="de-actions">
-        <button class="de-btn de-btn-ghost" onclick="resetLabBoiler('${key}')">🔄 Reset</button>
-        <button class="de-btn de-btn-primary" onclick="saveLabBoiler('${key}')">💾 Simpan Boiler Data</button>
+    <!-- Tab Harian / Project -->
+    <div style="margin-bottom:20px;">
+      <label class="de-label" style="color:#111;">TIPE ENTRY</label>
+      <div style="display:flex;gap:10px;margin-top:6px;">
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--blue);border-radius:10px;cursor:pointer;background:#ebf2fd;flex:1;justify-content:center;" id="lab-tab-harian-${key}" onclick="labSwitchType('${key}','harian')">
+          <input type="radio" name="${key}-lab-type" value="harian" checked style="accent-color:var(--blue);">
+          <span style="font-size:13px;font-weight:700;color:#111;">📅 Harian</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:var(--bg);flex:1;justify-content:center;" id="lab-tab-project-${key}" onclick="labSwitchType('${key}','project')">
+          <input type="radio" name="${key}-lab-type" value="project" style="accent-color:var(--blue);">
+          <span style="font-size:13px;font-weight:700;color:#111;">📋 Project</span>
+        </label>
       </div>
     </div>
 
-    <!-- Set Point section (project-based) -->
-    <div style="border-top:1px solid var(--border);margin-top:24px;padding-top:20px;">
-      <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:12px;">🧪 Set Point Data Entry</div>
-      <div id="dep-form-${key}"></div>
+    <!-- HARIAN: Analisa Air -->
+    <div id="lab-harian-area-${key}">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:16px;">🧪 Analisa Air — Entry Harian</div>
+        <div class="de-grid">
+          <div class="de-field de-full">
+            <label class="de-label" style="color:#111;">NAMA SAMPLE</label>
+            <input class="de-input" type="text" id="lab-h-${key}-sample" placeholder="Nama sample...">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">pH</label>
+            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-ph" placeholder="—">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">TDS</label>
+            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-tds" placeholder="—">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">HARDNESS</label>
+            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-hardness" placeholder="—">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">ALKALI</label>
+            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-alkali" placeholder="—">
+          </div>
+          <div class="de-field de-full">
+            <label class="de-label" style="color:#111;">NOTES</label>
+            <textarea class="de-input de-textarea" id="lab-h-${key}-notes" placeholder="Catatan tambahan..."></textarea>
+          </div>
+        </div>
+        <div class="de-status-bar" id="lab-h-${key}-sb" style="display:none"><span id="lab-h-${key}-sm"></span></div>
+        <div class="de-actions">
+          <button class="de-btn de-btn-ghost" onclick="labResetHarian('${key}')">🔄 Reset</button>
+          <button class="de-btn de-btn-primary" onclick="labSaveHarian('${key}')">💾 Simpan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROJECT: CIP Lab + Brix -->
+    <div id="lab-project-area-${key}" style="display:none;">
+      <div style="margin-bottom:16px;">
+        <label class="de-label" style="color:#111;">PILIH ONGOING PROJECT</label>
+        <select class="de-input de-select" id="lab-proj-sel-${key}" onchange="labRenderProject('${key}')" style="margin-top:6px;">
+          <option value="">-- Pilih project --</option>
+        </select>
+      </div>
+      <div id="lab-proj-form-${key}"></div>
     </div>
   </div>
 </div>`;}
+function onLabProjChange(key) {
+  const sel  = document.getElementById('lab-proj-sel-' + key);
+  const form = document.getElementById('lab-proj-form-' + key);
+  if (!sel || !form) return;
+  const idx  = sel.value;
+  if (idx === '') { form.innerHTML = ''; return; }
+  const proj = gPJ('ongoing')[+idx];
+  if (!proj) return;
+  labRenderProject(key);
+}
+window.onLabProjChange = onLabProjChange;
+
+// ── pill: update status indicator element ─────────────────
+function pill(id, val, warn, danger) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseFloat(val);
+  if (isNaN(v)) { el.className = 'st-wait'; return; }
+  if (v >= danger)     el.className = 's-pill st-danger';
+  else if (v >= warn)  el.className = 's-pill st-warn';
+  else                 el.className = 's-pill st-ok';
+}
+
+function labSwitchType(key, type) {
+  const harianArea = document.getElementById('lab-harian-area-'+key);
+  const projArea   = document.getElementById('lab-project-area-'+key);
+  const tabH = document.getElementById('lab-tab-harian-'+key);
+  const tabP = document.getElementById('lab-tab-project-'+key);
+  if (type === 'harian') {
+    harianArea.style.display = '';
+    projArea.style.display = 'none';
+    tabH.style.borderColor = 'var(--blue)'; tabH.style.background = '#ebf2fd';
+    tabP.style.borderColor = 'var(--border)'; tabP.style.background = 'var(--bg)';
+  } else {
+    harianArea.style.display = 'none';
+    projArea.style.display = '';
+    tabH.style.borderColor = 'var(--border)'; tabH.style.background = 'var(--bg)';
+    tabP.style.borderColor = 'var(--blue)'; tabP.style.background = '#ebf2fd';
+    const sel         = document.getElementById('lab-proj-sel-'+key);
+    const currentRole = localStorage.getItem('role') || 'scientist';
+    const isAdmin     = ['admin','superadmin'].includes(currentRole);
+    const allProjs    = gPJ('ongoing');
+    const projs       = isAdmin ? allProjs : allProjs.filter(p => {
+      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+      return p.allowed_roles.includes(currentRole);
+    });
+    sel.innerHTML = '<option value="">-- Pilih project --</option>';
+    projs.forEach(p => {
+      const realIdx = allProjs.indexOf(p);
+      const o = document.createElement('option');
+      o.value = realIdx; o.textContent = p.name;
+      sel.appendChild(o);
+    });
+    document.getElementById('lab-proj-form-'+key).innerHTML = '';
+  }
+}
+window.labSwitchType = labSwitchType;
+
+// ─────────────────────────────────────────────────
+// Helper: Build Previous Entry Reference Display
+// ─────────────────────────────────────────────────
+// ─────────────────────────────────────────────────
+// CIP Lab — PH + Keterangan + Add button
+// Ganti/replace fungsi labRenderProject yang lama
+// ─────────────────────────────────────────────────
+
+// Helper untuk membuat input number field dengan unit
+function makeNumberInputWithUnit(id, value, unit='') {
+  const hasValue = value && value !== '';
+  const style = hasValue ? 'color:#999;' : '';
+  const prevValue = value || '';
+  const input = `<input class="de-input" type="number" step="0.01" id="${id}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}"
+    onfocus="
+      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
+        this.value='';
+        this.style.color='#111';
+      }
+    "
+    onblur="
+      if(!this.value && this.dataset.prevValue){
+        this.value=this.dataset.prevValue;
+        this.style.color='#999';
+      } else if(this.value) {
+        this.style.color='#111';
+      }
+    "
+  >`;
+  return `<div class="de-input-wrap">${input}<span class="de-input-unit">${unit}</span></div>`;
+}
+
+// Helper untuk membuat input text field dengan styling dari nilai sebelumnya
+function makeNumberInput(id, value, placeholder='—') {
+  const hasValue = value && value !== '';
+  const style = hasValue ? 'color:#999;' : '';
+  const prevValue = value || '';
+  return `<input class="de-input" type="number" step="0.01" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}" 
+    onfocus="
+      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
+        this.value='';
+        this.style.color='#111';
+      }
+    "
+    onblur="
+      if(!this.value && this.dataset.prevValue){
+        this.value=this.dataset.prevValue;
+        this.style.color='#999';
+      } else if(this.value) {
+        this.style.color='#111';
+      }
+    "
+  >`;
+}
+
+// Helper untuk membuat textarea field dengan placeholder dari nilai sebelumnya
+function makeTextareaField(id, value, placeholder='Catatan tambahan...') {
+  const hasValue = value && value !== '';
+  const style = hasValue ? 'color:#999;' : '';
+  const prevValue = value || '';
+  return `<textarea class="de-input de-textarea" id="${id}" placeholder="${placeholder}" style="min-height:60px;${style}" data-prev-value="${prevValue}"
+    onfocus="
+      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
+        this.value='';
+        this.style.color='#111';
+      }
+    "
+    onblur="
+      if(!this.value && this.dataset.prevValue){
+        this.value=this.dataset.prevValue;
+        this.style.color='#999';
+      } else if(this.value) {
+        this.style.color='#111';
+      }
+    "
+  >${hasValue ? value : ''}</textarea>`;
+}
+
+// Helper untuk membuat input field dengan placeholder dari nilai sebelumnya
+function makeInputField(id, value, type='text', placeholder='—') {
+  const hasValue = value && value !== '';
+  const style = hasValue ? 'color:#999;' : '';
+  const prevValue = value || '';
+  return `<input class="de-input" type="${type}" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}" 
+    onfocus="
+      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
+        this.value='';
+        this.style.color='#111';
+      }
+    "
+    onblur="
+      if(!this.value && this.dataset.prevValue){
+        this.value=this.dataset.prevValue;
+        this.style.color='#999';
+      } else if(this.value) {
+        this.style.color='#111';
+      }
+    "
+  >`;
+}
+
+function labRenderProject(key) {
+  const sel  = document.getElementById('lab-proj-sel-'+key);
+  const area = document.getElementById('lab-proj-form-'+key);
+  if (!area || !sel || sel.value === '') { if(area) area.innerHTML=''; return; }
+  const proj = gPJ('ongoing')[+sel.value];
+  if (!proj) { area.innerHTML=''; return; }
+
+  const uid = key+'_proj_'+sel.value;
+  _labCIPItems[uid] = 0; // reset counter
+
+  // Load existing CIP entries kalau ada
+  const existing = proj.cipLabEntries || [];
+  
+  // Load previous entry data if exists
+  const prevData = proj.laboratoriumData?.[uid] || {};
+
+  area.innerHTML = `
+    <!-- Lab Form Panel with Toggle CIP -->
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;">
+      
+      <!-- Header Title -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#111;">🧪 ${proj.name}</div>
+          <div style="font-size:11px;color:var(--txt3);">Ongoing Project — Lab Entry</div>
+        </div>
+      </div>
+
+      <!-- Tab Switch: BRIX & MOISTURE -->
+      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);">
+        <button id="lab-${uid}-tab-brix" class="de-btn" style="padding:12px 24px;font-size:13px;font-weight:600;background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;color:#666;transition:all .2s;" 
+          onclick="labSwitchTab('${uid}','brix')">📊 BRIX</button>
+        <button id="lab-${uid}-tab-moisture" class="de-btn" style="padding:12px 24px;font-size:13px;font-weight:600;background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;color:#666;transition:all .2s;" 
+          onclick="labSwitchTab('${uid}','moisture')">💯 MOISTURE</button>
+      </div>
+
+      <!-- BRIX Form Content -->
+      <div id="lab-${uid}-form-brix" style="display:block;margin-bottom:20px;">
+        <!-- Container untuk multiple BRIX entries -->
+        <div id="lab-${uid}-brix-form-entries">
+          <div id="lab-${uid}-brix-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+              <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-brix-entry-0').remove()" style="display:none;" id="lab-${uid}-brix-remove-0" title="Hapus entry">✕</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">Nama Sample</label>
+                ${makeInputField('lab-'+uid+'-tlv', prevData.tlv)}
+              </div>
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">Kode Pile</label>
+                ${makeInputField('lab-'+uid+'-lab-code', prevData.labCode)}
+              </div>
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">Brix</label>
+              ${makeInputField('lab-'+uid+'-air-test', prevData.airTest)}
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">Catatan</label>
+              ${makeTextareaField('lab-'+uid+'-notes-brix', prevData.notes)}
+            </div>
+          </div>
+        </div>
+        <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px;margin-top:10px;" onclick="labAddBrixFormEntry('${uid}')">＋ Add Entry</button>
+      </div>
+
+      <!-- MOISTURE Form Content -->
+      <div id="lab-${uid}-form-moisture" style="display:none;margin-bottom:20px;">
+        <!-- Container untuk multiple MOISTURE entries -->
+        <div id="lab-${uid}-moisture-form-entries">
+          <div id="lab-${uid}-moisture-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+              <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-moisture-entry-0').remove()" style="display:none;" id="lab-${uid}-moisture-remove-0" title="Hapus entry">✕</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">Nama Sample</label>
+                ${makeInputField('lab-'+uid+'-header-retaking', prevData.headerRetaking)}
+              </div>
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">MC%</label>
+              ${makeInputField('lab-'+uid+'-sampling-point', prevData.samplingPoint)}
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">Catatan</label>
+              ${makeTextareaField('lab-'+uid+'-notes-moisture', prevData.notes)}
+            </div>
+          </div>
+        </div>
+        <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px;margin-top:10px;" onclick="labAddMoistureFormEntry('${uid}')">＋ Add Entry</button>
+      </div>
+
+      ${buildPhotoUpload('lab_'+uid)}
+
+      <div class="de-status-bar" id="lab-${uid}-sb" style="display:none"><span id="lab-${uid}-sm"></span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;">
+        <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px;"
+          onclick="labToggleCIPForm('${uid}')">🧼 CIP Lab</button>
+        <div class="de-actions">
+          <button class="de-btn de-btn-ghost" onclick="labResetProject('${uid}')">🔄 Reset</button>
+          <button class="de-btn de-btn-primary" onclick="labSaveProject('${uid}','${proj.name.replace(/'/g,"\\'")}')">💾 Simpan Lab</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CIP Lab Modal Overlay -->
+    <div id="lab-${uid}-cip-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;" onclick="if(event.target.id==='lab-${uid}-cip-overlay') labToggleCIPForm('${uid}')"></div>
+
+    <!-- CIP Lab Modal -->
+    <div id="lab-${uid}-cip-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--bg);border:1px solid var(--border);border-radius:14px;width:540px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.22);z-index:201;">
+      <!-- Modal Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:1;">
+        <div style="font-size:14px;font-weight:700;color:#111;">🧼 CIP Lab Entry</div>
+        <button onclick="labToggleCIPForm('${uid}')" style="width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:white;cursor:pointer;font-size:16px;color:#666;display:grid;place-items:center;transition:all .15s;">✕</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div style="padding:18px 22px;">
+        <!-- Container untuk baris entry CIP -->
+        <div id="${uid}-cip-entries">
+          ${existing.map((e, i) => buildLabCIPRow(uid, i, e)).join('')}
+          ${!existing.length ? buildLabCIPRow(uid, 0, null) : ''}
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:16px;margin-bottom:16px;">
+          <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px"
+            onclick="labAddCIPEntry('${uid}','${key}')">＋ Add Entry</button>
+        </div>
+
+        <div class="de-status-bar" id="${uid}-cip-sb" style="display:none"><span id="${uid}-cip-sm"></span></div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="display:flex;gap:10px;padding:16px 22px;border-top:1px solid var(--border);background:var(--surface);sticky:bottom;">
+        <button class="de-btn de-btn-ghost" onclick="labResetCIPEntries('${uid}','${key}')">🔄 Reset</button>
+        <button class="de-btn de-btn-primary" onclick="labSaveCIPEntries('${uid}','${key}')">💾 Simpan CIP</button>
+      </div>
+    </div>`;
+
+  // Sinkronkan counter dengan jumlah row yang sudah dirender
+  _labCIPItems[uid] = Math.max(existing.length, 1);
+  
+  // Initialize tab: set BRIX as default
+  setTimeout(() => labInitTab(uid), 100);
+}
+window.labRenderProject = labRenderProject;
+
+// ── Toggle CIP Modal Popup ────────────────────────────────
+function labToggleCIPForm(uid) {
+  const overlay = document.getElementById('lab-'+uid+'-cip-overlay');
+  const modal = document.getElementById('lab-'+uid+'-cip-modal');
+  if (!overlay || !modal) return;
+  
+  const isHidden = overlay.style.display === 'none';
+  overlay.style.display = isHidden ? 'block' : 'none';
+  modal.style.display = isHidden ? 'block' : 'none';
+  
+  // Add/remove body scroll lock
+  if (isHidden) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+}
+window.labToggleCIPForm = labToggleCIPForm;
+
+// ── Switch Tab: BRIX / MOISTURE ──────────────────────
+function labSwitchTab(uid, tab) {
+  const tabBrix = document.getElementById('lab-'+uid+'-tab-brix');
+  const tabMoisture = document.getElementById('lab-'+uid+'-tab-moisture');
+  const formBrix = document.getElementById('lab-'+uid+'-form-brix');
+  const formMoisture = document.getElementById('lab-'+uid+'-form-moisture');
+  
+  if (!tabBrix || !tabMoisture || !formBrix || !formMoisture) return;
+  
+  if (tab === 'brix') {
+    // Show BRIX, hide MOISTURE
+    formBrix.style.display = 'block';
+    formMoisture.style.display = 'none';
+    tabBrix.style.borderBottomColor = 'var(--blue)';
+    tabBrix.style.color = '#111';
+    tabMoisture.style.borderBottomColor = 'transparent';
+    tabMoisture.style.color = '#666';
+  } else {
+    // Show MOISTURE, hide BRIX
+    formBrix.style.display = 'none';
+    formMoisture.style.display = 'block';
+    tabBrix.style.borderBottomColor = 'transparent';
+    tabBrix.style.color = '#666';
+    tabMoisture.style.borderBottomColor = 'var(--blue)';
+    tabMoisture.style.color = '#111';
+  }
+}
+window.labSwitchTab = labSwitchTab;
+
+// ── Init tab: set BRIX as default ────────────────────
+function labInitTab(uid) {
+  labSwitchTab(uid, 'brix');
+}
+window.labInitTab = labInitTab;
+
+// ── Add BRIX Form Entry ──────────────────────────────
+function labAddBrixFormEntry(uid) {
+  const container = document.getElementById('lab-'+uid+'-brix-form-entries');
+  if (!container) return;
+  
+  const entryCount = container.querySelectorAll('[id^="lab-'+uid+'-brix-entry-"]').length;
+  const newIdx = entryCount;
+  
+  const newEntry = document.createElement('div');
+  newEntry.id = 'lab-'+uid+'-brix-entry-'+newIdx;
+  newEntry.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;';
+  newEntry.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;color:#666;">Entry #${newIdx+1}</div>
+      <button class="fp-item-remove" onclick="document.getElementById('${newEntry.id}').remove()" title="Hapus entry">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+      <div class="de-field">
+        <label class="de-label" style="color:#111;">Nama Sample</label>
+        <input class="de-input" type="text" placeholder="—">
+      </div>
+      <div class="de-field">
+        <label class="de-label" style="color:#111;">Kode Pile</label>
+        <input class="de-input" type="text" placeholder="—">
+      </div>
+    </div>
+    <div class="de-field">
+      <label class="de-label" style="color:#111;">Brix</label>
+      <input class="de-input" type="text" placeholder="—">
+    </div>
+    <div class="de-field">
+      <label class="de-label" style="color:#111;">Catatan</label>
+      <textarea class="de-input de-textarea" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
+    </div>
+  `;
+  
+  container.appendChild(newEntry);
+  
+  // Show delete button for all entries jika lebih dari 1
+  if (entryCount > 0) {
+    const allRemoveButtons = container.querySelectorAll('[id^="lab-'+uid+'-brix-remove-"]');
+    allRemoveButtons.forEach(btn => btn.style.display = 'block');
+  }
+}
+window.labAddBrixFormEntry = labAddBrixFormEntry;
+
+// ── Add MOISTURE Form Entry ──────────────────────────
+function labAddMoistureFormEntry(uid) {
+  const container = document.getElementById('lab-'+uid+'-moisture-form-entries');
+  if (!container) return;
+  
+  const entryCount = container.querySelectorAll('[id^="lab-'+uid+'-moisture-entry-"]').length;
+  const newIdx = entryCount;
+  
+  const newEntry = document.createElement('div');
+  newEntry.id = 'lab-'+uid+'-moisture-entry-'+newIdx;
+  newEntry.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;';
+  newEntry.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:600;color:#666;">Entry #${newIdx+1}</div>
+      <button class="fp-item-remove" onclick="document.getElementById('${newEntry.id}').remove()" title="Hapus entry">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+      <div class="de-field">
+        <label class="de-label" style="color:#111;">Nama Sample</label>
+        <input class="de-input" type="text" placeholder="—">
+      </div>
+    </div>
+    <div class="de-field">
+      <label class="de-label" style="color:#111;">MC%</label>
+      <input class="de-input" type="text" placeholder="—">
+    </div>
+    <div class="de-field">
+      <label class="de-label" style="color:#111;">Catatan</label>
+      <textarea class="de-input de-textarea" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
+    </div>
+  `;
+  
+  container.appendChild(newEntry);
+  
+  // Show delete button for all entries jika lebih dari 1
+  if (entryCount > 0) {
+    const allRemoveButtons = container.querySelectorAll('[id^="lab-'+uid+'-moisture-remove-"]');
+    allRemoveButtons.forEach(btn => btn.style.display = 'block');
+  }
+}
+window.labAddMoistureFormEntry = labAddMoistureFormEntry;
+
+// ── Reset Lab Form ───────────────────────────────────
+function labResetProject(uid) {
+  ['tlv','header-retaking','air-test','lab-code','sampling-point','notes-brix','notes-moisture'].forEach(f => {
+    const el = document.getElementById('lab-'+uid+'-'+f);
+    if (el) el.value = '';
+  });
+}
+window.labResetProject = labResetProject;
+
+// ── Save Lab Form ────────────────────────────────────
+function labSaveProject(uid, projName) {
+  const projIdx = +uid.split('_').pop();
+  const projs = gPJ('ongoing');
+  const proj = projs[projIdx];
+  if (!proj) return;
+  
+  // Tangkap semua baris pada form BRIX
+  const brixEntries = [];
+  const brixContainer = document.getElementById('lab-'+uid+'-brix-form-entries');
+  if (brixContainer) {
+    Array.from(brixContainer.children).forEach(entryDiv => {
+      const inputs = entryDiv.querySelectorAll('input, textarea');
+      if (inputs.length >= 4) {
+        brixEntries.push({
+          sample: inputs[0].value.trim(),
+          kode: inputs[1].value.trim(),
+          brix: inputs[2].value.trim(),
+          notes: inputs[3].value.trim()
+        });
+      }
+    });
+  }
+
+  // Tangkap semua baris pada form MOISTURE
+  const moistEntries = [];
+  const moistContainer = document.getElementById('lab-'+uid+'-moisture-form-entries');
+  if (moistContainer) {
+    Array.from(moistContainer.children).forEach(entryDiv => {
+      const inputs = entryDiv.querySelectorAll('input, textarea');
+      if (inputs.length >= 3) {
+        moistEntries.push({
+          sample: inputs[0].value.trim(),
+          mc: inputs[1].value.trim(),
+          notes: inputs[2].value.trim()
+        });
+      }
+    });
+  }
+
+  // Siapkan label baru untuk diletakkan di history
+  const labHistFields = [];
+
+  brixEntries.forEach((e, i) => {
+    const suffix = brixEntries.length > 1 ? ` (Baris ${i+1})` : '';
+    if (e.sample || e.kode || e.brix || e.notes) {
+      labHistFields.push({ label: `Nama Sample (Brix)${suffix}`, oldVal: '', newVal: e.sample });
+      labHistFields.push({ label: `Kode Pile${suffix}`, oldVal: '', newVal: e.kode });
+      labHistFields.push({ label: `Brix${suffix}`, oldVal: '', newVal: e.brix });
+      // Hapus kondisi "if (e.notes)" agar baris catatan selalu terbentuk di tabel summary
+      labHistFields.push({ label: `Catatan Brix${suffix}`, oldVal: '', newVal: e.notes });
+    }
+  });
+
+  moistEntries.forEach((e, i) => {
+    const suffix = moistEntries.length > 1 ? ` (Baris ${i+1})` : '';
+    if (e.sample || e.mc || e.notes) {
+      labHistFields.push({ label: `Nama Sample (Moisture)${suffix}`, oldVal: '', newVal: e.sample });
+      labHistFields.push({ label: `MC%${suffix}`, oldVal: '', newVal: e.mc });
+      // Baris catatan selalu terbentuk
+      labHistFields.push({ label: `Catatan Moisture${suffix}`, oldVal: '', newVal: e.notes });
+    }
+  });
+
+  // Simpan data
+  const formData = { brixEntries, moistEntries };
+  if (!proj.laboratoriumData) proj.laboratoriumData = {};
+  if (!proj.labHistory) proj.labHistory = [];
+  
+  if (labHistFields.length > 0) {
+    proj.labHistory.push({ saved_at: new Date().toISOString(), uid, fields: labHistFields });
+  }
+
+  proj.laboratoriumData[uid] = formData;
+  sPJ('ongoing', projs);
+  
+  const b = document.getElementById('lab-'+uid+'-sb');
+  const m = document.getElementById('lab-'+uid+'-sm');
+  if (b && m) {
+    b.style.display = 'flex';
+    b.className = 'de-status-bar de-status-success';
+    m.textContent = '✅ Lab untuk "' + projName + '" tersimpan!';
+    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000);
+  }
+}
+window.labSaveProject = labSaveProject;
+
+// ── Helper: build satu baris entry CIP ──────────────
+function buildLabCIPRow(uid, idx, data) {
+  const rowId = uid+'-cip-row-'+idx;
+  return `
+    <div id="${rowId}" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;
+      padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+      <div>
+        <label class="de-label" style="font-size:9px;color:#111;">PH</label>
+        <div class="de-input-wrap">
+          <input class="de-input" type="number" step="0.01" min="0" max="14"
+            id="${uid}-cip-ph-${idx}" value="${data?.ph || ''}" placeholder="0.00">
+          <span class="de-input-unit">pH</span>
+        </div>
+      </div>
+      <div>
+        <label class="de-label" style="font-size:9px;color:#111;">KETERANGAN</label>
+        <input class="de-input" type="text"
+          id="${uid}-cip-ket-${idx}" value="${data?.keterangan || ''}" placeholder="Keterangan...">
+      </div>
+      <div style="padding-bottom:2px;">
+        <button class="fp-item-remove"
+          onclick="document.getElementById('${rowId}').remove()"
+          title="Hapus baris">✕</button>
+      </div>
+    </div>`;
+}
+window.buildLabCIPRow = buildLabCIPRow;
+
+// ── Tambah baris entry baru ──────────────────────────
+function labAddCIPEntry(uid, key) {
+  _labCIPItems[uid] = (_labCIPItems[uid] || 0) + 1;
+  const idx       = _labCIPItems[uid];
+  const container = document.getElementById(uid+'-cip-entries');
+  if (!container) return;
+  container.insertAdjacentHTML('beforeend', buildLabCIPRow(uid, idx, null));
+}
+window.labAddCIPEntry = labAddCIPEntry;
+
+// ── Reset semua entry ke satu baris kosong ───────────
+function labResetCIPEntries(uid, key) {
+  _labCIPItems[uid] = 0;
+  const container = document.getElementById(uid+'-cip-entries');
+  if (container) container.innerHTML = buildLabCIPRow(uid, 0, null);
+}
+window.labResetCIPEntries = labResetCIPEntries;
+
+// ── Save semua entry CIP ke project ─────────────────
+function labSaveCIPEntries(uid, key) {
+  const container = document.getElementById(uid+'-cip-entries');
+  if (!container) return;
+
+  const entries = [];
+  container.querySelectorAll('[id^="'+uid+'-cip-row-"]').forEach(row => {
+    const idxMatch = row.id.match(/-cip-row-(\d+)$/);
+    if (!idxMatch) return;
+    const idx = idxMatch[1];
+    const ph  = document.getElementById(uid+'-cip-ph-'+idx)?.value.trim();
+    const ket = document.getElementById(uid+'-cip-ket-'+idx)?.value.trim();
+    if (ph || ket) entries.push({ ph: ph || '', keterangan: ket || '' });
+  });
+
+  if (!entries.length) {
+    showLabCIPSt(uid, 'error', '❌ Isi minimal satu baris PH!');
+    return;
+  }
+
+  // Simpan ke project di localStorage
+  const projIdx = parseInt(uid.split('_proj_')[1]);
+  const allProjs = gPJ('ongoing');
+  if (!allProjs[projIdx]) { showLabCIPSt(uid, 'error', '❌ Project tidak ditemukan!'); return; }
+
+  allProjs[projIdx].cipLabEntries = entries;
+  allProjs[projIdx].cipLabDone    = true;
+  sPJ('ongoing', allProjs);
+
+  showLabCIPSt(uid, 'success', '✅ CIP Lab tersimpan! ' + entries.length + ' entry.');
+  setTimeout(() => {
+    const sb = document.getElementById(uid+'-cip-sb');
+    if (sb) sb.style.display = 'none';
+    // Close modal after 1.5 seconds
+    setTimeout(() => {
+      labToggleCIPForm(uid);
+    }, 1500);
+  }, 500);
+}
+window.labSaveCIPEntries = labSaveCIPEntries;
+
+function showLabCIPSt(uid, type, msg) {
+  const b = document.getElementById(uid+'-cip-sb');
+  const m = document.getElementById(uid+'-cip-sm');
+  if (!b || !m) return;
+  b.style.display = 'flex';
+  b.className = 'de-status-bar de-status-' + type;
+  m.textContent = msg;
+  if (type === 'success') setTimeout(() => { if(b) b.style.display='none'; }, 3000);
+}
+window.showLabCIPSt = showLabCIPSt;
+
+function labResetHarian(key) {
+  ['sample','ph','tds','hardness','alkali','notes'].forEach(f => {
+    const el = document.getElementById('lab-h-'+key+'-'+f); if(el) el.value='';
+  });
+}
+window.labResetHarian = labResetHarian;
+
+function labSaveHarian(key) {
+  // 1. Ambil semua nilai dari input form
+  const sample = document.getElementById('lab-h-'+key+'-sample')?.value.trim();
+  const ph = document.getElementById('lab-h-'+key+'-ph')?.value;
+  const tds = document.getElementById('lab-h-'+key+'-tds')?.value;
+  const hardness = document.getElementById('lab-h-'+key+'-hardness')?.value;
+  const alkali = document.getElementById('lab-h-'+key+'-alkali')?.value;
+  const notes = document.getElementById('lab-h-'+key+'-notes')?.value.trim();
+
+  // Cek apakah minimal ada 1 data yang diisi
+  if (!sample && !ph && !tds && !hardness && !alkali && !notes) {
+    showQuickToast('❌ Isi minimal satu field sebelum menyimpan!');
+    return;
+  }
+
+  // 2. Simpan data ke dalam Laporan Harian (Harian Entries)
+  const harianEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]');
+  harianEntries.unshift({
+    id: Date.now(),
+    cat: 'laboratorium', // Kategori ini akan otomatis masuk ke tab Lab di menu Reporting
+    data: {
+      'Judul Laporan': 'Analisa Air Harian',
+      'Nama Sample': sample || '—',
+      'pH': ph || '—',
+      'TDS': tds || '—',
+      'Hardness': hardness || '—',
+      'Alkali': alkali || '—',
+      'Catatan': notes || '—'
+    },
+    saved_at: new Date().toISOString(),
+    projName: 'Laboratorium Harian'
+  });
+  localStorage.setItem('harian_entries', JSON.stringify(harianEntries));
+
+  // 3. Tampilkan Notifikasi Sukses
+  const b = document.getElementById('lab-h-'+key+'-sb');
+  const m = document.getElementById('lab-h-'+key+'-sm');
+  if (b && m) { 
+    b.style.display = 'flex'; 
+    b.className = 'de-status-bar de-status-success'; 
+    m.textContent = '✅ Data analisa air berhasil tersimpan!'; 
+    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000); 
+  }
+
+  // 4. Kosongkan form setelah berhasil disimpan agar siap untuk entri baru
+  labResetHarian(key);
+}
+window.labSaveHarian = labSaveHarian;
+
+function labResetProjSection(uid, section, fields) {
+  fields.forEach(f => { const el=document.getElementById(uid+'-'+section+'-'+f); if(el) el.value=''; });
+}
+window.labResetProjSection = labResetProjSection;
+
+function labSaveProjSection(uid, section, label) {
+  const b=document.getElementById(uid+'-'+section+'-sb'), m=document.getElementById(uid+'-'+section+'-sm');
+  if(b&&m){ b.style.display='flex'; b.className='de-status-bar de-status-success'; m.textContent='✅ Data '+label+' tersimpan!'; setTimeout(()=>{ if(b) b.style.display='none'; },3000); }
+}
+window.labSaveProjSection = labSaveProjSection;
+
+// Buka modal Set Point dari halaman Lab
+function openLabSetPoint(key) {
+  const sel = document.getElementById('dep-proj-sel-'+key);
+  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
+  const projIdx = +sel.value;
+  const allProjs = gPJ('ongoing');
+  if (projIdx < 0 || projIdx >= allProjs.length) return;
+  openSP('ongoing', projIdx);
+}
+window.openLabSetPoint = openLabSetPoint;
+
+function openLabCIP(key) {
+  const sel = document.getElementById('dep-proj-sel-'+key);
+  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
+  openCIP_enh('ongoing', +sel.value);
+}
+window.openLabCIP = openLabCIP;
+
+// Buka modal Set Point dari halaman Utility Project
+function openUtilSetPoint(key, projName) {
+  const allProjs = gPJ('ongoing');
+  const idx = allProjs.findIndex(p => p.name === projName);
+  if (idx < 0) { showQuickToast('❌ Project tidak ditemukan!'); return; }
+  openSP('ongoing', idx);
+}
+window.openUtilSetPoint = openUtilSetPoint;
 
 function resetLabBoiler(key) {
   for (let i = 1; i <= 18; i++) {
@@ -1887,6 +3269,8 @@ function resetLabBoiler(key) {
   if (t) t.value = '';
   const n = document.getElementById(key+'-boiler-notes');
   if (n) n.value = '';
+  const preview = document.getElementById(key+'-boiler-photo-preview');
+  if (preview) preview.innerHTML = '';
 }
 window.resetLabBoiler = resetLabBoiler;
 
@@ -1901,106 +3285,235 @@ function saveLabBoiler(key) {
 }
 window.saveLabBoiler = saveLabBoiler;
 
-// SP field definitions (same order as Set Point modal)
-// SP field definitions - Reorganized with pagination
-const SP_FIELDS_PAGE1 = [
-  {id:'sp-slurry',     label:'Slurry Ratio',         type:'number', unit:'%'},
-  {id:'sp-hopper',     label:'Hopper Calibration',   type:'text',   unit:''},
-  {id:'sp-density',    label:'Density',              type:'number', unit:'Kg/m³'},
-  {id:'sp-feed',       label:'Feed',                 type:'number', unit:'L/h'},
-  {id:'sp-aroma',      label:'Aroma Flowrate',       type:'number', unit:'L/h'},
-  {id:'sp-steam',      label:'Stripping Steam',      type:'number', unit:'kg/h'},
-  {id:'sp-prod-out',   label:'Product Out',          type:'number', unit:'L/h'},
-  {id:'sp-cond1',      label:'Condensate #1',        type:'number', unit:'L/h'},
-  {id:'sp-cond2',      label:'Condensate #2',        type:'number', unit:'L/h'},
-  {id:'sp-ext',        label:'Strip Rate External',  type:'number', unit:'%'},
-  {id:'sp-int',        label:'Strip Rate Internal',  type:'text',   unit:''},
-  {id:'sp-cond-rate',  label:'Condenser #1',         type:'number', unit:'%'},
-  {id:'sp-offset',     label:'Offset',               type:'number', unit:'°C'},
-];
+function resetLabChiller(key) {
+  for (let i = 1; i <= 18; i++) {
+    const el = document.getElementById(key+'-c'+i);
+    if (el) el.value = '';
+  }
+  const d = document.getElementById(key+'-chiller-date');
+  if (d) d.value = new Date().toISOString().split('T')[0];
+  const t = document.getElementById(key+'-chiller-time');
+  if (t) t.value = '';
+  const n = document.getElementById(key+'-chiller-notes');
+  if (n) n.value = '';
+  const preview = document.getElementById(key+'-chiller-photo-preview');
+  if (preview) preview.innerHTML = '';
+}
+window.resetLabChiller = resetLabChiller;
 
-const SP_FIELDS_PAGE2 = [
-  {id:'sp-temp-feed',  label:'Product Feed',         type:'number', unit:'°C'},
-  {id:'sp-temp-heater',label:'Product Heater',       type:'number', unit:'°C'},
-  {id:'sp-temp-top',   label:'Top of Column',        type:'number', unit:'°C'},
-  {id:'sp-vacuum',     label:'Vacuum',               type:'number', unit:'mBar', calculated: true},
-  {id:'sp-temp-bot',   label:'Bottom of Column',     type:'number', unit:'°C'},
-  {id:'sp-temp-c1',    label:'Product Out',          type:'number', unit:'°C'},
-  {id:'sp-temp-c2',    label:'Condensate #1',        type:'number', unit:'°C'},
-  {id:'sp-temp-out',   label:'Condensate #2',        type:'number', unit:'°C'},
-  {id:'sp-chill',      label:'Chilled Water',        type:'number', unit:'°C'},
-  {id:'sp-cond-water', label:'Condenser Water',      type:'number', unit:'°C'},
-  {id:'sp-press-sys',  label:'Pressure System',      type:'number', unit:'kPa'},
-  {id:'sp-press-steam',label:'Steam Flow',           type:'number', unit:'Kg/h'},
-];
+function saveLabChiller(key) {
+  const b = document.getElementById(key+'-chiller-sb');
+  const m = document.getElementById(key+'-chiller-sm');
+  if (b && m) {
+    b.style.display = 'flex'; b.className = 'de-status-bar de-status-success';
+    m.textContent = '✅ Chiller checklist tersimpan!';
+    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000);
+  }
+}
+window.saveLabChiller = saveLabChiller;
 
-// Legacy SP_FIELDS for backwards compatibility
-const SP_FIELDS = [...SP_FIELDS_PAGE1, ...SP_FIELDS_PAGE2];
+function resetLabAll(key) {
+  resetLabBoiler(key);
+  resetLabChiller(key);
+  const sb = document.getElementById(key+'-lab-sb');
+  const sm = document.getElementById(key+'-lab-sm');
+  if (sb && sm) { sb.style.display = 'none'; sm.textContent = ''; }
+}
+window.resetLabAll = resetLabAll;
+
+async function saveLabAll(key) {
+  const sb = document.getElementById(key + '-lab-sb');
+  const sm = document.getElementById(key + '-lab-sm');
+
+  const sel  = document.getElementById('dep-proj-sel-' + key);
+  const proj = sel && sel.value !== '' ? gPJ('ongoing')[+sel.value] : null;
+
+  const payload = {
+    project_name:   proj?.name || null,
+    boiler_notes:   document.getElementById(key + '-boiler-notes')?.value.trim() || '',
+    chiller_notes:  document.getElementById(key + '-chiller-notes')?.value.trim() || '',
+    notes:          '',
+    foto_urls:      window._photoData?.[key + '-chiller'] || [],
+    cip_lab_done:   proj?.cip_lab_done   || false,
+    cip_lab_checks: proj?.cip_lab_checks || {},
+  };
+  for (let i = 1; i <= 18; i++) payload['b' + i] = document.getElementById(key + '-b' + i)?.value || '';
+  for (let i = 1; i <= 18; i++) payload['c' + i] = document.getElementById(key + '-c' + i)?.value || '';
+
+  if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-loading'; sm.textContent='\u23F3 Menyimpan ke database...'; }
+
+  try {
+    const res  = await fetch('/api/dataentry/laboratorium', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Gagal simpan');
+
+    if (sb && sm) {
+      sb.style.display='flex'; sb.className='de-status-bar de-status-success';
+      sm.textContent='\u2705 Boiler & Chiller tersimpan ke database! (' + (json.action||'saved') + ')';
+      setTimeout(() => { if (sb) sb.style.display = 'none'; }, 3000);
+    }
+  } catch (err) {
+    console.error('saveLabAll error:', err);
+    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='\u274C Gagal simpan: ' + err.message; }
+  }
+}
+window.saveLabAll = saveLabAll;
+
+
+// Fungsi dummy untuk mencegah reference error apabila ada event listener usang yang memanggil ini.
 
 function initDataEntryForm(key){
-  // Utility: form with tabs — set date + clock + init tab highlight
+  // ── UTILITY ──────────────────────────────────────────────
   if(key === 'utility'){
-    const d = document.getElementById(key+'-date');
-    if(d) d.value = new Date().toISOString().split('T')[0];
     if(window._deClock) clearInterval(window._deClock);
     window._deClock = setInterval(()=>{
       const el = document.getElementById('de-dt-'+key);
       if(!el){ clearInterval(window._deClock); return; }
-      el.textContent = new Date().toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      el.textContent = new Date().toLocaleString('en-GB',{
+        weekday:'long',day:'numeric',month:'long',
+        year:'numeric',hour:'2-digit',minute:'2-digit'
+      });
     }, 1000);
-    // Init tab highlight
     const tabH = document.getElementById('util-tab-harian');
-    if (tabH) { tabH.style.borderColor = 'var(--blue)'; tabH.style.background = '#ebf2fd'; }
+    if(tabH){ tabH.style.borderColor='var(--blue)'; tabH.style.background='#ebf2fd'; }
+    const area = document.getElementById('util-form-area-utility');
+    if(area) area.innerHTML = '';
     return;
   }
-  // Limbah: form langsung
+
+  // ── LIMBAH ───────────────────────────────────────────────
   if(key === 'limbah'){
     const d = document.getElementById(key+'-date');
     if(d) d.value = new Date().toISOString().split('T')[0];
+    const psel = document.getElementById('limbah-proj-sel');
+    if (psel) {
+      const currentRole = localStorage.getItem('role') || 'limbah';
+      const isAdmin     = ['admin','superadmin'].includes(currentRole);
+      const allProjs    = gPJ('ongoing');
+      const projs       = isAdmin ? allProjs : allProjs.filter(p => {
+        if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+        return p.allowed_roles.includes(currentRole);
+      });
+      psel.innerHTML = '<option value="">-- Tidak ditautkan ke project --</option>';
+      projs.forEach(p => {
+        const realIdx = allProjs.indexOf(p);
+        const opt = document.createElement('option');
+        opt.value = realIdx; opt.textContent = p.name;
+        psel.appendChild(opt);
+      });
+    }
     if(window._deClock) clearInterval(window._deClock);
     window._deClock = setInterval(()=>{
       const el = document.getElementById('de-dt-'+key);
       if(!el){ clearInterval(window._deClock); return; }
-      el.textContent = new Date().toLocaleString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      el.textContent = new Date().toLocaleString('en-GB',{
+        weekday:'long',day:'numeric',month:'long',
+        year:'numeric',hour:'2-digit',minute:'2-digit'
+      });
     }, 1000);
     return;
   }
-  // Production & Laboratorium: populate project dropdown + set boiler date for lab
-  const sel = document.getElementById('dep-proj-sel-'+key);
-  if(key === 'laboratorium') {
-    const bd = document.getElementById(key+'-boiler-date');
-    if(bd) bd.value = new Date().toISOString().split('T')[0];
+
+  // ── LABORATORIUM ─────────────────────────────────────────
+  if(key === 'laboratorium'){
+    // Data Entry Lab sekarang memakai tab Harian vs Project.
+    // Default-nya buka Tab Harian.
+    const tabH = document.getElementById('lab-tab-harian-'+key);
+    if(tabH) tabH.click();
+    return;
   }
+
+  // ── PRODUCTION ───────────────────────────────────────────
+  const sel = document.getElementById('dep-proj-sel-'+key);
   if(!sel) return;
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
-  sel.innerHTML = '<option value="">-- Pilih project ongoing --</option>';
-  projs.forEach((p,i) => {
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = p.name;
-    sel.appendChild(opt);
+
+  // Muat project terbaru dari API dulu, lalu populate dropdown
+  sel.innerHTML = '<option value="">⏳ Memuat project...</option>';
+  sel.disabled = true;
+
+  loadPJ('ongoing').then(allProjs => {
+    const currentRole = localStorage.getItem('role') || '';
+    const isAdmin     = ['admin','superadmin'].includes(currentRole);
+
+    // Filter: tampilkan project yang:
+    // 1. allowed_roles null/kosong (dibuat admin tanpa restrict) → semua role lihat
+    // 2. allowed_roles berisi role user ini
+    const visibleProjs = isAdmin ? allProjs : allProjs.filter(p => {
+      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+      return p.allowed_roles.includes(currentRole);
+    });
+
+    sel.innerHTML = '<option value="">-- Pilih project ongoing --</option>';
+    visibleProjs.forEach(p => {
+      const realIdx = allProjs.indexOf(p); // pakai index asli agar loadDEProjForm tidak salah
+      const opt = document.createElement('option');
+      opt.value = realIdx;
+      opt.textContent = p.name;
+      sel.appendChild(opt);
+    });
+    sel.disabled = false;
+
+    if (visibleProjs.length === 0) {
+      sel.innerHTML = '<option value="">-- Belum ada project yang tersedia --</option>';
+    }
+  }).catch(() => {
+    sel.innerHTML = '<option value="">-- Gagal memuat project --</option>';
+    sel.disabled = false;
   });
 }
 
-// ═══════════════════════════════════════════════════════════
-// HTML TEMPLATE BUILDERS - Modular & Reusable
-// ═══════════════════════════════════════════════════════════
+/**
+ * Versi buildSetpointPage dengan section header bergaya Set Point modal.
+ * Menggantikan buildSetpointPage(fields, key, sp) di renderSetpointPage.
+ */
+function buildSetpointPageWithHeaders(key, sp) {
+  // Buat lookup: field id → field definition
+  const fieldMap = {};
+  SP_FIELDS.forEach(f => { fieldMap[f.id] = f; });
 
-function buildSetpointPage(fields, key, sp) {
-  return fields.map(f => buildSetpointField(f, key, sp[f.id] || '')).join('');
+  return DE_SECTIONS.map(section => {
+    const sectionFields = section.fields
+      .map(id => fieldMap[id])
+      .filter(Boolean); // abaikan jika field tidak ditemukan
+
+    const fieldsHTML = sectionFields
+      .map(f => buildSetpointField(f, key, sp[f.id] || ''))
+      .join('');
+
+    return `
+      <div style="margin-bottom:20px;">
+        <!-- Section Header -->
+        <div style="
+          display:flex;
+          align-items:center;
+          gap:8px;
+          background:${section.bg};
+          border:1px solid ${section.border};
+          border-radius:8px;
+          padding:9px 14px;
+          margin-bottom:12px;
+        ">
+          <span style="font-size:15px;">${section.icon}</span>
+          <span style="
+            font-size:12px;
+            font-weight:700;
+            color:${section.color};
+            letter-spacing:0.5px;
+            text-transform:uppercase;
+          ">${section.label}</span>
+        </div>
+        <!-- Fields Grid -->
+        <div class="setpoint-grid">
+          ${fieldsHTML}
+        </div>
+      </div>`;
+  }).join('');
 }
 
-function buildTempProdField(key) {
-  return `
-    <div class="de-field de-full" style="margin-bottom:4px;">
-      <label class="de-label" style="color:#111;">TEMPERATUR PRODUKSI</label>
-      <div class="de-input-wrap" style="max-width:220px">
-        <input class="de-input" id="dep-temp-prod-${key}" type="number" step="0.1" placeholder="Masukkan suhu..." oninput="checkVacuum('${key}')">
-        <span class="de-input-unit">°C</span>
-      </div>
-      <div id="dep-vacuum-note-${key}" style="display:none;margin-top:8px;padding:8px 14px;border-radius:8px;font-size:12px;font-weight:600;"></div>
-    </div>`;
-}
 
 function buildPhotoUpload(key) {
   return `
@@ -2024,7 +3537,7 @@ function buildFormActions(key, currentPage) {
       <div class="de-status-bar" id="dep-sb-${key}" style="display:none"><span id="dep-sm-${key}"></span></div>
       <div class="de-actions" style="justify-content:space-between;align-items:center;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <span id="dep-cip-status-${key}" style="font-size:10px;padding:4px 12px;border-radius:100px;background:#fef3c7;color:#854d0e;border:1px solid #fde047;font-weight:700;cursor:pointer;" onclick="openCIPModal('${key}')" title="Klik untuk buka CIP">🧼 CIP: Belum diisi</span>
+          <button class="de-btn de-btn-primary" id="dep-cip-status-${key}" style="padding:8px 16px;font-size:12px;cursor:pointer;" onclick="console.log('CIP button clicked'); openCIPModal('${key}')">🧼 CIP</button>
         </div>
         <div style="display:flex;gap:8px;">
           <button class="de-btn de-btn-ghost" onclick="resetDEP('${key}')">🔄 Reset</button>
@@ -2041,16 +3554,43 @@ function buildFormActions(key, currentPage) {
   }
 }
 
-// Pagination functions
+// Single page actions for production
+function buildFormActionsSinglePage(key) {
+  return `
+    <div class="de-status-bar" id="dep-sb-${key}" style="display:none"><span id="dep-sm-${key}"></span></div>
+    <div class="de-actions" style="justify-content:space-between;align-items:center;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="de-btn de-btn-primary" id="dep-cip-status-${key}" style="padding:8px 16px;font-size:12px;cursor:pointer;">🧼 CIP</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="de-btn de-btn-ghost" onclick="resetDEP('${key}')">🔄 Reset</button>
+        <button class="de-btn de-btn-primary" onclick="submitDEP('${key}')">💾 Save Data</button>
+      </div>
+    </div>`;
+}
+function saveSetpointDraft(key) {
+  window._spDrafts = window._spDrafts || {};
+  const draft = {};
+  SP_FIELDS.forEach(f => { // Gunakan semua field karena sekarang single page
+    const el = document.getElementById('dep-'+f.id+'-'+key);
+    if (el) draft[f.id] = el.value.trim();
+  });
+  const tempEl = document.getElementById('dep-temp-prod-'+key);
+  if (tempEl) draft['temp-prod'] = tempEl.value.trim();
+  const notesEl = document.getElementById('dep-notes-'+key);
+  if (notesEl) draft.notes = notesEl.value.trim();
+  window._spDrafts[key] = draft;
+}
+
 function goToSetpointPage2(key) {
   const wrap = document.getElementById('dep-form-'+key);
   if (!wrap) return;
   
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const projs = gPJ('ongoing');
   const sel = document.getElementById('dep-proj-sel-'+key);
   const proj = projs[+sel.value];
-  if (!proj || !proj.setPoint) return;
-  
+  if (!proj) return;
+  saveSetpointDraft(key);
   renderSetpointPage(key, proj, 2);
 }
 
@@ -2058,52 +3598,102 @@ function goToSetpointPage1(key) {
   const wrap = document.getElementById('dep-form-'+key);
   if (!wrap) return;
   
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const projs = gPJ('ongoing');
   const sel = document.getElementById('dep-proj-sel-'+key);
   const proj = projs[+sel.value];
-  if (!proj || !proj.setPoint) return;
+  if (!proj) return;
   
   renderSetpointPage(key, proj, 1);
 }
 
-function buildSetpointField(f, key, spVal) {
-  const isCalculated = f.calculated || false;
-  const inputAttrs = isCalculated 
-    ? `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" value="${spVal}" readonly style="background:#f3f4f6;color:var(--txt3);cursor:not-allowed;" title="Calculated field - not editable"`
-    : `class="de-input sp-ghost" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${spVal}" onfocus="this.classList.remove('sp-ghost');this.placeholder=''" onblur="if(this.value===''){this.classList.add('sp-ghost');this.placeholder='${spVal}';}"`; 
-  
-  // Top of Column gets vacuum note
-  const extraNote = (f.id === 'sp-temp-top') 
-    ? ` oninput="checkTopColumnVacuum('${key}',this.value)"` 
-    : '';
-  const finalInputAttrs = isCalculated ? inputAttrs : inputAttrs.replace('onblur=', extraNote + ' onblur=');
+// Fungsi baru untuk mengganti mode Auto/Manual
+function toggleSPMode(elementId, fieldId, key) {
+  const inputEl = document.getElementById(elementId);
+  const btn = document.getElementById(`btn-mode-${elementId}`);
+  if (!inputEl || !btn) return;
 
-  if (f.unit) {
-    return `
-      <div class="de-field">
-        <label class="de-label" style="color:#111;">${f.label}${isCalculated ? ' <span style="font-size:9px;color:var(--txt3);">(auto)</span>' : ''}</label>
-        <div class="de-input-wrap">
-          <input ${finalInputAttrs}>
-          <span class="de-input-unit">${f.unit}</span>
-        </div>
-        ${f.id === 'sp-temp-top' ? `<div id="dep-top-vacuum-note-${key}" style="display:none;margin-top:6px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;"></div>` : ''}
-      </div>`;
+  const currentMode = inputEl.getAttribute('data-mode') || 'auto';
+  
+  if (currentMode === 'auto') {
+      // 1. Switch ke MANUAL
+      inputEl.setAttribute('data-mode', 'manual');
+      btn.textContent = 'MANUAL';
+      btn.style.background = '#fff7ed';
+      btn.style.color = 'var(--orange)';
+      btn.style.borderColor = 'var(--orange)';
+      
+      inputEl.readOnly = false;
+      inputEl.style.background = '#fff';
+      inputEl.style.color = '#111';
+      inputEl.style.cursor = 'text';
+      inputEl.title = 'Manual input';
+      inputEl.focus();
+  } else {
+      // 2. Switch kembali ke AUTO
+      inputEl.setAttribute('data-mode', 'auto');
+      btn.textContent = 'AUTO';
+      btn.style.background = '#ebf2fd';
+      btn.style.color = 'var(--blue)';
+      btn.style.borderColor = 'var(--blue)';
+      
+      inputEl.readOnly = true;
+      inputEl.style.background = '#f3f4f6';
+      inputEl.style.color = 'var(--txt3)';
+      inputEl.style.cursor = 'not-allowed';
+      inputEl.title = 'Auto-calculated';
+
+      // Jalankan hitungan otomatis seketika saat kembali ke Auto
+      if (elementId.startsWith('dep-')) {
+          calculateSetpointField(fieldId, key);
+      } else {
+          calculateSPModalField(fieldId, key);
+      }
   }
+}
+window.toggleSPMode = toggleSPMode;
+
+function buildSetpointField(f, key, spVal) {
+  const extraNote = (f.id === 'sp-temp-top')
+    ? ` oninput="checkTopColumnVacuum('${key}',this.value)"`
+    : '';
+
+  const isCalc = f.calculated;
+  // Jika ini adalah field kalkulasi otomatis, setting awal adalah AUTO (Terkunci)
+  const calcAttrs = isCalc ? ' data-mode="auto" readonly style="background:#f3f4f6;color:var(--txt3);cursor:not-allowed;" title="Auto-calculated"' : '';
+  const inputAttrs = `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${spVal}" onfocus="this.classList.remove('sp-ghost');this.placeholder=''" onblur="if(this.value===''){this.classList.add('sp-ghost');this.placeholder='${spVal}';}${extraNote}" ${calcAttrs}`;
+
+  // Tombol Toggle Auto/Manual
+  const autoTag = isCalc ? ` <button type="button" id="btn-mode-dep-${f.id}-${key}" onclick="toggleSPMode('dep-${f.id}-${key}', '${f.id}', '${key}')" style="margin-left:auto;font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid var(--blue);background:#ebf2fd;color:var(--blue);cursor:pointer;font-weight:700;transition:all 0.2s;">AUTO</button>` : '';
+
+  // TRIK CSS AGAR RAPI:
+  // 1. .de-field diset 'flex-col' & 'justify-end'. Jika teks label panjang, kotak input tetap terdorong ke paling bawah sejajar dengan sebelahnya.
+  // 2. Semua input (dengan unit maupun tanpa unit) sekarang DIBUNGKUS merata dengan div .de-input-wrap agar proporsinya sama.
   return `
-    <div class="de-field">
-      <label class="de-label" style="color:#111;">${f.label}${isCalculated ? ' <span style="font-size:9px;color:var(--txt3);">(auto)</span>' : ''}</label>
-      <input ${finalInputAttrs}>
+    <div class="de-field" style="display:flex;flex-direction:column;justify-content:flex-end;height:100%;">
+      <label class="de-label" style="color:#111;display:flex;align-items:flex-start;margin-bottom:8px;line-height:1.4;min-height:16px;">
+        <span style="flex:1;word-break:break-word;">${f.label}</span>
+        ${autoTag}
+      </label>
+      
+      <div class="de-input-wrap" style="width:100%;">
+        <input ${inputAttrs} style="width:100%;">
+        ${f.unit ? `<span class="de-input-unit">${f.unit}</span>` : ''}
+      </div>
+      
       ${f.id === 'sp-temp-top' ? `<div id="dep-top-vacuum-note-${key}" style="display:none;margin-top:6px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;"></div>` : ''}
     </div>`;
 }
 
 function checkTopColumnVacuum(key, val) {
-  const note = document.getElementById('dep-top-vacuum-note-' + key);
+  // Try both dep- and sp- prefixes
+  let note = document.getElementById('dep-top-vacuum-note-' + key);
+  if (!note) note = document.getElementById('sp-top-vacuum-note-' + key);
   if (!note) return;
+  
   const v = parseFloat(val);
   if (isNaN(v)) { note.style.display = 'none'; return; }
   note.style.display = 'block';
-  if (v <= 97) {
+  if (v < 97) {
     note.textContent = '🔵 Vacuum';
     note.style.background = '#dbeafe'; note.style.color = '#1e40af'; note.style.border = '1px solid #93c5fd';
   } else {
@@ -2113,43 +3703,242 @@ function checkTopColumnVacuum(key, val) {
 }
 window.checkTopColumnVacuum = checkTopColumnVacuum;
 
+function calculateSetpointField(fieldId, key) {
+  const field = SP_FIELDS.find(f => f.id === fieldId);
+  if (!field || !field.calculated) return;
+  const inputEl = document.getElementById('dep-' + fieldId + '-' + key);
+  
+  if (!inputEl) return;
+  // CEGAH KALKULASI JIKA USER MENGATUR MODE KE 'MANUAL'
+  if (inputEl.getAttribute('data-mode') === 'manual') return; 
+
+  const v = id => parseFloat(document.getElementById('dep-' + id + '-' + key)?.value) || 0;
+  let result = '';
+
+  try {
+    if (fieldId === 'sp-aroma') {
+      result = (v('sp-ext') * v('sp-feed') / 100).toFixed(2);
+    } else if (fieldId === 'sp-steam') {
+      const aroma = parseFloat(document.getElementById('dep-sp-aroma-' + key)?.value) || 0;
+      result = (aroma + 0.0933 * v('sp-temp-top') - 2.3333 + Math.abs(v('sp-offset')) * v('sp-feed') * 0.0018).toFixed(2);
+    } else if (fieldId === 'sp-cond1') {
+      result = (v('sp-cond-rate') * v('sp-feed') / 100).toFixed(2);
+    } else if (fieldId === 'sp-cond2') {
+      result = ((v('sp-ext') - v('sp-cond-rate')) * v('sp-feed') / 100).toFixed(2);
+    } else if (fieldId === 'sp-int') {
+      const steam = parseFloat(document.getElementById('dep-sp-steam-' + key)?.value) || 0;
+      const feed  = v('sp-feed');
+      result = feed === 0 ? '—' : (100 * steam / feed).toFixed(2);
+    } else if (fieldId === 'sp-temp-heater') {
+      result = (v('sp-temp-top') + v('sp-offset')).toFixed(2);
+    }
+  } catch (e) {}
+
+  if (result !== '') inputEl.value = result;
+}
+
+function recalcChain(key) {
+  calculateSetpointField('sp-aroma',       key);
+  calculateSetpointField('sp-steam',       key);
+  calculateSetpointField('sp-cond1',       key);
+  calculateSetpointField('sp-cond2',       key);
+  calculateSetpointField('sp-int',         key);
+  calculateSetpointField('sp-temp-heater', key);
+}
+
+function setupSetpointCalculations(key) {
+  const proj = (() => {
+    const sel = document.getElementById('dep-proj-sel-' + key);
+    if (!sel || sel.value === '') return null;
+    return gPJ('ongoing')[+sel.value] || null;
+  })();
+
+  const sp = { ...(proj?.setPoint || {}), ...(window._spDrafts?.[key] || {}) };
+  const CALCULATED = ['sp-aroma', 'sp-steam', 'sp-cond1', 'sp-cond2', 'sp-int', 'sp-temp-heater'];
+
+  CALCULATED.forEach(fieldId => {
+    const el = document.getElementById('dep-' + fieldId + '-' + key);
+    if (!el) return;
+    const saved = sp[fieldId];
+    if (saved !== undefined && saved !== '') {
+      el.value = saved;
+    } else {
+      calculateSetpointField(fieldId, key);
+    }
+  });
+
+  ['sp-ext', 'sp-feed', 'sp-cond-rate', 'sp-temp-top', 'sp-offset'].forEach(triggerId => {
+    const el = document.getElementById('dep-' + triggerId + '-' + key);
+    if (!el) return;
+    el.addEventListener('input', () => recalcChain(key));
+  });
+}
+
+function calculateSPModalField(fieldId, type) {
+  const el = document.getElementById(fieldId + '-' + type);
+  if (!el) return;
+  // CEGAH KALKULASI PADA MODAL JIKA MODE = MANUAL
+  if (el.getAttribute('data-mode') === 'manual') return; 
+  
+  const v = id => parseFloat(document.getElementById(id + '-' + type)?.value) || 0;
+  let result = '';
+
+  if (fieldId === 'sp-aroma') {
+    result = (v('sp-ext') * v('sp-feed') / 100).toFixed(2);
+  } else if (fieldId === 'sp-steam') {
+    const aroma = parseFloat(document.getElementById('sp-aroma-' + type)?.value) || 0;
+    result = (aroma + 0.0933 * v('sp-temp-top') - 2.3333 + Math.abs(v('sp-offset')) * v('sp-feed') * 0.0018).toFixed(2);
+  } else if (fieldId === 'sp-cond1') {
+    result = (v('sp-cond-rate') * v('sp-feed') / 100).toFixed(2);
+  } else if (fieldId === 'sp-cond2') {
+    result = ((v('sp-ext') - v('sp-cond-rate')) * v('sp-feed') / 100).toFixed(2);
+  } else if (fieldId === 'sp-int') {
+    const steam = parseFloat(document.getElementById('sp-steam-' + type)?.value) || 0;
+    const feed  = v('sp-feed');
+    result = feed === 0 ? '—' : (100 * steam / feed).toFixed(2);
+  } else if (fieldId === 'sp-temp-heater') {
+    result = (v('sp-temp-top') + v('sp-offset')).toFixed(2);
+  }
+
+  if (result !== '') el.value = result;
+}
+
+function recalcSPChain(type) {
+  calculateSPModalField('sp-aroma',       type);
+  calculateSPModalField('sp-steam',       type);
+  calculateSPModalField('sp-cond1',       type);
+  calculateSPModalField('sp-cond2',       type);
+  calculateSPModalField('sp-int',         type);
+  calculateSPModalField('sp-temp-heater', type);
+}
+
+function setupSPModalCalculations(type) {
+  const CALCULATED_SP = ['sp-aroma', 'sp-steam', 'sp-cond1', 'sp-cond2', 'sp-int', 'sp-temp-heater'];
+  CALCULATED_SP.forEach(fieldId => {
+    const el = document.getElementById(fieldId + '-' + type);
+    if (!el) return;
+    
+    // Default Inisialisasi ke Auto Mode
+    if (el.getAttribute('data-mode') !== 'manual') {
+        el.setAttribute('data-mode', 'auto');
+        el.readOnly = true;
+        el.style.background = '#f3f4f6';
+        el.style.color = 'var(--txt3)';
+        el.style.cursor = 'not-allowed';
+        el.title = 'Auto-calculated';
+    }
+
+    const label = el.closest('.de-field')?.querySelector('.de-label');
+    if (label && !label.querySelector('.sp-auto-tag')) {
+      label.style.display = 'flex'; 
+      label.style.alignItems = 'center';
+      
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sp-auto-tag';
+      btn.id = `btn-mode-${fieldId}-${type}`;
+      btn.onclick = () => toggleSPMode(`${fieldId}-${type}`, fieldId, type);
+      
+      // Render visualisasi tombol sesuai statenya sekarang
+      if (el.getAttribute('data-mode') === 'manual') {
+          btn.textContent = 'MANUAL';
+          btn.style.cssText = 'margin-left:6px;font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid var(--orange);background:#fff7ed;color:var(--orange);cursor:pointer;font-weight:700;transition:all 0.2s;';
+      } else {
+          btn.textContent = 'AUTO';
+          btn.style.cssText = 'margin-left:6px;font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid var(--blue);background:#ebf2fd;color:var(--blue);cursor:pointer;font-weight:700;transition:all 0.2s;';
+      }
+      label.appendChild(btn);
+    }
+  });
+
+  ['sp-ext', 'sp-feed', 'sp-cond-rate', 'sp-temp-top', 'sp-offset'].forEach(triggerId => {
+    const el = document.getElementById(triggerId + '-' + type);
+    if (!el) return;
+    el.addEventListener('input', () => recalcSPChain(type));
+  });
+
+  recalcSPChain(type);
+}
+
+window.calculateSetpointField = calculateSetpointField;
+window.recalcChain = recalcChain;
+window.setupSetpointCalculations = setupSetpointCalculations;
+window.calculateSPModalField = calculateSPModalField;
+window.recalcSPChain = recalcSPChain;
+window.setupSPModalCalculations = setupSPModalCalculations; 
+
 function renderSetpointPage(key, proj, page) {
   const wrap = document.getElementById('dep-form-'+key);
-  if (!wrap) return;
-  
-  const sp = proj.setPoint;
-  const fields = page === 1 ? SP_FIELDS_PAGE1 : SP_FIELDS_PAGE2;
-  
-  const pageTitle = page === 1 ? 'Set Point - Page 1 of 2' : 'Untitled — Set Point Page 2 of 2';
-  const setpointHTML = buildSetpointPage(fields, key, sp);
-  
-  let html = `
-    <div class="de-entry-note">
-      📄 <strong>${pageTitle}</strong> — Nilai set point ditampilkan sebagai placeholder abu-abu. Klik kolom untuk menghapusnya dan isi nilai baru.
-    </div>
-    <div class="setpoint-grid" style="margin-bottom:18px;">
-      ${setpointHTML}
-    </div>
-  `;
-  
-  if (page === 1) {
+  if (!wrap) {
+    console.error('Wrap element not found for key:', key);
+    return;
+  }
+
+  console.log('Rendering setpoint page for:', key, proj);
+
+  const draft = window._spDrafts?.[key] || {};
+  // Ambil nilai dari production history terakhir (jika ada) sebagai referensi placeholder
+  // Ini supaya setelah save, placeholder menampilkan nilai yang baru diinput, bukan SP awal
+  const lastHistory = proj.productionHistory?.length
+    ? proj.productionHistory[proj.productionHistory.length - 1]
+    : null;
+  const lastValuesCache = lastHistory?.values || {};
+  // Baca juga dari localStorage (persist setelah page refresh)
+  const lsLastValues = (() => {
+    try { return JSON.parse(localStorage.getItem('dep_last_values_' + proj.name) || '{}'); }
+    catch(e) { return {}; }
+  })();
+  const sp = { ...(proj.setPoint || {}), ...lsLastValues, ...lastValuesCache, ...draft };
+  const fields = SP_FIELDS; // Gunakan semua field dalam satu page
+  const pageTitle = 'Set Point — All Fields';
+
+  try {
+    let html = `
+      <div class="de-entry-note">
+        ⚙️ <strong>Set Point — All Fields</strong> — Nilai set point ditampilkan sebagai placeholder. Klik kolom untuk isi nilai baru.
+      </div>
+      <div style="margin-bottom:18px;">
+        ${buildSetpointPageWithHeaders(key, sp)}
+      </div>`;
+
+    // Selalu tampilkan field tambahan di akhir
     html += `
       <div class="de-field" style="margin-bottom:16px;">
-        ${buildTempProdField(key)}
-        <label class="de-label" style="color:#111;">NOTES</label>
-        <textarea class="de-input de-textarea" id="dep-notes-${key}" placeholder="Catatan tambahan..."></textarea>
+        <label class="de-label" style="color:#111;margin-top:10px;display:block;">NOTES</label>
+        <textarea class="de-input de-textarea" id="dep-notes-${key}" placeholder="Catatan tambahan...">${sp.notes || ''}</textarea>
         ${buildPhotoUpload(key)}
-      </div>
-    `;
-  }
-  
-  html += buildFormActions(key, page);
-  
-  wrap.innerHTML = html;
-  
-  // Update CIP status if already saved (only on page 1) — show bottom-left
-  if (page === 1) {
+      </div>`;
+
+    html += buildFormActionsSinglePage(key);
+    wrap.innerHTML = html;
+
+    // Setup automatic calculations for set point fields
+    setTimeout(() => setupSetpointCalculations(key), 10);
+
+    // Setup CIP button event listener
+    const cipButton = wrap.querySelector('#dep-cip-status-'+key);
+    if (cipButton) {
+      cipButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Extra check: CIP tidak bisa diakses jika sudah done
+        if (cipButton.disabled) {
+          showQuickToast('❌ CIP sudah selesai dan tidak dapat diubah lagi!');
+          return;
+        }
+        
+        console.log('🔘 CIP button clicked via event listener');
+        openCIPModal(key);
+      });
+    }
+
     updateCIPStatus(key, proj);
+
+    console.log('Setpoint page rendered successfully for:', key);
+  } catch (error) {
+    console.error('Error rendering setpoint page:', error);
+    wrap.innerHTML = '<div style="color:red;">Error rendering form: ' + error.message + '</div>';
   }
 }
 
@@ -2160,20 +3949,23 @@ window.goToSetpointPage2 = goToSetpointPage2;
 // LOAD DATA ENTRY PROJECT FORM - Refactored Version with Pagination
 // ═══════════════════════════════════════════════════════════
 
-function loadDEProjForm(key) {
+async function loadDEProjForm(key) {
   const sel = document.getElementById('dep-proj-sel-'+key);
   const wrap = document.getElementById('dep-form-'+key);
   if(!sel || !wrap) return;
   if(sel.value === '') { wrap.innerHTML = ''; return; }
 
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  // Reload dari DB supaya nilai selalu fresh
+  await loadPJ('ongoing');
+
+  const projs = gPJ('ongoing');
   const proj = projs[+sel.value];
-  if(!proj || !proj.setPoint) { wrap.innerHTML = ''; return; }
+  if(!proj) { wrap.innerHTML = ''; return; }
 
   // Store current project info in window for CIP modal
   window._currentDEProj = { key, proj, projIndex: +sel.value };
 
-  // Always start on page 1
+  // Always start on single page
   renderSetpointPage(key, proj, 1);
 }
 
@@ -2183,17 +3975,30 @@ function updateCIPStatus(key, proj) {
   const statusEl = document.getElementById('dep-cip-status-'+key);
   if (!statusEl) return;
   if (cipDone) {
-    const savedAt = cipData?.savedAt ? new Date(cipData.savedAt).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    statusEl.textContent = '✅ CIP Selesai' + (savedAt ? ' · ' + savedAt : '');
-    statusEl.style.background = '#dcfce7';
-    statusEl.style.color = '#15803d';
-    statusEl.style.borderColor = '#86efac';
+    statusEl.textContent = '✅ CIP Selesai';
+    statusEl.style.background = '#15803d';
+    statusEl.style.borderColor = '#15803d';
+    statusEl.style.color = 'white';
+    statusEl.disabled = true;
+    statusEl.style.cursor = 'not-allowed';
+    statusEl.style.opacity = '0.6';
+    statusEl.onclick = null;
   } else if (cipData) {
-    const savedAt = cipData.savedAt ? new Date(cipData.savedAt).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    statusEl.textContent = '💾 CIP Tersimpan' + (savedAt ? ' · ' + savedAt : '');
-    statusEl.style.background = '#dbeafe';
-    statusEl.style.color = '#1e40af';
-    statusEl.style.borderColor = '#93c5fd';
+    statusEl.textContent = '💾 CIP Tersimpan';
+    statusEl.style.background = '#1e40af';
+    statusEl.style.borderColor = '#1e40af';
+    statusEl.style.color = 'white';
+    statusEl.disabled = false;
+    statusEl.style.cursor = 'pointer';
+    statusEl.style.opacity = '1';
+  } else {
+    statusEl.textContent = '🧼 CIP';
+    statusEl.style.background = '';
+    statusEl.style.borderColor = '';
+    statusEl.style.color = '';
+    statusEl.disabled = false;
+    statusEl.style.cursor = 'pointer';
+    statusEl.style.opacity = '1';
   }
 }
 
@@ -2208,56 +4013,8 @@ function resetDEP(key){
 
 // ═══════════════════════════════════════════════════════════
 // CIP MODAL SYSTEM - Clean in Place with Checklist & Timestamp
+// (CIP_CHECKLISTS definition moved to top of file for proper initialization)
 // ═══════════════════════════════════════════════════════════
-
-// CIP Checklist definitions based on production type
-const CIP_CHECKLISTS = {
-  production: {
-    title: 'SCC CIP - Birsing Production',
-    sections: [
-      {
-        name: 'Desanter',
-        items: ['Caustic', 'Birsing Caustic', 'Citric', 'Birsing Citric', 'Revurs', 'Shutdown']
-      },
-      {
-        name: 'Conln (Birsing Prod) + Raw Tank',
-        items: ['Caustic', 'Birsing Caustic', 'Citric', 'Birsing Citric', 'Svildenn']
-      },
-      {
-        name: 'After CIP',
-        items: ['Birsing', 'Caustic + Birsing', 'Citric + Birsing']
-      },
-      {
-        name: 'CT CIP',
-        items: ['Birsing Prod', 'Caustic', 'Birsing Caustic', 'Citric', 'Birsing Citric']
-      },
-      {
-        name: 'Clarified',
-        items: ['Birsing Prod', 'Caustic', 'Birsing Caustic', 'Citric', 'Birsing Citric']
-      },
-      {
-        name: 'Concentrate',
-        items: ['Sama Split Clarified']
-      }
-    ],
-    fields: [
-      { id: 'ph', label: 'PH', type: 'number', step: '0.1' },
-      { id: 'total_chemical', label: 'Total Chemical', type: 'text' }
-    ]
-  },
-  laboratorium: {
-    title: 'Laboratory CIP',
-    sections: [
-      {
-        name: 'General CIP',
-        items: ['Pre-rinse', 'Caustic Wash', 'Intermediate Rinse', 'Acid Wash', 'Final Rinse', 'Sanitization']
-      }
-    ],
-    fields: [
-      { id: 'ph', label: 'PH', type: 'number', step: '0.1' }
-    ]
-  }
-};
 
 function buildCIPChecklist(key, cipData) {
   const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
@@ -2339,109 +4096,165 @@ function handleCIPCheckbox(checkId, timeId) {
 }
 
 window.handleCIPCheckbox = handleCIPCheckbox;
+window.buildCIPChecklist = buildCIPChecklist;
+window.buildCIPFields = buildCIPFields;
 
 function openCIPModal(key) {
-  const sel = document.getElementById('dep-proj-sel-'+key);
-  if (!sel || sel.value === '') {
-    showQuickToast('❌ Pilih project dulu!');
-    return;
-  }
+  console.log('🔍 openCIPModal called with key:', key);
+  try {
+    let sel = document.getElementById('dep-proj-sel-'+key);
+    if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
+    
+    console.log('🔍 Project selector element:', sel, 'value:', sel?.value);
+    
+    if (!sel || sel.value === '') {
+      showQuickToast('❌ Pilih project dulu!');
+      return;
+    }
 
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
-  const proj = projs[+sel.value];
-  if (!proj) return;
+    const allProjs = gPJ('ongoing');
+    const proj = allProjs[+sel.value];
+    
+    if (!proj) { showQuickToast('❌ Project tidak ditemukan!'); return; }
 
-  // Get existing CIP data
-  const cipData = key === 'production' ? proj.cipProdData : proj.cipLabData;
-  const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
+    const cipDone = key === 'production' ? proj.cipProdDone : proj.cipLabDone;
+    if (cipDone) {
+      showQuickToast('❌ CIP sudah selesai dan tidak dapat diubah lagi!');
+      return;
+    }
 
-  const now = new Date();
-  const nowStr = now.toLocaleString('id-ID', {weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  const savedAtStr = cipData?.savedAt ? new Date(cipData.savedAt).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
+    const cipData = key === 'production' ? proj.cipProdData : proj.cipLabData;
+    const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
 
-  const modalHTML = `
-    <div id="cip-modal-overlay" onclick="closeCIPModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;"></div>
-    <div id="cip-modal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0;width:min(700px,92vw);max-height:88vh;overflow:hidden;z-index:9999;box-shadow:0 25px 70px rgba(0,0,0,.3);">
-      
-      <!-- Header -->
-      <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:#1f2937;display:flex;align-items:center;justify-content:space-between;">
-        <div>
-          <div style="font-size:17px;font-weight:700;color:white;display:flex;align-items:center;gap:8px;">
-            🧼 ${config.title}
-          </div>
-          <div style="font-size:12px;color:#9ca3af;margin-top:3px;">${proj.name} — ${key === 'production' ? 'Production' : 'Laboratorium'}</div>
-        </div>
-        <button onclick="closeCIPModal()" style="width:32px;height:32px;border-radius:8px;border:1px solid #374151;background:#111827;color:#9ca3af;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;">✕</button>
-      </div>
-      
-      <!-- Body -->
-      <div style="padding:24px;max-height:calc(88vh - 180px);overflow-y:auto;">
+    const now = new Date();
+    const nowStr = now.toLocaleString('id-ID', {weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const savedAtStr = cipData?.savedAt ? new Date(cipData.savedAt).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
+
+    const modalHTML = `
+      <div id="cip-modal-overlay" onclick="closeCIPModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;"></div>
+      <div id="cip-modal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0;width:min(700px,92vw);max-height:88vh;overflow:hidden;z-index:9999;box-shadow:0 25px 70px rgba(0,0,0,.3);">
         
-        <!-- Info Notice -->
-        <div style="background:#fffbeb;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#854d0e;line-height:1.5;">
-          ℹ️ <strong>CIP Checklist:</strong> Centang setiap step yang sudah selesai. Timestamp akan otomatis tercatat. Data akan tersimpan saat klik Save atau Finish.
-        </div>
-
-        <!-- Realtime date + last saved info -->
-        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:#1f2937;display:flex;align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">🕐 Tanggal & Waktu</div>
-            <div style="font-size:13px;font-weight:600;color:#111;" id="cip-realtime-clock">${nowStr}</div>
+            <div style="font-size:17px;font-weight:700;color:white;display:flex;align-items:center;gap:8px;">
+              🧼 ${config.title}
+            </div>
+            <div style="font-size:12px;color:#9ca3af;margin-top:3px;">${proj.name} — ${key === 'production' ? 'Production' : 'Laboratorium'}</div>
           </div>
-          ${savedAtStr ? `<div style="text-align:right;">
-            <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">💾 Terakhir Disimpan</div>
-            <div style="font-size:12px;font-weight:600;color:#1e40af;">${savedAtStr}</div>
-          </div>` : ''}
+          <button onclick="closeCIPModal()" style="width:32px;height:32px;border-radius:8px;border:1px solid #374151;background:#111827;color:#9ca3af;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;">✕</button>
         </div>
+        
+        <div style="padding:24px;max-height:calc(88vh - 180px);overflow-y:auto;">
+          
+          <div style="background:#fffbeb;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#854d0e;line-height:1.5;">
+            ℹ️ <strong>CIP Checklist:</strong> Centang setiap step yang sudah selesai. Timestamp otomatis tercatat.
+          </div>
 
-        <!-- CIP Form Fields (PH + Total Chemical only) -->
-        <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:20px;">
-          <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:12px;">📋 CIP Information</div>
-          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-            ${buildCIPFields(key, cipData)}
+          <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">🕐 Tanggal & Waktu</div>
+              <div style="font-size:13px;font-weight:600;color:#111;" id="cip-realtime-clock">${nowStr}</div>
+            </div>
+            ${savedAtStr ? `<div style="text-align:right;">
+              <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px;">💾 Terakhir Disimpan</div>
+              <div style="font-size:12px;font-weight:600;color:#1e40af;">${savedAtStr}</div>
+            </div>` : ''}
+          </div>
+
+          <div id="cip-checklist-container">
+            ${buildCIPChecklist(key, cipData)}
+          </div>
+
+          <div id="cip-modal-msg" style="margin-top:16px;font-size:12px;text-align:center;"></div>
+        </div>
+        
+        <div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px;justify-content:space-between;">
+          <button class="de-btn de-btn-ghost" onclick="closeCIPModal()">Cancel</button>
+          <div style="display:flex;gap:10px;">
+            <button class="de-btn de-btn-ghost" onclick="saveCIPModal('${key}', false)" style="background:white;border-color:var(--border2);">💾 Save</button>
+            <button class="de-btn de-btn-primary" onclick="saveCIPModal('${key}', true)" style="background:#15803d;border-color:#15803d;">✅ Save & Finish</button>
           </div>
         </div>
-
-        <!-- CIP Checklist -->
-        <div id="cip-checklist-container">
-          ${buildCIPChecklist(key, cipData)}
-        </div>
-
-        <div id="cip-modal-msg" style="margin-top:16px;font-size:12px;text-align:center;"></div>
       </div>
-      
-      <!-- Footer Actions -->
-      <div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px;justify-content:space-between;">
-        <button class="de-btn de-btn-ghost" onclick="closeCIPModal()">Cancel</button>
-        <div style="display:flex;gap:10px;">
-          <button class="de-btn de-btn-ghost" onclick="saveCIPModal('${key}', false)" style="background:white;border-color:var(--border2);">💾 Save</button>
-          <button class="de-btn de-btn-primary" onclick="saveCIPModal('${key}', true)" style="background:#15803d;border-color:#15803d;">✅ Save & Finish</button>
-        </div>
-      </div>
-    </div>
-  `;
+    `;
 
-  const container = document.createElement('div');
-  container.id = 'cip-modal-container';
-  container.innerHTML = modalHTML;
-  document.body.appendChild(container);
-  
-  // Realtime clock inside modal
-  window._cipClockTimer = setInterval(() => {
-    const el = document.getElementById('cip-realtime-clock');
-    if (!el) { clearInterval(window._cipClockTimer); return; }
-    el.textContent = new Date().toLocaleString('id-ID', {weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  }, 1000);
+    const container = document.createElement('div');
+    container.id = 'cip-modal-container';
+    container.innerHTML = modalHTML;
+    document.body.appendChild(container);
+    document.body.style.overflow = 'hidden'; 
+    
+    window._cipClockTimer = setInterval(() => {
+      const el = document.getElementById('cip-realtime-clock');
+      if (!el) { clearInterval(window._cipClockTimer); return; }
+      el.textContent = new Date().toLocaleString('id-ID', {weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    }, 1000);
 
-  // Store current key for later use
-  window._currentCIPKey = key;
+    window._currentCIPKey = key;
+  } catch (error) {
+    console.error('❌ Error in openCIPModal:', error);
+    showQuickToast('❌ Error membuka CIP Modal: ' + error.message);
+  }
 }
+
+async function saveCIPModal(key, isFinish) {
+  const config  = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
+  const checks  = {};
+  let   allDone = true;
+  config.sections.forEach(sec => {
+    sec.items.forEach(item => {
+      const id  = 'cip-cb-' + key + '-' + item.replace(/\s+/g,'_');
+      const el  = document.getElementById(id);
+      const val = el ? el.checked : false;
+      checks[item] = val;
+      if (!val) allDone = false;
+    });
+  });
+  // Cari project yang sedang aktif
+  const sel  = document.getElementById('dep-proj-sel-'+key) || document.getElementById('cip-proj-sel-'+key);
+  const proj = sel && sel.value !== '' ? gPJ('ongoing')[+sel.value] : null;
+  if (proj && proj._id) {
+    try {
+      const isProd = key === 'production';
+      const body   = isProd
+        ? { cip_prod_done: isFinish || allDone, cip_prod_checks: checks }
+        : { cip_lab_done:  isFinish || allDone, cip_lab_checks:  checks };
+      await fetch('/api/projects/'+proj._id+'/cip', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      await loadPJ('ongoing');
+    } catch(e) { console.error('saveCIPModal API error:', e); }
+  } else if (proj) {
+    // Fallback localStorage
+    if (key === 'production') { proj.cipProdDone = isFinish||allDone; proj.cipProdChecks = checks; }
+    else                      { proj.cipLabDone  = isFinish||allDone; proj.cipLabChecks  = checks; }
+    const ps = gPJ('ongoing'); sPJ('ongoing', ps);
+  }
+  closeCIPModal(key);
+  showQuickToast((isFinish||allDone) ? '✅ CIP selesai!' : '💾 CIP progress tersimpan.');
+}
+
+function openLabSetPoint(key) {
+  let sel = document.getElementById('dep-proj-sel-'+key);
+  if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
+  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
+  openSP('ongoing', +sel.value);
+}
+function openLabCIP(key) {
+  let sel = document.getElementById('dep-proj-sel-'+key);
+  if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
+  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
+  openCIPModal(key);
+}
+
+window.openLabSetPoint = openLabSetPoint;
+window.openLabCIP = openLabCIP;
 
 function closeCIPModal() {
   const container = document.getElementById('cip-modal-container');
   if (container) container.remove();
   if (window._cipClockTimer) { clearInterval(window._cipClockTimer); window._cipClockTimer = null; }
   window._currentCIPKey = null;
+  // Restore body scroll
+  document.body.style.overflow = '';
 }
 
 function saveCIPModal(key, isFinish) {
@@ -2453,29 +4266,34 @@ function saveCIPModal(key, isFinish) {
     if (el) fields[f.id] = el.value;
   });
 
-  // Collect checklist data
+  // Collect checklist data & check if all items are checked (for isFinish)
   const checklist = {};
+  let allItemsChecked = true;
+  let totalItems = 0;
+  
   config.sections.forEach((section, sIdx) => {
     section.items.forEach((item, iIdx) => {
+      totalItems++;
       const checkId = `cip-check-${sIdx}-${iIdx}`;
       const timeId = `cip-time-${sIdx}-${iIdx}`;
       const checkEl = document.getElementById(checkId);
       const timeEl = document.getElementById(timeId);
       
-      if (checkEl) checklist[checkId] = checkEl.checked;
+      if (checkEl) {
+        checklist[checkId] = checkEl.checked;
+        if (!checkEl.checked) allItemsChecked = false;
+      }
       if (timeEl) checklist[timeId] = timeEl.textContent !== '—' ? timeEl.textContent : '';
     });
   });
 
   // Find and save to project
   const sel = document.getElementById('dep-proj-sel-'+key);
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
-  const proj = projs[+sel.value];
+  const allProjs = gPJ('ongoing');
+  const proj = allProjs[+sel.value];
   if (!proj) return;
 
-  const allProjs = gPJ('ongoing');
-  const realIdx = allProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
-  if (realIdx < 0) return;
+  const realIdx = +sel.value;
 
   // Save CIP data
   const cipData = { fields, checklist, savedAt: new Date().toISOString() };
@@ -2573,53 +4391,97 @@ function saveCIPFromDE(key) {
 }
 window.saveCIPFromDE = saveCIPFromDE;
 
-function submitDEP(key){
-  // Get the selected project index from dropdown
-  const sel = document.getElementById('dep-proj-sel-'+key);
-  if(!sel || sel.value === '') {
-    const b=document.getElementById('dep-sb-'+key), m=document.getElementById('dep-sm-'+key);
-    if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-error';m.textContent='❌ Pilih project dulu!';}
+async function submitDEP(key) {
+  const sel = document.getElementById('dep-proj-sel-' + key);
+  if (!sel || sel.value === '') {
+    _depStatus(key, 'error', '\u274C Pilih project dulu!');
     return;
   }
-
-  // Get the actual project from ongoing list
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const projs   = gPJ('ongoing');
   const projIdx = +sel.value;
-  const proj = projs[projIdx];
-  if(!proj) return;
+  const proj    = projs[projIdx];
+  if (!proj) return;
 
-  // Find real index in full ongoing list
-  const allProjs = gPJ('ongoing');
-  const realIdx = allProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
-  if(realIdx < 0) return;
+  const draft = window._spDrafts?.[key] || {};
+  const payload = {
+    project_name:    proj.name,
+    notes:           document.getElementById('dep-notes-' + key)?.value.trim() || draft.notes || '',
+    foto_urls:       window._photoData?.[key] || [],
+    cip_prod_done:   proj.cip_prod_done   || false,
+    cip_prod_checks: proj.cip_prod_checks || {},
+    cip_lab_done:    proj.cip_lab_done    || false,
+    cip_lab_checks:  proj.cip_lab_checks  || {},
+    fp_entries:      proj.fp_entries      || [],
+  };
 
-  // Collect filled values — only update fields that have a value entered
-  let hasAny = false;
+  let anyFilled = false;
   SP_FIELDS.forEach(f => {
-    const el = document.getElementById('dep-'+f.id+'-'+key);
-    if(el && el.value !== '' && !el.classList.contains('sp-ghost')) {
-      allProjs[realIdx].setPoint[f.id] = el.value;
-      hasAny = true;
-    }
+    const el  = document.getElementById('dep-' + f.id + '-' + key);
+    const val = el ? el.value.trim() : (draft[f.id] || '');
+    payload[f.id] = val;
+    if (!f.calculated && val !== '') anyFilled = true;
   });
 
-  if(!hasAny) {
-    const b=document.getElementById('dep-sb-'+key), m=document.getElementById('dep-sm-'+key);
-    if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-error';m.textContent='❌ Isi minimal satu field dulu!';}
+  if (!anyFilled && !payload.notes) {
+    _depStatus(key, 'error', '\u274C Isi minimal satu field sebelum menyimpan!');
     return;
   }
 
-  // Save back to localStorage
-  sPJ('ongoing', allProjs);
+  _depStatus(key, 'loading', '\u23F3 Menyimpan ke database...');
 
-  const b=document.getElementById('dep-sb-'+key), m=document.getElementById('dep-sm-'+key);
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Set Point diperbarui! Nilai baru tersimpan.';}
+  try {
+    const res  = await fetch('/api/dataentry/production', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Gagal simpan');
 
-  // Reload form so placeholders reflect new values
-  setTimeout(()=>{
-    if(b) b.style.display='none';
-    loadDEProjForm(key);
-  }, 1500);
+    // Simpan nilai yang diinput ke cache lokal supaya placeholder terupdate setelah reload
+    await loadPJ('ongoing');
+    const freshProjs = gPJ('ongoing');
+    const freshIdx = freshProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
+    if (freshIdx >= 0) {
+      const lsKey = 'dep_last_values_' + proj.name;
+      // Ambil nilai yang sudah tersimpan sebelumnya (kumulatif)
+      let existingValues = {};
+      try { existingValues = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e) {}
+
+      // Merge: nilai lama sebagai base, nilai baru (yang diinput) menimpa field yang diisi
+      // Field kosong di form TIDAK menimpa nilai lama → nilai lama tetap terjaga
+      const mergedValues = { ...existingValues };
+      SP_FIELDS.forEach(f => {
+        if (payload[f.id] !== '') {
+          mergedValues[f.id] = payload[f.id]; // field diisi → update
+        }
+        // field kosong → biarkan nilai lama (tidak overwrite)
+      });
+
+      if (!freshProjs[freshIdx].productionHistory) freshProjs[freshIdx].productionHistory = [];
+      const hist = freshProjs[freshIdx].productionHistory;
+      if (hist.length > 0) {
+        hist[hist.length - 1].values = mergedValues;
+      } else {
+        hist.push({ saved_at: new Date().toISOString(), source: key, db_id: json.id, values: mergedValues });
+      }
+      _pjCache['ongoing'] = freshProjs;
+      // Persist secara kumulatif ke localStorage
+      localStorage.setItem(lsKey, JSON.stringify(mergedValues));
+    }
+
+    if (window._spDrafts) delete window._spDrafts[key];
+    _depStatus(key, 'success', '\u2705 Data Production tersimpan! (' + (json.action || 'saved') + ')');
+    setTimeout(() => {
+      const b = document.getElementById('dep-sb-' + key);
+      if (b) b.style.display = 'none';
+      loadDEProjForm(key);
+    }, 1500);
+
+  } catch (err) {
+    console.error('submitDEP error:', err);
+    _depStatus(key, 'error', '\u274C Gagal simpan: ' + err.message);
+  }
 }
 
 // Utility/Limbah simple DE helpers
@@ -2630,10 +4492,88 @@ function resetDE(key){
   });
   const d=document.getElementById(key+'-date'); if(d) d.value=new Date().toISOString().split('T')[0];
 }
-function submitDE(key){
-  const b=document.getElementById(key+'-sb'),m=document.getElementById(key+'-sm');
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Data berhasil disimpan!';}
-  setTimeout(()=>{if(b)b.style.display='none';},3000);
+function submitLimbah(key) {
+  const projSel = document.getElementById('limbah-proj-sel');
+  const selectedIdx = projSel ? projSel.value : "";
+  
+  // Ambil Data Form
+  const basicData = {
+    date: document.getElementById(key+'-date').value,
+    vol: document.getElementById(key+'-vol').value,
+    cod: document.getElementById(key+'-cod').value,
+    bod: document.getElementById(key+'-bod').value,
+    tss: document.getElementById(key+'-tss').value,
+    ph: document.getElementById(key+'-ph').value,
+    notes: document.getElementById(key+'-notes').value,
+    jar: window._tmpJar || null
+  };
+
+  if (selectedIdx !== "") {
+    // ── JALUR A: SIMPAN KE SUMMARY PROJECT ──
+    const projs = gPJ('ongoing');
+    const p = projs[+selectedIdx];
+    if (!p.limbahHistory) p.limbahHistory = [];
+    
+    // Susun fields untuk tabel summary bergaya Excel
+    const fields = [
+      { label: 'Volume (L)', newVal: basicData.vol },
+      { label: 'COD (mg/L)', newVal: basicData.cod },
+      { label: 'BOD (mg/L)', newVal: basicData.bod },
+      { label: 'TSS (mg/L)', newVal: basicData.tss },
+      { label: 'pH', newVal: basicData.ph }
+    ];
+    // Tambah info jar test jika ada
+    if (basicData.jar) {
+      fields.push({ label: 'Jar Test Alum', newVal: basicData.jar.alum });
+      fields.push({ label: 'Jar Test Total', newVal: basicData.jar.total });
+    }
+
+    p.limbahHistory.push({
+      saved_at: new Date().toISOString(),
+      fields: fields
+    });
+    
+    sPJ('ongoing', projs);
+    showQuickToast('✅ Data tersimpan di Summary Project: ' + p.name);
+  } else {
+    // ── JALUR B: SIMPAN KE LAPORAN HARIAN ──
+    const harian = JSON.parse(localStorage.getItem('harian_entries') || '[]');
+    
+    // Build data object with jar test info if available
+    const reportData = {
+      'Volume': basicData.vol + ' L',
+      'pH': basicData.ph,
+      'COD/BOD': `${basicData.cod}/${basicData.bod} mg/L`
+    };
+    
+    // Add jar test data if present - get from latest jar test entries
+    const jarTestEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]')
+      .filter(e => e.cat === 'limbah' && e.projName === 'Jar Test Harian')
+      .sort((a, b) => new Date(b.saved_at) - new Date(a.saved_at));
+    
+    if (jarTestEntries.length > 0) {
+      // Get the most recent jar test
+      const latestJar = jarTestEntries[0];
+      if (latestJar.data) {
+        reportData['PAC (PPM)'] = latestJar.data['Doz. PAC'] || '—';
+        reportData['Polimer (PPM)'] = latestJar.data['Doz. Polimer'] || '—';
+      }
+    }
+    
+    harian.unshift({
+      id: Date.now(),
+      cat: 'limbah',
+      projName: 'Limbah Harian (Umum)',
+      data: reportData,
+      saved_at: new Date().toISOString()
+    });
+    localStorage.setItem('harian_entries', JSON.stringify(harian));
+    showQuickToast('✅ Data tersimpan di Laporan Harian.');
+  }
+
+  // Reset & Bersihkan
+  resetDE(key);
+  window._tmpJar = null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2757,7 +4697,7 @@ function getProjectHTML(type, title) {
   <input class="proj-search" id="ps-${type}" placeholder="🔍  Search projects..." oninput="renderPJ('${type}')">
   <div class="proj-list" id="pl-${type}"></div>
 </div>
-${isOngoing ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</button>' : ''}
+${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'') ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</button>' : ''}
 
 <!-- ADD modal -->
 <div class="proj-modal-overlay" id="pmo-${type}">
@@ -2790,7 +4730,7 @@ ${isOngoing ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</butt
         <div class="de-field proj-modal-full">
           <label class="de-label">PREPARATION METHOD</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)" id="pf-tl-${type}">
-            ${['Ekstraksi','Separator Kasar','Separator Halus','Filtrasi','Evaporasi'].map(m=>`
+            ${['Ekstraksi','Decanter (Separator Kasar)','Centrifuge (Separator Halus)','Filtrasi','Evaporasi', 'Full Condensation', 'Separate Condensation'].map(m=>`
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);transition:all .15s" class="method-chip">
                 <input type="checkbox" value="${m}" style="accent-color:var(--blue);cursor:pointer"> ${m}
               </label>`).join('')}
@@ -2798,6 +4738,26 @@ ${isOngoing ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</butt
         </div>
         <div class="de-field proj-modal-full"><label class="de-label">MATERIALS USED</label><textarea class="de-input de-textarea" id="pf-mat-${type}" placeholder="e.g. Steel pipes, concrete..." style="min-height:60px"></textarea></div>
         <div class="de-field proj-modal-full"><label class="de-label">NOTES</label><textarea class="de-input de-textarea" id="pf-nt-${type}" placeholder="Additional notes..." style="min-height:60px"></textarea></div>
+
+        <!-- Role visibility — hanya tampil untuk admin/superadmin -->
+        ${['admin','superadmin'].includes(localStorage.getItem('role')||'') ? `
+        <div class="de-field proj-modal-full">
+          <label class="de-label">👥 VISIBLE UNTUK ROLE</label>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;">Centang role yang bisa melihat & mengakses project ini di Data Entry mereka. Kosongkan = semua role bisa lihat.</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)" id="pf-roles-${type}">
+            ${[
+              {val:'Produksi',   lbl:'🏭 Produksi'},
+              {val:'utility',    lbl:'⚡ Utility'},
+              {val:'scientist',  lbl:'🧪 Scientist'},
+              {val:'limbah',     lbl:'♻️ Limbah'},
+              {val:'PPIC',       lbl:'📊 PPIC'},
+            ].map(r=>`
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);transition:all .15s">
+                <input type="checkbox" value="${r.val}" name="pf-role-check-${type}" style="accent-color:var(--blue);cursor:pointer"> ${r.lbl}
+              </label>`).join('')}
+          </div>
+          <div style="font-size:10px;color:var(--txt3);margin-top:6px;">💡 admin & superadmin selalu bisa melihat semua project.</div>
+        </div>` : ''}
       </div>
       <div class="de-status-bar" id="psb-${type}" style="display:none"><span id="psm-${type}"></span></div>
       <div class="de-actions" style="margin-top:18px">
@@ -2864,123 +4824,157 @@ ${isOngoing ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</butt
 <div class="proj-modal-overlay" id="sp-overlay-${type}">
   <div class="proj-modal sp-modal">
     <div class="proj-modal-head">
-      <div class="proj-modal-title">⚙️ Set Point — <span id="sp-proj-nm-${type}">Project</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div class="proj-modal-title">⚙️ Set Point — <span id="sp-proj-nm-${type}">Project</span></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span id="sp-page-dot1-${type}" style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block;transition:all .2s"></span>
+          <span id="sp-page-dot2-${type}" style="width:8px;height:8px;border-radius:50%;background:#d1d5db;display:inline-block;transition:all .2s"></span>
+          <span id="sp-page-lbl-${type}" style="font-size:10px;color:var(--txt3);font-weight:600">Page 1 / 2</span>
+        </div>
+      </div>
       <button class="proj-modal-close" onclick="closeSP('${type}')">✕</button>
     </div>
     <div class="proj-modal-body">
-      <div style="padding:10px 12px;background:#ebf2fd;border:1px solid #c3d9fa;border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:16px;">
-        <strong>⚠️ Note:</strong> Fill all required parameters for this production batch. These values will be used as reference in data entry forms.
-      </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">🧪 Slurry</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">Slurry Ratio</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-slurry-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
-          <div class="de-field"><label class="de-label">Hopper Calibration</label><input class="de-input sp-field-${type}" id="sp-hopper-${type}" type="text"></div>
-          <div class="de-field"><label class="de-label">Density</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-density-${type}" type="number" step="0.1"><span class="de-input-unit">Kg/m³</span></div></div>
+
+      <!-- ═══ PAGE 1 ═══ -->
+      <div id="sp-page1-${type}">
+        <div style="padding:10px 12px;background:#ebf2fd;border:1px solid #c3d9fa;border-radius:8px;font-size:11px;color:var(--blue);margin-bottom:16px;">
+          <strong>⚠️ Note:</strong> Fill all required parameters for this production batch. These values will be used as reference in data entry forms.
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">🧪 Slurry</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">Slurry Ratio</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-slurry-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
+            <div class="de-field"><label class="de-label">Hopper Calibration</label><input class="de-input sp-field-${type}" id="sp-hopper-${type}" type="text"></div>
+            <div class="de-field"><label class="de-label">Density</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-density-${type}" type="number" step="0.1"><span class="de-input-unit">Kg/m³</span></div></div>
+          </div>
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">💧 Flow</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+            <div class="de-field"><label class="de-label">Aroma Flowrate</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-aroma-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+            <div class="de-field"><label class="de-label">Stripping Steam</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-steam-${type}" type="number" step="0.1"><span class="de-input-unit">kg/h</span></div></div>
+            <div class="de-field"><label class="de-label">Product Out</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-prod-out-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+            <div class="de-field"><label class="de-label">Condensate #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond1-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+            <div class="de-field"><label class="de-label">Condensate #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond2-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+          </div>
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">📊 Strip Rate</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">External</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-ext-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
+            <div class="de-field"><label class="de-label">Internal</label><input class="de-input sp-field-${type}" id="sp-int-${type}" type="text"></div>
+            <div class="de-field"><label class="de-label">Condenser #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond-rate-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
+            <div class="de-field"><label class="de-label">Offset</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-offset-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+          </div>
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">🌡️ Temperatures</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">Product Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Product Heater</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-heater-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Top of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-top-${type}" type="number" step="0.1" oninput="checkTopColumnVacuum('${type}',this.value)"><span class="de-input-unit">°C</span></div><div id="sp-top-vacuum-note-${type}" style="display:none;margin-top:6px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;"></div></div>
+            <div class="de-field"><label class="de-label">Condensed #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-condensed1-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Condensed #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-condensed2-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Bottom of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-bot-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+          </div>
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">Coolants</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">Chilled Water</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-chilled-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Condenser Water</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-condenser-water-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+          </div>
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">Pressure</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">System Vacuum</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-system-vacuum-${type}" type="number" step="0.1"><span class="de-input-unit">mBar</span></div></div>
+            <div class="de-field"><label class="de-label">Steam Flow</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-steam-flow-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+          </div>
+        </div>
+        <div class="de-actions" style="margin-top:20px;justify-content:space-between">
+          <button class="de-btn de-btn-ghost" onclick="closeSP('${type}')">Cancel</button>
+          <button class="de-btn de-btn-primary" onclick="spGoPage2('${type}')">Next →</button>
         </div>
       </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">💧 Flow</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
-          <div class="de-field"><label class="de-label">Aroma Flowrate</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-aroma-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
-          <div class="de-field"><label class="de-label">Stripping Steam</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-steam-${type}" type="number" step="0.1"><span class="de-input-unit">kg/h</span></div></div>
-          <div class="de-field"><label class="de-label">Product Out</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-prod-out-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
-          <div class="de-field"><label class="de-label">Condensate #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond1-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
-          <div class="de-field"><label class="de-label">Condensate #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond2-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
+
+      <!-- ═══ PAGE 2 ═══ -->
+      <div id="sp-page2-${type}" style="display:none">
+        <div style="padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;color:#15803d;margin-bottom:16px;">
+          📋 <strong>Halaman 2:</strong> Isi 8 field tambahan untuk melengkapi Set Point produksi ini.
+        </div>
+        <div class="setpoint-section">
+          <div class="setpoint-section-title">📝 Parameter CT</div>
+          <div class="setpoint-grid">
+            <div class="de-field"><label class="de-label">Product Flowrate</label><input class="de-input sp-field-${type}" id="sp-add1-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">Product Flow Control Valve Position</label><input class="de-input sp-field-${type}" id="sp-add2-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">CT Steam Pressure</label><input class="de-input sp-field-${type}" id="sp-add3-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">Concentrate Recirculation Flow</label><input class="de-input sp-field-${type}" id="sp-add4-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">Product Cooler Temperature</label><input class="de-input sp-field-${type}" id="sp-add5-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">CT Discharge Level</label><input class="de-input sp-field-${type}" id="sp-add6-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">Brix Input</label><input class="de-input sp-field-${type}" id="sp-add7-${type}" type="text" placeholder="—"></div>
+            <div class="de-field"><label class="de-label">Brix Output</label><input class="de-input sp-field-${type}" id="sp-add8-${type}" type="text" placeholder="—"></div>
+          </div>
+        </div>
+        <div class="de-status-bar" id="sp-sb-${type}" style="display:none"><span id="sp-sm-${type}"></span></div>
+        <div class="de-actions" style="margin-top:20px;justify-content:space-between">
+          <button class="de-btn de-btn-ghost" onclick="spGoPage1('${type}')">← Back</button>
+          <button class="de-btn de-btn-primary" onclick="saveSP('${type}')">💾 Save Set Point</button>
         </div>
       </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">📊 Strip Rate</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">External</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-ext-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
-          <div class="de-field"><label class="de-label">Internal</label><input class="de-input sp-field-${type}" id="sp-int-${type}" type="text"></div>
-          <div class="de-field"><label class="de-label">Condenser #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond-rate-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
-          <div class="de-field"><label class="de-label">Offset</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-offset-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-        </div>
-      </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">🌡️ Temperatures</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">Product Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Product Heater</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-heater-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Top of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-top-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Bottom of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-bot-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Product Out</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-c1-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Condensate #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-c2-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Condensate #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-out-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-        </div>
-      </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">❄️ Coolants</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">Chilled Water</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-chill-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-          <div class="de-field"><label class="de-label">Condenser Water</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond-water-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-        </div>
-      </div>
-      <div class="setpoint-section">
-        <div class="setpoint-section-title">📏 Pressure</div>
-        <div class="setpoint-grid">
-          <div class="de-field"><label class="de-label">System</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-press-sys-${type}" type="number" step="0.1"><span class="de-input-unit">kPa(g)</span></div></div>
-          <div class="de-field"><label class="de-label">Steam Flow</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-press-steam-${type}" type="number" step="0.1"><span class="de-input-unit">Kg/h</span></div></div>
-        </div>
-      </div>
-      <div class="de-status-bar" id="sp-sb-${type}" style="display:none"><span id="sp-sm-${type}"></span></div>
-      <div class="de-actions" style="margin-top:20px">
-        <button class="de-btn de-btn-ghost" onclick="closeSP('${type}')">Cancel</button>
-        <button class="de-btn de-btn-primary" onclick="saveSP('${type}')">💾 Save Set Point</button>
-      </div>
+
     </div>
   </div>
 </div>
 
-<!-- CIP modal (6 blank untitled fields) -->
-<div class="proj-modal-overlay" id="cip-overlay-${type}">
-  <div class="proj-modal cip-modal" style="max-width:600px!important">
-    <div class="proj-modal-head">
-      <div class="proj-modal-title">🧼 CIP — <span id="cip-proj-nm-${type}">Project</span></div>
-      <button class="proj-modal-close" onclick="closeCIP_enh('${type}')">✕</button>
-    </div>
-    <div class="proj-modal-body">
-      <div class="cip-blank-note">
-        ℹ️ Isi formulir CIP sebelum melanjutkan ke Finish Production. Simpan untuk mengaktifkan tombol <strong>End</strong>.
-      </div>
-      <div class="cip-grid">
-        <div class="de-field"><label class="de-label">Untitled 1</label><input class="de-input" id="cip-f1-${type}" type="text" placeholder="Isi kolom ini..."></div>
-        <div class="de-field"><label class="de-label">Untitled 2</label><input class="de-input" id="cip-f2-${type}" type="text" placeholder="Isi kolom ini..."></div>
-        <div class="de-field"><label class="de-label">Untitled 3</label><input class="de-input" id="cip-f3-${type}" type="text" placeholder="Isi kolom ini..."></div>
-        <div class="de-field"><label class="de-label">Untitled 4</label><input class="de-input" id="cip-f4-${type}" type="text" placeholder="Isi kolom ini..."></div>
-        <div class="de-field"><label class="de-label">Untitled 5</label><input class="de-input" id="cip-f5-${type}" type="text" placeholder="Isi kolom ini..."></div>
-        <div class="de-field"><label class="de-label">Untitled 6</label><input class="de-input" id="cip-f6-${type}" type="text" placeholder="Isi kolom ini..."></div>
-      </div>
-      <div class="de-status-bar" id="cip-sb-${type}" style="display:none"><span id="cip-sm-${type}"></span></div>
-      <div class="de-actions" style="margin-top:18px">
-        <button class="de-btn de-btn-ghost" onclick="closeCIP_enh('${type}')">Cancel</button>
-        <button class="de-btn de-btn-primary" onclick="saveCIP_enh('${type}')">💾 Save CIP</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- FINISH PRODUCTION modal (Date / Name / Code / Brix entries) -->
 <div class="proj-modal-overlay" id="fp-overlay-${type}">
   <div class="proj-modal fp-modal" style="max-width:760px!important">
     <div class="proj-modal-head">
       <div class="proj-modal-title">🏭 Finish Production — <span id="fp-proj-nm-${type}">Project</span></div>
       <button class="proj-modal-close" onclick="closeFP('${type}')">✕</button>
     </div>
+    
     <div class="proj-modal-body">
-      <div style="padding:10px 14px;background:#f3e8ff;border:1px solid #e9d5ff;border-radius:8px;font-size:11px;color:#7c3aed;margin-bottom:16px;">
-        ℹ️ Isi data produksi akhir. Tambah baris sesuai kebutuhan. Simpan untuk mengaktifkan tombol <strong>End</strong>.
+      <div id="fp-page1-${type}">
+        
+        <div style="font-size:15px;font-weight:700;color:var(--txt);margin:16px 0 12px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:16px;">🌿</span> Data Aroma
+        </div>
+
+        <div id="fp-items-${type}"></div>
+        <button class="de-btn de-btn-ghost" style="width:100%;margin-bottom:14px;font-size:12px" onclick="addFPItem('${type}')">＋ Tambah Baris</button>
+        
+        <div class="de-actions" style="justify-content:space-between">
+          <div>
+            <button class="de-btn de-btn-ghost" onclick="closeFP('${type}')">Cancel</button>
+            <button class="de-btn de-btn-ghost" onclick="resetFPForm('${type}')" style="color:var(--red);border-color:var(--red);opacity:0.7;">🔄 Reset</button>
+          </div>
+          <button class="de-btn de-btn-primary" onclick="fpGoPage2('${type}')">Next →</button>
+        </div>
       </div>
-      <div id="fp-items-${type}"></div>
-      <button class="fp-add-btn" onclick="addFPItem('${type}')">＋ Tambah Baris</button>
-      <div class="de-status-bar" id="fp-sb-${type}" style="display:none"><span id="fp-sm-${type}"></span></div>
-      <div class="de-actions">
-        <button class="de-btn de-btn-ghost" onclick="closeFP('${type}')">Cancel</button>
-        <button class="de-btn de-btn-primary" onclick="saveFP('${type}')">💾 Save</button>
+
+      <div id="fp-page2-${type}" style="display:none">
+        
+        <div style="font-size:15px;font-weight:700;color:var(--txt);margin:16px 0 12px;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:16px;">📦</span> Data Produk
+        </div>
+
+        <div id="fp-items2-${type}"></div>
+        <button class="de-btn de-btn-ghost" style="width:100%;margin-bottom:14px;font-size:12px" onclick="addFPItem2('${type}')">＋ Tambah Baris</button>
+        <div class="de-status-bar" id="fp-sb-${type}" style="display:none"><span id="fp-sm-${type}"></span></div>
+
+        <div class="de-actions" style="margin-top:20px;justify-content:space-between">
+          <div>
+            <button class="de-btn de-btn-ghost" onclick="fpGoPage1('${type}')">← Back</button>
+            <button class="de-btn de-btn-ghost" onclick="resetFPForm('${type}')" style="color:var(--red);border-color:var(--red);opacity:0.7;">🔄 Reset</button>
+          </div>
+          <button class="de-btn de-btn-primary" onclick="saveFP('${type}')">💾 Save</button>
+        </div>
       </div>
     </div>
+
   </div>
 </div>
 
@@ -3030,20 +5024,98 @@ ${isOngoing ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</butt
 }
 
 // ── Storage helpers ───────────────────────────────────────
-function initProjectPage(t) {
+async function initProjectPage(t) {
   const d = document.getElementById('pf-st-'+t);
   if (d) d.value = new Date().toISOString().split('T')[0];
+  const list = document.getElementById('pl-'+t);
+  if (list) list.innerHTML = '<div style="padding:40px;text-align:center;color:var(--txt3)">⏳ Loading projects...</div>';
+  await loadPJ(t);
   renderPJ(t);
 }
-const gPJ = t => JSON.parse(localStorage.getItem('pj_'+t) || '[]');
-const sPJ = (t, l) => localStorage.setItem('pj_'+t, JSON.stringify(l));
+// ═══ PROJECT CACHE — sync dari database ═══════════════════
+// Cache lokal supaya UI tetap responsif
+
+// Ambil dari cache (sync), load dari API (async)
+function gPJ(t) {
+  return _pjCache[t] || [];
+}
+
+// Simpan ke cache lokal (tidak lagi ke localStorage)
+function sPJ(t, l) {
+  _pjCache[t] = l;
+}
+
+// Load projects dari API dan update cache
+async function loadPJ(type) {
+  try {
+    const res  = await fetch('/api/projects?type=' + type);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    // Konversi format DB → format app (snake_case → camelCase)
+    _pjCache[type] = json.data.map(dbToApp);
+    return _pjCache[type];
+  } catch (err) {
+    console.error('loadPJ error:', err);
+    // Fallback ke localStorage kalau API tidak bisa
+    _pjCache[type] = JSON.parse(localStorage.getItem('pj_'+type) || '[]');
+    return _pjCache[type];
+  }
+}
+
+// Konversi format database ke format yang dipakai app
+function dbToApp(p) {
+  return {
+    _id:            p.id,
+    name:           p.name,
+    type:           p.type,
+    kategori:       p.kategori   || '',
+    batch:          p.batch      || '',
+    start:          p.start_date || '',
+    end:            p.end_date   || '',
+    materials:      p.materials  || '',
+    tools:          p.tools      || '',
+    notes:          p.notes      || '',
+    progress:       p.progress   || 0,
+    locked:         p.locked     || false,
+    setPoint:       p.set_point  || null,
+    cip_prod_done:  p.cip_prod_done   || false,
+    cip_prod_checks:p.cip_prod_checks || {},
+    cip_lab_done:   p.cip_lab_done    || false,
+    cip_lab_checks: p.cip_lab_checks  || {},
+    fp_done:        p.fp_done         || false,
+    fp_entries:     p.fp_entries      || [],
+    allowed_roles:  p.allowed_roles   || null, // null = semua role boleh lihat
+    // Alias lama
+    cipProdDone:    p.cip_prod_done   || false,
+    cipLabDone:     p.cip_lab_done    || false,
+    fpDone:         p.fp_done         || false,
+    updates:        [],
+    created_at:     p.created_at,
+    updated_at:     p.updated_at,
+  };
+}
 
 // ── Render list ───────────────────────────────────────────
 function renderPJ(type) {
   const list=document.getElementById('pl-'+type), cnt=document.getElementById('pc-'+type);
   const q=(document.getElementById('ps-'+type)?.value||'').toLowerCase();
   if(!list) return;
-  let ps=gPJ(type); if(q) ps=ps.filter(p=>p.name.toLowerCase().includes(q));
+
+  const currentRole = localStorage.getItem('role') || 'utility';
+  const isAdmin = ['admin','superadmin'].includes(currentRole);
+
+  let ps = gPJ(type);
+
+  // Filter berdasarkan role: admin lihat semua, role lain hanya lihat
+  // project yang allowed_roles-nya null (semua) atau mengandung role mereka
+  if (!isAdmin) {
+    ps = ps.filter(p => {
+      if (!p.allowed_roles || p.allowed_roles.length === 0) return true; // null = semua boleh
+      return p.allowed_roles.includes(currentRole);
+    });
+  }
+
+  if (q) ps = ps.filter(p => p.name.toLowerCase().includes(q));
   if(cnt) cnt.textContent=ps.length+' project'+(ps.length!==1?'s':'');
   if(!ps.length){list.innerHTML=`<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q?'No projects match.':'No projects yet — click ＋ to add one!'}</div>`;return;}
   const col={ongoing:'var(--blue)',recent:'var(--orange)',completed:'var(--green)'};
@@ -3100,7 +5172,7 @@ function renderPJ(type) {
         <button class="pj-btn pj-btn-update" onclick="openSumm('${type}',${i})">📊 Summary</button>
       </div>` : '';
     return `
-      <div class="proj-card" style="--acc:${col[type]||'var(--blue)'}; flex-wrap:wrap; gap:0;" onclick="${isOngoing||isCompleted?'':'openPD(\''+type+'\','+i+')'}">
+      <div class="proj-card" style="--acc:${col[type]||'var(--blue)'}; flex-wrap:wrap; gap:0;" ${!isOngoing&&!isCompleted?'onclick="openPD(\''+type+'\','+i+')\""':''}">
         <div style="display:flex;align-items:flex-start;gap:14px;width:100%;">
           <div class="proj-card-icon">📋</div>
           <div class="proj-card-body" style="min-width:200px;flex:1">
@@ -3127,7 +5199,7 @@ function openAPJ(t){
 }
 function closeAPJ(t){
   document.getElementById('pmo-'+t)?.classList.remove('show');
-  ['pf-nm-','pf-st-','pf-en-','pf-mat-','pf-nt-'].forEach(f=>{const el=document.getElementById(f+t);if(el)el.value='';});
+  ['pf-nm-','pf-st-','pf-en-','pf-cat-','pf-mat-','pf-nt-'].forEach(f=>{const el=document.getElementById(f+t);if(el)el.value='';});
   document.querySelectorAll('#pf-tl-'+t+' input[type=checkbox]').forEach(cb=>cb.checked=false);
   const b=document.getElementById('psb-'+t);if(b)b.style.display='none';
 }
@@ -3135,12 +5207,30 @@ function genBatchNo() {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2,'0');
   const mm = String(today.getMonth()+1).padStart(2,'0');
-  const yy = String(today.getFullYear()).slice(-2);
-  const key = 'batch_'+dd+mm+yy;
-  let seq = (parseInt(localStorage.getItem(key)||'0'))+1;
-  localStorage.setItem(key, seq);
-  return String(seq).padStart(2,'0')+'-'+dd+mm+yy;
+  const yyyy = String(today.getFullYear());
+  const dateStr = dd+mm+yyyy;
+  
+  // Ambil semua project dari localStorage
+  try {
+    const ongoing = JSON.parse(localStorage.getItem('pj_ongoing') || '[]');
+    const completed = JSON.parse(localStorage.getItem('pj_completed') || '[]');
+    const allProjects = [...ongoing, ...completed];
+    
+    // Hitung project hari ini
+    const todayISO = today.toISOString().split('T')[0];
+    const todayCount = allProjects.filter(p => {
+      if (!p.created_at) return false;
+      return p.created_at.substring(0, 10) === todayISO;
+    }).length;
+    
+    const seq = todayCount + 1;
+    return String(seq).padStart(3,'0')+'-'+dateStr;
+  } catch(e) {
+    console.error('genBatchNo error:', e);
+    return '001-'+dateStr;
+  }
 }
+
 function getCatLabel(val) {
   const map = {'teh-hijau':'Teh Hijau','oolong':'Oolong','black-tea':'Black Tea',
     'roasted-jasmine':'Roasted Green Tea Jasmine','robusta':'Kopi Robusta','arabika':'Kopi Arabika'};
@@ -3190,19 +5280,40 @@ function loadCustomCategoriesIntoSelect(selEl) {
     }
   });
 }
-function submitPJ(t){
+async function submitPJ(t){
   const name=document.getElementById('pf-nm-'+t)?.value.trim();
   if(!name){showPSt(t,'error','❌ Project title is required!');return;}
   const kategori = document.getElementById('pf-cat-'+t)?.value || '';
   const batch = genBatchNo();
-  const p={name,kategori,batch,start:document.getElementById('pf-st-'+t)?.value,end:document.getElementById('pf-en-'+t)?.value,
-   materials:document.getElementById('pf-mat-'+t)?.value.trim(),
-   tools:[...document.querySelectorAll('#pf-tl-'+t+' input[type=checkbox]:checked')].map(cb=>cb.value).join(', '),
-    notes:document.getElementById('pf-nt-'+t)?.value.trim(),
-    setPoint:null, cipDone:false,
-    updates:[],created_at:new Date().toISOString()};
-  const l=gPJ(t);l.unshift(p);sPJ(t,l);
-  showPSt(t,'success','✅ Project saved! Batch: '+batch);setTimeout(()=>{closeAPJ(t);renderPJ(t);},900);
+
+  // Kumpulkan role yang dicentang (hanya admin yang lihat form ini)
+  const checkedRoles = [...document.querySelectorAll(`input[name="pf-role-check-${t}"]:checked`)]
+    .map(cb => cb.value);
+  // null = semua role bisa lihat; array = hanya role tertentu
+  const allowedRoles = checkedRoles.length > 0 ? checkedRoles : null;
+
+  const payload = {
+    type:          t,
+    name,          kategori,  batch,
+    start:         document.getElementById('pf-st-'+t)?.value || null,
+    end:           document.getElementById('pf-en-'+t)?.value || null,
+    materials:     document.getElementById('pf-mat-'+t)?.value.trim() || '',
+    tools:         [...document.querySelectorAll('#pf-tl-'+t+' input[type=checkbox]:checked')].map(cb=>cb.value).join(', '),
+    notes:         document.getElementById('pf-nt-'+t)?.value.trim() || '',
+    allowed_roles: allowedRoles,
+  };
+  showPSt(t,'loading','⏳ Saving project...');
+  try {
+    const res  = await fetch('/api/projects', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Gagal simpan');
+    await loadPJ(t);
+    showPSt(t,'success','✅ Project saved! Batch: '+batch);
+    setTimeout(()=>{closeAPJ(t);renderPJ(t);},900);
+  } catch(e) {
+    console.error('Save error:', e);
+    showPSt(t,'error','❌ Failed to save: '+e.message);
+  }
 }
 function showPSt(t, k, m) {
   const b  = document.getElementById('psb-'+t);
@@ -3214,7 +5325,6 @@ function showPSt(t, k, m) {
 }
 
 // ── Edit project ──────────────────────────────────────────
-let _editPJIdx = -1;
 function openEditPJ(type, idx) {
   _editPJIdx = idx;
   const p = gPJ(type)[idx]; if(!p) return;
@@ -3233,39 +5343,90 @@ function closeEditPJ(type) {
   document.getElementById('edit-overlay-'+type)?.classList.remove('show');
   const b=document.getElementById('esb-'+type);if(b)b.style.display='none';
 }
-function saveEditPJ(type) {
+async function saveEditPJ(type) {
   const name = document.getElementById('ef-nm-'+type)?.value.trim();
   if(!name){const b=document.getElementById('esb-'+type),m=document.getElementById('esm-'+type);if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-error';m.textContent='❌ Title required!';}return;}
-  const ps = gPJ(type);
-  ps[_editPJIdx] = {...ps[_editPJIdx],
+  const ps  = gPJ(type);
+  const proj = ps[_editPJIdx];
+  if (!proj || !proj._id) { console.error('No project ID'); return; }
+  const payload = {
     name,
-    kategori: document.getElementById('ef-cat-'+type)?.value || ps[_editPJIdx].kategori || '',
-    start:   document.getElementById('ef-st-'+type)?.value,
-    end:     document.getElementById('ef-en-'+type)?.value,
-    materials: document.getElementById('ef-mat-'+type)?.value.trim(),
-    tools: [...document.querySelectorAll('#ef-tl-'+type+' input[type=checkbox]:checked')].map(cb=>cb.value).join(', '),
-    notes:   document.getElementById('ef-nt-'+type)?.value.trim(),
+    kategori:  document.getElementById('ef-cat-'+type)?.value || proj.kategori || '',
+    start:     document.getElementById('ef-st-'+type)?.value  || null,
+    end:       document.getElementById('ef-en-'+type)?.value  || null,
+    materials: document.getElementById('ef-mat-'+type)?.value.trim() || '',
+    tools:     [...document.querySelectorAll('#ef-tl-'+type+' input[type=checkbox]:checked')].map(cb=>cb.value).join(', '),
+    notes:     document.getElementById('ef-nt-'+type)?.value.trim() || '',
   };
-  sPJ(type, ps);
   const b=document.getElementById('esb-'+type),m=document.getElementById('esm-'+type);
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Project updated!';}
-  setTimeout(()=>{closeEditPJ(type);renderPJ(type);},900);
+  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-loading';m.textContent='⏳ Saving...';}
+  try {
+    const res  = await fetch('/api/projects/'+proj._id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    await loadPJ(type);
+    if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Project updated!';}
+    setTimeout(()=>{closeEditPJ(type);renderPJ(type);},900);
+  } catch(e) {
+    console.error('saveEditPJ error:', e);
+    if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-error';m.textContent='❌ Failed: '+e.message;}
+  }
 }
 
-function deleteFromSetPoint(type) {
+async function deleteFromSetPoint(type) {
   if (_editPJIdx < 0) return;
-  const ps = gPJ(type);
-  const name = ps[_editPJIdx]?.name || 'Project ini';
-  if (!confirm(`Hapus "${name}"? Tindakan ini tidak bisa dibatalkan.`)) return;
-  ps.splice(_editPJIdx, 1);
-  sPJ(type, ps);
-  closeEditPJ(type);
-  renderPJ(type);
-  showQuickToast('🗑️ Project dihapus.');
+  const ps   = gPJ(type);
+  const proj = ps[_editPJIdx];
+  if (!proj) return;
+  const name = proj.name || 'Project ini';
+  if (!confirm('Hapus "'+name+'"? Tindakan ini tidak bisa dibatalkan.')) return;
+  if (!proj._id) {
+    // Fallback: hapus dari cache saja
+    ps.splice(_editPJIdx, 1);
+    sPJ(type, ps);
+    closeEditPJ(type);
+    renderPJ(type);
+    showQuickToast('🗑️ Project dihapus.');
+    return;
+  }
+  try {
+    const res  = await fetch('/api/projects/'+proj._id, { method:'DELETE' });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    await loadPJ(type);
+    closeEditPJ(type);
+    renderPJ(type);
+    showQuickToast('🗑️ Project dihapus.');
+  } catch(e) {
+    console.error('deleteFromSetPoint error:', e);
+    showQuickToast('❌ Gagal hapus: '+e.message);
+  }
 }
+
+// ── Set Point page navigation ────────────────────────────
+function spGoPage2(type) {
+  document.getElementById('sp-page1-'+type).style.display = 'none';
+  document.getElementById('sp-page2-'+type).style.display = '';
+  document.getElementById('sp-page-dot1-'+type).style.background = '#d1d5db';
+  document.getElementById('sp-page-dot2-'+type).style.background = 'var(--blue)';
+  document.getElementById('sp-page-lbl-'+type).textContent = 'Page 2 / 2';
+  // scroll modal body back to top
+  const body = document.querySelector('#sp-overlay-'+type+' .proj-modal-body');
+  if (body) body.scrollTop = 0;
+}
+function spGoPage1(type) {
+  document.getElementById('sp-page2-'+type).style.display = 'none';
+  document.getElementById('sp-page1-'+type).style.display = '';
+  document.getElementById('sp-page-dot1-'+type).style.background = 'var(--blue)';
+  document.getElementById('sp-page-dot2-'+type).style.background = '#d1d5db';
+  document.getElementById('sp-page-lbl-'+type).textContent = 'Page 1 / 2';
+  const body = document.querySelector('#sp-overlay-'+type+' .proj-modal-body');
+  if (body) body.scrollTop = 0;
+}
+window.spGoPage1 = spGoPage1;
+window.spGoPage2 = spGoPage2;
 
 // ── Set Point functions ───────────────────────────────────
-let _spPJIdx = -1;
 function openSP(type, idx) {
   _spPJIdx = idx;
   const p = gPJ(type)[idx]; if (!p) return;
@@ -3280,91 +5441,192 @@ function openSP(type, idx) {
     });
   }
   const sb = document.getElementById('sp-sb-'+type); if(sb) sb.style.display='none';
+  // Always start on page 1
+  spGoPage1(type);
   document.getElementById('sp-overlay-'+type)?.classList.add('show');
+  setupSPModalCalculations(type);
 }
 function closeSP(type) {
   document.getElementById('sp-overlay-'+type)?.classList.remove('show');
   _spPJIdx = -1;
 }
-function saveSP(type) {
-  if (_spPJIdx < 0) return;
+async function saveSP(type) {
+  const ps    = gPJ(type);
+  const proj  = ps[_spPJIdx];
+  if (!proj) return;
   const spData = {};
-  document.querySelectorAll('.sp-field-'+type).forEach(f => {
-    // Store by base key (strip the type suffix)
-    const baseKey = f.id.replace('-'+type,'');
-    spData[baseKey] = f.value;
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id+'-'+type);
+    if (el) spData[f.id] = el.value.trim();
   });
-  const ps = gPJ(type);
-  ps[_spPJIdx].setPoint = spData;
-  sPJ(type, ps);
-  const b=document.getElementById('sp-sb-'+type),m=document.getElementById('sp-sm-'+type);
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Set Point saved!';}
+  const sb=document.getElementById('sp-sb-'+type),sm=document.getElementById('sp-sm-'+type);
+  if(sb&&sm){sb.style.display='flex';sb.className='de-status-bar de-status-loading';sm.textContent='⏳ Saving...';}
+  if (proj._id) {
+    try {
+      const res  = await fetch('/api/projects/'+proj._id+'/setpoint', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(spData) });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      await loadPJ(type);
+    } catch(e) {
+      console.error('saveSP API error:', e);
+    }
+  } else {
+    // Fallback localStorage
+    ps[_spPJIdx].setPoint = spData;
+    sPJ(type, ps);
+  }
+  if(sb&&sm){sb.style.display='flex';sb.className='de-status-bar de-status-success';sm.textContent='✅ Set Point saved!';}
   setTimeout(()=>{closeSP(type);renderPJ(type);},900);
 }
 
-// ── CIP functions (6 untitled fields) ────────────────────
-let _cipPJIdx = -1;
-function openCIP_enh(type, idx) {
-  _cipPJIdx = idx;
-  const p = gPJ(type)[idx]; if (!p) return;
-  document.getElementById('cip-proj-nm-'+type).textContent = p.name;
-  for(let i=1;i<=6;i++){
-    const el = document.getElementById('cip-f'+i+'-'+type);
-    if(el) el.value = (p.cipFields && p.cipFields['f'+i]) || '';
-  }
-  const sb = document.getElementById('cip-sb-'+type); if(sb) sb.style.display='none';
-  document.getElementById('cip-overlay-'+type)?.classList.add('show');
-}
-function closeCIP_enh(type) {
-  document.getElementById('cip-overlay-'+type)?.classList.remove('show');
-  _cipPJIdx = -1;
-}
-function saveCIP_enh(type) {
-  if (_cipPJIdx < 0) return;
-  const fields = {};
-  let hasAny = false;
-  for(let i=1;i<=6;i++){
-    const el = document.getElementById('cip-f'+i+'-'+type);
-    fields['f'+i] = el ? el.value.trim() : '';
-    if(fields['f'+i]) hasAny = true;
-  }
-  if(!hasAny){
-    const b=document.getElementById('cip-sb-'+type),m=document.getElementById('cip-sm-'+type);
-    if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-error';m.textContent='❌ Isi minimal satu kolom!';}
-    return;
-  }
+// ── Fungsi Reset Finish Production (Update Final) ────────────────────────
+function resetFPForm(type) {
+  if (_fpPJIdx < 0) return;
+  
+  if (!confirm('Apakah Anda yakin ingin menghapus semua data input dan baris tambahan di form ini? Semua data Finish Production project ini akan dikosongkan.')) return;
+
+  // 1. Hapus draf di memori (RAM)
+  if (window._fpDraft1) delete window._fpDraft1[type + _fpPJIdx];
+  if (window._fpDraft2) delete window._fpDraft2[type + _fpPJIdx];
+
+  // 2. Hapus draf DAN Data yang sudah disave di Database (localStorage)
   const ps = gPJ(type);
-  ps[_cipPJIdx].cipDone   = true;
-  ps[_cipPJIdx].cipFields = fields;
-  sPJ(type, ps);
-  const b=document.getElementById('cip-sb-'+type),m=document.getElementById('cip-sm-'+type);
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ CIP disimpan! Lanjutkan ke Finish Production.';}
-  setTimeout(()=>{closeCIP_enh(type);renderPJ(type);},900);
+  if (ps[_fpPJIdx]) {
+    delete ps[_fpPJIdx].fpItems1Draft; // Hapus draf Page 1
+    delete ps[_fpPJIdx].fpItems2Draft; // Hapus draf Page 2
+    delete ps[_fpPJIdx].fpItems1;      // Hapus data Save Page 1 (Aroma)
+    delete ps[_fpPJIdx].fpItems2;      // Hapus data Save Page 2 (Produk)
+    delete ps[_fpPJIdx].fpItems;       // Hapus data legacy
+    ps[_fpPJIdx].fpDone = false;       // Kembalikan status tombol End
+    
+    sPJ(type, ps); // Simpan status kosong ke database
+  }
+
+  // 3. Render ulang form (sekarang pasti kembali ke 1 baris kosong)
+  openFP(type, _fpPJIdx);
+  
+  // Matikan notifikasi hijau jika ada
+  const sb = document.getElementById('fp-sb-'+type);
+  if (sb) sb.style.display = 'none';
+  
+  showQuickToast('🔄 Form berhasil di-reset menjadi kosong.');
 }
+window.resetFPForm = resetFPForm;
 
 // ── Finish Production functions ───────────────────────────
-let _fpPJIdx = -1;
+
+// Fungsi baru untuk simpan draf kedua-dua page secara berasingan
+function _saveFPDrafts(type) {
+  if (_fpPJIdx < 0) return;
+  
+  // Ambil data Page 1 (Aroma)
+  const items1 = [];
+  document.querySelectorAll(`#fp-items-${type} .fp-item`).forEach(row => {
+    const uid = row.id.replace('fp-row-','');
+    items1.push({
+      date:  document.getElementById('fpr-date-'+uid)?.value  || '',
+      name:  document.getElementById('fpr-name-'+uid)?.value  || '',
+      code:  document.getElementById('fpr-code-'+uid)?.value  || '',
+      berat: document.getElementById('fpr-berat-'+uid)?.value || '',
+    });
+  });
+
+  // Ambil data Page 2 (Produk)
+  const items2 = [];
+  document.querySelectorAll(`#fp-items2-${type} .fp-item2`).forEach(row => {
+    const uid = row.id.replace('fp-row2-','');
+    items2.push({
+      date:  document.getElementById('fpr2-date-'+uid)?.value  || '',
+      name:  document.getElementById('fpr2-name-'+uid)?.value  || '',
+      code:  document.getElementById('fpr2-code-'+uid)?.value  || '',
+      brix:  document.getElementById('fpr2-brix-'+uid)?.value  || '',
+      berat: document.getElementById('fpr2-berat-'+uid)?.value || '',
+    });
+  });
+
+  // Simpan dalam cache/memori sementara
+  window._fpDraft1 = window._fpDraft1 || {};
+  window._fpDraft2 = window._fpDraft2 || {};
+  window._fpDraft1[type+_fpPJIdx] = items1;
+  window._fpDraft2[type+_fpPJIdx] = items2;
+}
+
 function openFP(type, idx) {
   _fpPJIdx = idx;
   const p = gPJ(type)[idx]; if (!p) return;
   document.getElementById('fp-proj-nm-'+type).textContent = p.name;
-  const container = document.getElementById('fp-items-'+type);
-  container.innerHTML = '';
-  if(p.fpItems && p.fpItems.length > 0){
-    p.fpItems.forEach(item => addFPItem(type, item));
-  } else {
-    addFPItem(type);
-  }
+  
+  // Load PAGE 1 (Aroma)
+  const container1 = document.getElementById('fp-items-'+type);
+  container1.innerHTML = '';
+  // Cek draf memori atau draf dari localStorage (jika ditutup sebelum ni)
+  const draft1 = window._fpDraft1?.[type+idx] || p.fpItems1Draft;
+  const items1 = draft1 || (p.fpItems1?.length ? p.fpItems1 : null);
+  if (items1 && items1.length > 0) { items1.forEach(item => addFPItem(type, item)); }
+  else { addFPItem(type); }
+
+  // Load PAGE 2 (Produk)
+  const container2 = document.getElementById('fp-items2-'+type);
+  container2.innerHTML = '';
+  const draft2 = window._fpDraft2?.[type+idx] || p.fpItems2Draft;
+  // (Pakej fallback `p.fpItems` untuk data lama)
+  const items2 = draft2 || (p.fpItems2?.length ? p.fpItems2 : (p.fpItems?.length ? p.fpItems : null));
+  if (items2 && items2.length > 0) { items2.forEach(item => addFPItem2(type, item)); }
+  else { addFPItem2(type); }
+
   const sb = document.getElementById('fp-sb-'+type); if(sb) sb.style.display='none';
+  fpGoPage1(type);
   document.getElementById('fp-overlay-'+type)?.classList.add('show');
 }
+
 function closeFP(type) {
+  // Save draf setiap kali form ditutup
+  _saveFPDrafts(type);
+  
+  // Simpan ke localStorage supaya form tidak hilang walaupun page di-refresh
+  if (_fpPJIdx >= 0) {
+      const ps = gPJ(type);
+      if(ps[_fpPJIdx]) {
+          ps[_fpPJIdx].fpItems1Draft = window._fpDraft1[type+_fpPJIdx];
+          ps[_fpPJIdx].fpItems2Draft = window._fpDraft2[type+_fpPJIdx];
+          sPJ(type, ps);
+      }
+  }
+
   document.getElementById('fp-overlay-'+type)?.classList.remove('show');
   _fpPJIdx = -1;
 }
+
+function fpGoPage1(type) {
+  _saveFPDrafts(type); // Simpan status semasa pindah tab
+  document.getElementById('fp-page1-'+type).style.display = '';
+  document.getElementById('fp-page2-'+type).style.display = 'none';
+}
+
+function fpGoPage2(type) {
+  _saveFPDrafts(type); // Simpan status semasa pindah tab
+  document.getElementById('fp-page1-'+type).style.display = 'none';
+  document.getElementById('fp-page2-'+type).style.display = '';
+}
+
+function _saveFPDraft(type) {
+  window._fpDraft = window._fpDraft || {};
+  const items = [];
+  document.querySelectorAll(`#fp-items-${type} .fp-item`).forEach(row => {
+    const uid = row.id.replace('fp-row-','');
+    items.push({
+      date:  document.getElementById('fpr-date-'+uid)?.value  || '',
+      name:  document.getElementById('fpr-name-'+uid)?.value  || '',
+      code:  document.getElementById('fpr-code-'+uid)?.value  || '',
+      berat: document.getElementById('fpr-berat-'+uid)?.value || '',
+    });
+  });
+  window._fpDraft[type+_fpPJIdx] = items;
+}
+
 function addFPItem(type, data=null) {
   const container = document.getElementById('fp-items-'+type);
-  if(!container) return;
+  if (!container) return;
   const uid = Date.now() + Math.random();
   const row = document.createElement('div');
   row.className = 'fp-item';
@@ -3380,43 +5642,93 @@ function addFPItem(type, data=null) {
       <input class="de-input" id="fpr-name-${uid}" type="text" value="${data?.name||''}" placeholder="Nama produk...">
     </div>
     <div class="de-field">
-      <label class="de-label">Kode Produksi</label>
-      <input class="de-input" id="fpr-code-${uid}" type="text" value="${data?.code||''}" placeholder="Kode produksi...">
-    </div>
-    <div class="de-field">
-      <label class="de-label">Brix <span style="font-weight:400;color:var(--txt3)">(°Bx)</span></label>
-      <input class="de-input" id="fpr-brix-${uid}" type="number" step="0.1" value="${data?.brix||''}" placeholder="0.0">
+      <label class="de-label">Kode Kemasan</label>
+      <input class="de-input" id="fpr-code-${uid}" type="text" value="${data?.code||''}" placeholder="Kode kemasan...">
     </div>
     <div class="de-field">
       <label class="de-label">Berat <span style="font-weight:400;color:var(--txt3)">(kg)</span></label>
       <input class="de-input" id="fpr-berat-${uid}" type="number" step="0.1" value="${data?.berat||''}" placeholder="0.0">
     </div>
+    <div></div>
     <div style="display:flex;align-items:flex-end;justify-content:flex-end">
       <button class="fp-item-remove" onclick="document.getElementById('fp-row-${uid}').remove()" style="padding:8px 14px;font-size:12px">✕ Hapus</button>
     </div>`;
   container.appendChild(row);
 }
-function saveFP(type) {
-  if (_fpPJIdx < 0) return;
-  const items = [];
-  document.querySelectorAll(`#fp-items-${type} .fp-item`).forEach(row => {
-    const uid = row.id.replace('fp-row-','');
-    items.push({
-      date:  document.getElementById('fpr-date-'+uid)?.value  || '',
-      name:  document.getElementById('fpr-name-'+uid)?.value  || '',
-      code:  document.getElementById('fpr-code-'+uid)?.value  || '',
-      brix:  document.getElementById('fpr-brix-'+uid)?.value  || '',
-      berat: document.getElementById('fpr-berat-'+uid)?.value || '',
+
+function addFPItem2(type, data=null) {
+  const container = document.getElementById('fp-items2-'+type);
+  if (!container) return;
+  const uid = Date.now() + Math.random();
+  const row = document.createElement('div');
+  row.className = 'fp-item2';
+  row.id = 'fp-row2-'+uid;
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px;background:var(--bg);border-radius:8px;align-items:end;margin-bottom:8px;border:1px solid var(--border);';
+  row.innerHTML = `
+    <div class="de-field">
+      <label class="de-label">Tanggal</label>
+      <input class="de-input" id="fpr2-date-${uid}" type="date" value="${data?.date || new Date().toISOString().split('T')[0]}">
+    </div>
+    <div class="de-field">
+      <label class="de-label">Nama Produk</label>
+      <input class="de-input" id="fpr2-name-${uid}" type="text" value="${data?.name||''}" placeholder="Nama produk...">
+    </div>
+    <div class="de-field">
+      <label class="de-label">Kode Kemasan</label>
+      <input class="de-input" id="fpr2-code-${uid}" type="text" value="${data?.code||''}" placeholder="Kode kemasan...">
+    </div>
+    <div class="de-field">
+      <label class="de-label">Brix <span style="font-weight:400;color:var(--txt3)">(°Bx)</span></label>
+      <input class="de-input" id="fpr2-brix-${uid}" type="number" step="0.1" value="${data?.brix||''}" placeholder="0.0">
+    </div>
+    <div class="de-field">
+      <label class="de-label">Berat <span style="font-weight:400;color:var(--txt3)">(kg)</span></label>
+      <input class="de-input" id="fpr2-berat-${uid}" type="number" step="0.1" value="${data?.berat||''}" placeholder="0.0">
+    </div>
+    <div style="display:flex;align-items:flex-end;justify-content:flex-end">
+      <button class="fp-item-remove" onclick="document.getElementById('fp-row2-${uid}').remove()" style="padding:8px 14px;font-size:12px">✕ Hapus</button>
+    </div>`;
+  container.appendChild(row);
+}
+
+async function saveFP(type) {
+  const ps   = gPJ(type);
+  const proj = ps[_fpPJIdx];
+  if (!proj) return;
+  const entries = [];
+  document.querySelectorAll('.fp-item-row').forEach(row => {
+    const uid = row.dataset.uid;
+    entries.push({
+      product: document.getElementById('fp-prod-'+uid)?.value  || '',
+      lot:     document.getElementById('fp-lot-'+uid)?.value   || '',
+      qty:     document.getElementById('fp-qty-'+uid)?.value   || '',
+      unit:    document.getElementById('fp-unit-'+uid)?.value  || '',
+      notes:   document.getElementById('fp-note-'+uid)?.value  || '',
     });
   });
-  const ps = gPJ(type);
-  ps[_fpPJIdx].fpDone  = true;
-  ps[_fpPJIdx].fpItems = items;
-  sPJ(type, ps);
-  const b=document.getElementById('fp-sb-'+type),m=document.getElementById('fp-sm-'+type);
-  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Finish Production disimpan! Tombol End sekarang aktif.';}
-  setTimeout(()=>{closeFP(type);renderPJ(type);},900);
+  const allFilled = entries.length > 0 && entries.every(e => e.product && e.qty);
+  if (proj._id) {
+    try {
+      await fetch('/api/projects/'+proj._id+'/fp', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fp_done: allFilled, fp_entries: entries }) });
+      await loadPJ(type);
+    } catch(e) { console.error('saveFP API error:', e); }
+  } else {
+    ps[_fpPJIdx].fpDone    = allFilled;
+    ps[_fpPJIdx].fp_entries = entries;
+    sPJ(type, ps);
+  }
+  closeFP(type);
+  renderPJ(type);
+  showQuickToast('✅ Final Product tersimpan!');
 }
+
+window.fpGoPage1 = fpGoPage1;
+window.fpGoPage2 = fpGoPage2;
+window.addFPItem = addFPItem;
+window.addFPItem2 = addFPItem2;
+window.saveFP = saveFP;
+window.openFP = openFP;
+window.closeFP = closeFP;
 
 // ── End Production ────────────────────────────────────────
 function endProd(type, idx) {
@@ -3447,7 +5759,6 @@ function completePJ(idx) {
 }
 
 // ── Update modal (20 fields) ──────────────────────────────
-let _updPJIdx = -1, _updType = '';
 function openUpdModal(type, idx) {
   _updPJIdx = idx; _updType = type;
   const p = gPJ(type)[idx]; if(!p) return;
@@ -3468,24 +5779,26 @@ function closeUpdModal(type) {
   document.getElementById('upd-overlay-'+type)?.classList.remove('show');
   document.body.style.overflow = '';
 }
-function saveUpdEntry(type) {
-  const ps = gPJ(type);
-  const p = ps[_updPJIdx]; if(!p) return;
-  const entry = {
-    entry_num: (p.updates||[]).length + 1,
-    saved_at: new Date().toISOString(),
-    fields: UPD_FIELDS.map((label, i) => ({
-      label: `Untitled ${i+1} — ${label}`,
-      value: document.getElementById('upd-f'+i+'-'+type)?.value || ''
-    }))
-  };
-  if(!p.updates) p.updates = [];
-  p.updates.push(entry);
-  sPJ(type, ps);
-  closeUpdModal(type);
+async function saveUpdEntry(type) {
+  const ps   = gPJ(type);
+  const proj = ps[_updPJIdx];
+  if (!proj) return;
+  const note = document.getElementById('upd-note-'+type)?.value.trim();
+  if (!note) { showQuickToast('❌ Catatan tidak boleh kosong!'); return; }
+  const entry = { note, date: new Date().toISOString() };
+  if (!proj.updates) proj.updates = [];
+  proj.updates.unshift(entry);
+  if (proj._id) {
+    try {
+      await fetch('/api/projects/'+proj._id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ notes: note }) });
+      await loadPJ(type);
+    } catch(e) { console.error('saveUpdEntry API error:', e); }
+  } else {
+    sPJ(type, ps);
+  }
+  closeUpdEntry(type);
   renderPJ(type);
-  // Show quick toast
-  showQuickToast('✅ Update #'+entry.entry_num+' Stored!');
+  showQuickToast('✅ Update tersimpan!');
 }
 function showQuickToast(msg) {
   let t = document.getElementById('_toast');
@@ -3495,19 +5808,30 @@ function showQuickToast(msg) {
 }
 
 // ── Summary drawer ────────────────────────────────────────
+if (!window._summState) window._summState = {}; // { type: { idx, activeTab } }
+
 function openSumm(type, idx) {
   const p = gPJ(type)[idx]; if(!p) return;
-  document.getElementById('summ-nm-'+type).textContent = p.name;
-  document.getElementById('summ-dt-'+type).textContent =
-    '📅 '+(p.start||'—')+' → 🏁 '+(p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—');
-  const body = document.getElementById('summ-body-'+type);
+  if (!window._summState) window._summState = {};
+  window._summState[type] = { idx, activeTab: 'setpoint' };
 
-  const tblStyle = 'width:100%;border-collapse:collapse;font-size:12px;';
-  const thStyle  = 'text-align:left;padding:8px 12px;font-size:10px;font-weight:700;color:var(--txt3);background:var(--bg);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;';
-  const tdStyle  = 'padding:8px 12px;border-bottom:1px solid var(--border);color:var(--txt2);font-size:12px;vertical-align:top;';
+  const nmEl = document.getElementById('summ-nm-'+type);
+  const dtEl = document.getElementById('summ-dt-'+type);
+  const body  = document.getElementById('summ-body-'+type);
+  if (!nmEl || !dtEl || !body) {
+    console.warn('openSumm: DOM elements not found for type='+type);
+    return;
+  }
+
+  nmEl.textContent = p.name;
+  dtEl.textContent =
+    '📅 '+(p.start||'—')+' → 🏁 '+(p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—');
+
+  const tblStyle    = 'width:100%;border-collapse:collapse;font-size:12px;';
+  const thStyle     = 'text-align:left;padding:8px 12px;font-size:10px;font-weight:700;color:var(--txt3);background:var(--bg);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;';
+  const tdStyle     = 'padding:8px 12px;border-bottom:1px solid var(--border);color:var(--txt2);font-size:12px;vertical-align:top;';
   const tdMonoStyle = 'padding:8px 12px;border-bottom:1px solid var(--border);color:var(--blue);font-family:\'DM Mono\',monospace;font-size:11px;font-weight:600;vertical-align:top;';
 
-  // ── Section helper ────────────────────────────────────
   const section = (icon, title, tableHTML) => `
     <div class="summ-section">
       <div class="summ-section-title">${icon} <span>${title}</span></div>
@@ -3516,10 +5840,8 @@ function openSumm(type, idx) {
       </div>
     </div>`;
 
-  let html = '';
-
   // ── 1. Project Info ───────────────────────────────────
-  html += section('📋', 'Informasi Project', `
+  let html = section('📋', 'Informasi Project', `
     <thead><tr>
       <th style="${thStyle}">Field</th>
       <th style="${thStyle}">Value</th>
@@ -3528,25 +5850,33 @@ function openSumm(type, idx) {
       <tr><td style="${tdStyle}">Nama Project</td><td style="${tdMonoStyle}">${p.name||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Mulai</td><td style="${tdStyle}">${p.start||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Selesai</td><td style="${tdStyle}">${p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Tipe Project</td><td style="${tdStyle}">${p.projType==='separator'?'Separator / Distillation':'Boiler / Steam Generator'}</td></tr>
       <tr><td style="${tdStyle}">Notes</td><td style="${tdStyle}">${p.notes||'—'}</td></tr>
     </tbody>`);
 
-  // ── 2. Set Point Table ────────────────────────────────
-  if (p.setPoint && Object.keys(p.setPoint).length > 0) {
-    const spRows = SP_FIELDS.map(f => {
-      const val = p.setPoint[f.id] || '—';
-      return `<tr><td style="${tdStyle}">${f.label}</td><td style="${tdMonoStyle}">${val}${val!=='—'&&f.unit?' <span style=\'font-size:10px;color:var(--txt3);font-weight:400\'>'+f.unit+'</span>':''}</td></tr>`;
-    }).join('');
-    html += section('⚙️', 'Set Point Parameters', `
-      <thead><tr>
-        <th style="${thStyle}">Parameter</th>
-        <th style="${thStyle}">Nilai Set Point</th>
-      </tr></thead>
-      <tbody>${spRows}</tbody>`);
-  }
+  // ── 2. Unified Switch: Set Point + Data Entry ────────
+  const switchDefs = [
+    { id:'produksi',  label:'🏭 Produksi'  },
+    { id:'lab',       label:'🧪 Lab'       },
+    { id:'utility',   label:'⚡ Utility'   },
+    { id:'limbah',    label:'♻️ Limbah'    },
+  ];
+  html += `
+    <div class="summ-section" style="padding-bottom:0">
+      <div class="summ-section-title" style="margin-bottom:10px">📊 <span>Data Summary</span></div>
+      <div style="display:flex;background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:3px;gap:2px;flex-wrap:wrap;margin-bottom:14px;">
+        ${switchDefs.map(t=>`
+          <button id="summ-tab-${type}-${t.id}"
+            onclick="switchSummTab('${type}','${t.id}')"
+            style="flex:1;min-width:60px;padding:6px 10px;font-size:10.5px;font-weight:600;border-radius:9px;border:none;cursor:pointer;transition:all .18s;white-space:nowrap;
+              ${t.id==='produksi'
+                ? 'background:var(--blue);color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12);'
+                : 'background:transparent;color:var(--txt3);'}"
+          >${t.label}</button>`).join('')}
+      </div>
+      <div id="summ-tab-content-${type}" style="margin-bottom:4px"></div>
+    </div>`;
 
-  // ── 3. CIP Data ───────────────────────────────────────
+  // ── 4. CIP Data ───────────────────────────────────────
   if (p.cipDone && p.cipFields) {
     const cipRows = Object.entries(p.cipFields).map(([k,v], i) =>
       `<tr><td style="${tdStyle}">CIP Field ${i+1}</td><td style="${tdStyle}">${v||'—'}</td></tr>`
@@ -3556,7 +5886,7 @@ function openSumm(type, idx) {
       <tbody>${cipRows}</tbody>`);
   }
 
-  // ── 4. Finish Production ──────────────────────────────
+  // ── 5. Finish Production ──────────────────────────────
   if (p.fpDone && p.fpItems && p.fpItems.length) {
     const fpRows = p.fpItems.map((item, i) => `
       <tr>
@@ -3579,56 +5909,346 @@ function openSumm(type, idx) {
       <tbody>${fpRows}</tbody>`);
   }
 
-  // ── 5. Update History Table ───────────────────────────
-  const updates = p.updates || [];
-  if (updates.length) {
-    // Collect all unique field names across all updates
-    const allFieldNames = [];
-    updates.forEach(u => {
-      u.fields && u.fields.forEach(f => {
-        const nm = f.name || f.label || '';
-        if (!allFieldNames.includes(nm)) allFieldNames.push(nm);
-      });
-    });
-
-    // Build header
-    const headerCols = ['Update #', 'Tanggal & Waktu', ...allFieldNames];
-    const thead = '<thead><tr>' + headerCols.map(h =>
-      `<th style="${thStyle};min-width:90px">${h}</th>`).join('') + '</tr></thead>';
-
-    // Build rows — one row per update entry
-    const tbody = '<tbody>' + updates.map(u => {
-      const date = new Date(u.saved_at).toLocaleString('id-ID');
-      // Build a quick lookup by field name
-      const lookup = {};
-      (u.fields||[]).forEach(f => { lookup[f.name||f.label||''] = f.value||'—'; });
-
-      const dataCols = allFieldNames.map(nm => {
-        const val = lookup[nm] || '—';
-        return `<td style="${val!=='—'?tdMonoStyle:tdStyle}">${val}</td>`;
-      });
-
-      return `<tr>
-        <td style="${tdMonoStyle}">#${u.entry_num}</td>
-        <td style="${tdStyle};white-space:nowrap;font-size:10px;color:var(--txt3)">${date}</td>
-        ${dataCols.join('')}
-      </tr>`;
-    }).join('') + '</tbody>';
-
-    html += section('📝', `Riwayat Update Parameter (${updates.length} entri)`,
-      thead + tbody);
-  } else {
-    html += `<div class="summ-section">
-      <div class="summ-section-title">📝 <span>Riwayat Update</span></div>
-      <div style="color:var(--txt3);font-size:12px;padding:16px;text-align:center">Tidak ada update dicatat.</div>
-    </div>`;
-  }
-
   body.innerHTML = html;
+
+  // Render initial tab content (Produksi as default)
+  renderSummTabContent(type, 'produksi', p);
+
   document.getElementById('summ-overlay-'+type)?.classList.add('show');
   document.getElementById('summ-drawer-'+type)?.classList.add('show');
   document.body.style.overflow = 'hidden';
 }
+
+// ── Tab switcher ──────────────────────────────────────────
+function switchSummTab(type, tabId) {
+  const st = window._summState[type]; if(!st) return;
+  st.activeTab = tabId;
+  const p = gPJ(type)[st.idx]; if(!p) return;
+
+  // Update switch button styles
+  ['produksi','lab','utility','limbah'].forEach(t => {
+    const btn = document.getElementById('summ-tab-'+type+'-'+t);
+    if (!btn) return;
+    if (t === tabId) {
+      btn.style.background = 'var(--blue)';
+      btn.style.color = '#fff';
+      btn.style.boxShadow = '0 1px 4px rgba(0,0,0,.12)';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color = 'var(--txt3)';
+      btn.style.boxShadow = 'none';
+    }
+  });
+
+  renderSummTabContent(type, tabId, p);
+}
+window.switchSummTab = switchSummTab;
+
+// ── Tab content renderer ──────────────────────────────────
+function renderSummTabContent(type, tabId, p) {
+  const wrap = document.getElementById('summ-tab-content-'+type);
+  if (!wrap) return;
+
+  // Base Styles yang lebih compact/rapat
+  const tblStyle = 'width:100%;border-collapse:collapse;font-size:11px;';
+  const thStyle  = 'padding:6px 10px;font-size:9px;font-weight:700;color:var(--txt3);background:var(--bg);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;';
+  const tdLabel  = 'padding:6px 10px;border-bottom:1px solid var(--border);color:var(--txt2);font-size:11px;vertical-align:middle;white-space:nowrap;';
+  
+  const emptyMsg = (msg) => `<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;background:var(--bg);border-radius:8px;border:1px dashed var(--border)">${msg}</div>`;
+
+  const tableHeaderUI = (title) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">${title}</div>
+      <div style="font-size:9px;color:var(--blue);background:#ebf2fd;padding:3px 8px;border-radius:4px;font-weight:600">↔ Geser kanan untuk melihat update</div>
+    </div>`;
+
+  // ─── PRODUKSI (includes Set Point) ────────────────────
+  if (tabId === 'produksi') {
+    const hist = p.productionHistory || [];
+    const hasSetPoint = p.setPoint && Object.keys(p.setPoint).length > 0;
+
+    if (!hasSetPoint && !hist.length) {
+      wrap.innerHTML = emptyMsg('📭 Belum ada data Set Point atau Produksi untuk project ini.');
+      return;
+    }
+
+    let thead = `<tr>
+      <th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>
+      <th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">SP Awal</th>`;
+
+    hist.forEach((entry, i) => {
+      const dateObj = new Date(entry.saved_at);
+      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">
+        Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span>
+      </th>`;
+    });
+    thead += `</tr>`;
+
+    let tbody = '';
+    let visibleRows = 0;
+    
+    SP_FIELDS.forEach(f => {
+      const baseVal = p.setPoint ? (p.setPoint[f.id] || '') : '';
+      let rowHasData = baseVal !== '';
+      
+      const historyCells = hist.map(entry => {
+        const fieldData = entry.fields.find(hf => hf.id === f.id || hf.label === f.label);
+        if (fieldData && fieldData.newVal !== '' && fieldData.newVal !== fieldData.oldVal) {
+          rowHasData = true;
+          return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${fieldData.newVal}</td>`;
+        } else {
+          return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+        }
+      });
+
+      if (rowHasData) {
+        const unitHtml = f.unit ? ` <span style="font-size:8px;color:var(--txt3);font-weight:400">${f.unit}</span>` : '';
+        const baseDisplay = baseVal ? `${baseVal}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
+        const rowBg = visibleRows % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+        visibleRows++;
+
+        tbody += `<tr style="background:${rowBg};">
+          <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${f.label}</td>
+          <td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;background:inherit;">${baseDisplay}</td>
+          ${historyCells.join('')}
+        </tr>`;
+      }
+    });
+
+    wrap.innerHTML = `
+      <div style="margin-bottom:16px">
+        ${tableHeaderUI('⚙️ Data & History Produksi')}
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ─── LAB ─────────────────────────────────────────────
+  if (tabId === 'lab') {
+    const labHist = p.labHistory || [];
+    if (!labHist.length) {
+      wrap.innerHTML = emptyMsg('📭 Belum ada data entry Lab untuk project ini.');
+      return;
+    }
+
+    // Auto mapping / Translate dari data nama Inggris lama ke nama Form Baru
+    const mapLabel = (l) => {
+        const map = {
+            'TLV': 'Nama Sample (Brix)',
+            'Lab Code': 'Kode Pile',
+            'Air Test': 'Brix',
+            'Header Retaking': 'Nama Sample (Moisture)',
+            'Sampling Point': 'MC%'
+        };
+        return map[l] || l;
+    };
+
+    const normalizedHist = labHist.map(entry => ({
+        ...entry,
+        fields: (entry.fields || []).map(f => ({
+            ...f,
+            label: mapLabel(f.label)
+        }))
+    }));
+
+    // Pisahkan Label Brix dan Moisture ke dua array berbeda
+    const uniqueBrixLabels = [];
+    const uniqueMoistLabels = [];
+
+    normalizedHist.forEach(entry => {
+      (entry.fields || []).forEach(f => {
+        const lbl = f.label;
+        // Deteksi apakah ini parameter Brix atau Moisture
+        if (lbl.includes('Brix') || lbl.includes('Kode Pile')) {
+            if (!uniqueBrixLabels.includes(lbl)) uniqueBrixLabels.push(lbl);
+        } else if (lbl.includes('Moisture') || lbl.includes('MC%')) {
+            if (!uniqueMoistLabels.includes(lbl)) uniqueMoistLabels.push(lbl);
+        } else {
+            // Jaga-jaga jika ada label tak terduga, masukkan ke Brix
+            if (!uniqueBrixLabels.includes(lbl) && !uniqueMoistLabels.includes(lbl)) uniqueBrixLabels.push(lbl);
+        }
+      });
+    });
+
+    // Buat template Header Kolom (Sama untuk kedua tabel)
+    let theadCols = ``;
+    normalizedHist.forEach((entry, i) => {
+      const dateObj = new Date(entry.saved_at);
+      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+      theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+    });
+    const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
+
+    // Fungsi pembuat baris tabel (tbody)
+    const buildTbody = (labelsArr) => {
+      let tbody = '';
+      labelsArr.forEach((label, rIdx) => {
+        const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+        let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
+        
+        normalizedHist.forEach(entry => {
+          const field = (entry.fields || []).find(f => f.label === label);
+          if (field && field.newVal !== '') {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
+          } else {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+          }
+        });
+        tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
+      });
+      return tbody;
+    };
+
+    const brixTbody = buildTbody(uniqueBrixLabels);
+    const moistTbody = buildTbody(uniqueMoistLabels);
+
+    // Gabungkan menjadi dua tabel terpisah di dalam Summary
+    wrap.innerHTML = `
+      <div style="margin-bottom:16px">
+        ${tableHeaderUI('🧪 Data & History Lab')}
+        
+        ${uniqueBrixLabels.length > 0 ? `
+        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;margin-top:12px;">
+          <span style="font-size:14px;">📊</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">DATA BRIX</span>
+        </div>
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;margin-bottom:20px;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${brixTbody}</tbody>
+          </table>
+        </div>
+        ` : ''}
+
+        ${uniqueMoistLabels.length > 0 ? `
+        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;">
+          <span style="font-size:14px;">💯</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">DATA MOISTURE</span>
+        </div>
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${moistTbody}</tbody>
+          </table>
+        </div>
+        ` : ''}
+
+      </div>`;
+    return;
+  }
+
+  // ─── UTILITY ─────────────────────────────────────────
+  if (tabId === 'utility') {
+    const utilHist = p.utilityHistory || [];
+    if (!utilHist.length) {
+      wrap.innerHTML = emptyMsg('📭 Belum ada data entry Utility untuk project ini.');
+      return;
+    }
+
+    const uniqueLabels = [];
+    utilHist.forEach(entry => {
+      (entry.fields || []).forEach(f => {
+        if (!uniqueLabels.includes(f.label)) uniqueLabels.push(f.label);
+      });
+    });
+
+    let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>`;
+    utilHist.forEach((entry, i) => {
+      const dateObj = new Date(entry.saved_at);
+      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+    });
+    thead += `</tr>`;
+
+    let tbody = '';
+    uniqueLabels.forEach((label, rIdx) => {
+      const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+      let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
+      
+      utilHist.forEach(entry => {
+        const field = (entry.fields || []).find(f => f.label === label);
+        if (field && field.newVal !== '') {
+          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
+        } else {
+          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+        }
+      });
+      tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
+    });
+
+    wrap.innerHTML = `
+      <div style="margin-bottom:16px">
+        ${tableHeaderUI('⚡ Data & History Utility')}
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // ─── LIMBAH ──────────────────────────────────────────
+  if (tabId === 'limbah') {
+    const limbahEntries = JSON.parse(localStorage.getItem('limbah_entries') || '[]');
+    // Diurutkan dari oldest ke newest agar scroll ke kanan adalah data terbaru
+    const projLimbah = limbahEntries.filter(e => e.projName === p.name).sort((a,b) => new Date(a.saved_at) - new Date(b.saved_at));
+    if (!projLimbah.length) {
+      wrap.innerHTML = emptyMsg('📭 Belum ada data Limbah yang tersimpan untuk project ini.');
+      return;
+    }
+    
+    const limbahLabels = [
+      {key:'date', label:'Tanggal'}, {key:'vol', label:'Volume (L)'}, {key:'cod', label:'COD (mg/L)'}, 
+      {key:'bod', label:'BOD (mg/L)'}, {key:'tss', label:'TSS (mg/L)'}, {key:'ph', label:'pH'}, 
+      {key:'temp', label:'Temp Effluent (°C)'}, {key:'notes', label:'Catatan'}
+    ];
+
+    let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>`;
+    projLimbah.forEach((entry, i) => {
+      const dateObj = new Date(entry.saved_at);
+      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Entry #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+    });
+    thead += `</tr>`;
+
+    let tbody = '';
+    limbahLabels.forEach((lblData, rIdx) => {
+      const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+      let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${lblData.label}</td>`;
+      
+      projLimbah.forEach(entry => {
+        const val = entry[lblData.key];
+        if (val !== undefined && val !== '') {
+          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${val}</td>`;
+        } else {
+          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+        }
+      });
+      tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
+    });
+
+    wrap.innerHTML = `
+      <div style="margin-bottom:16px">
+        ${tableHeaderUI('♻️ Data & History Limbah')}
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>`;
+    return;
+  }
+
+  wrap.innerHTML = '';
+}
+
 function closeSumm(type) {
   document.getElementById('summ-overlay-'+type)?.classList.remove('show');
   document.getElementById('summ-drawer-'+type)?.classList.remove('show');
@@ -3683,41 +6303,186 @@ document.addEventListener('keydown',e=>{
 // IoT DETAIL DRAWER HTML
 // ═══════════════════════════════════════════════════════════
 function initReportingForm() {
+  // Render existing Harian reports as tables
+  renderHarianReports();
+  
   const form = document.getElementById("reportForm");
-  const statusDiv = document.getElementById("report-status");
-
   if (!form) return;
 
   form.addEventListener("submit", function (e) {
     e.preventDefault();
 
     const data = {
-      nama: document.getElementById("r-nama").value,
-      shift: document.getElementById("r-shift").value,
-      kategori: document.getElementById("r-kategori").value,
-      prioritas: document.getElementById("r-prioritas").value,
-      deskripsi: document.getElementById("r-deskripsi").value,
-      tanggal: new Date().toISOString()
+      id: Date.now(),
+      title: document.getElementById("report-title").value.trim(),
+      category: document.getElementById("report-category").value,
+      priority: document.getElementById("report-priority").value,
+      electricity: document.getElementById("report-electricity").value.trim(),
+      utility: document.getElementById("report-utility").value,
+      stock: document.getElementById("report-stock").value.trim(),
+      saved_at: new Date().toISOString()
     };
 
-    console.log("DATA REPORT:", data);
+    // Save to harian_entries
+    const harianEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]');
+    harianEntries.unshift({
+      id: data.id,
+      cat: data.category,
+      data: {
+        'Judul Laporan': data.title,
+        'Kategori': data.category,
+        'Prioritas': data.priority,
+        'Penggunaan Listrik': data.electricity || '—',
+        'Durability Utility': data.utility,
+        'Stok Barang': data.stock || '—'
+      },
+      saved_at: data.saved_at,
+      projName: 'Laporan Harian' // default project name
+    });
+    localStorage.setItem('harian_entries', JSON.stringify(harianEntries));
 
-    statusDiv.innerHTML = `
-      <div class="de-status-bar de-status-loading">
-        ⏳ Mengirim laporan...
-      </div>
-    `;
-
-    setTimeout(() => {
-      statusDiv.innerHTML = `
-        <div class="de-status-bar de-status-success">
-          ✅ Laporan berhasil dikirim!
-        </div>
-      `;
-      form.reset();
-    }, 1000);
+    // Show success message
+    showQuickToast('✅ Laporan harian berhasil disimpan!');
+    
+    // Reset form
+    form.reset();
+    
+    // Re-render the reports
+    renderHarianReports();
   });
 }
+
+function renderHarianReports() {
+    const container = document.getElementById('harian-reports-container');
+    const countLabel = document.getElementById('report-count-label');
+    if (!container) return;
+
+    // Get all harian entries
+    const allEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]');
+    
+    // Filter by active tab
+    let filtered = allEntries.filter(entry => {
+        const cat = (entry.cat || '').toLowerCase();
+        if (_activeReportTab === 'lab') return cat === 'laboratorium' || cat === 'lab';
+        if (_activeReportTab === 'utility') return cat === 'utility';
+        if (_activeReportTab === 'limbah') return cat === 'limbah';
+        return false;
+    });
+    
+    // Apply date filtering
+    const dateFrom = document.getElementById('report-date-from')?.value;
+    const dateTo = document.getElementById('report-date-to')?.value;
+    
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        filtered = filtered.filter(entry => {
+            const entryDate = new Date(entry.saved_at);
+            entryDate.setHours(0, 0, 0, 0);
+            return entryDate >= fromDate;
+        });
+    }
+    
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(entry => {
+            const entryDate = new Date(entry.saved_at);
+            return entryDate <= toDate;
+        });
+    }
+    
+    // Sort entries
+    const sorted = [...filtered].sort((a, b) => {
+        const dateA = new Date(a.saved_at);
+        const dateB = new Date(b.saved_at);
+        
+        if (_reportSortBy === 'newest') return dateB - dateA;
+        if (_reportSortBy === 'oldest') return dateA - dateB;
+        return dateB - dateA;
+    });
+    
+    // Update count label
+    if (countLabel) {
+        countLabel.textContent = `${sorted.length} laporan`;
+    }
+    
+    // If no entries
+    if (!sorted.length) {
+        container.innerHTML = `
+            <div class="de-card" style="text-align:center;padding:60px 20px;background:var(--bg);border:1px dashed var(--border);border-radius:12px">
+                <div style="font-size:48px;margin-bottom:16px;opacity:0.2">📭</div>
+                <div style="font-size:14px;color:var(--txt2);font-weight:600;margin-bottom:6px">Belum ada laporan untuk ${getTabLabel(_activeReportTab)}</div>
+                <div style="font-size:12px;color:var(--txt3)">Data laporan harian akan muncul di sini</div>
+            </div>`;
+        return;
+    }
+    
+    // Build grid HTML
+    let html = '<div class="report-grid">';
+    
+    sorted.forEach((entry, index) => {
+        const date = new Date(entry.saved_at);
+        const dateStr = date.toLocaleDateString('id-ID', { 
+            day: '2-digit', 
+            month: 'short', 
+            year: 'numeric' 
+        });
+        const timeStr = date.toLocaleTimeString('id-ID', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+        });
+        
+        // Category colors
+        const categoryColors = {
+            'produksi': { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
+            'teknis': { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
+            'operasional': { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
+            'laboratorium': { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8' },
+            'lab': { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8' },
+            'utility': { bg: '#fef08a', border: '#eab308', text: '#713f12' },
+            'limbah': { bg: '#dcfce7', border: '#22c55e', text: '#15803d' },
+            'lainnya': { bg: '#f3f4f6', border: '#9ca3af', text: '#374151' }
+        };
+        const color = categoryColors[entry.cat] || categoryColors['lainnya'];
+        
+        // Build parameters rows (exclude Catatan/Notes)
+        let paramsHTML = '';
+        Object.entries(entry.data || {}).forEach(([key, value]) => {
+            if (value && value !== '—' && key !== 'Judul Laporan' && key !== 'Kategori' && key !== 'Catatan' && key !== 'Notes') {
+                paramsHTML += `
+                    <div class="report-param-row">
+                        <div class="report-param-label">${key}</div>
+                        <div class="report-param-value">${value}</div>
+                    </div>`;
+            }
+        });
+        
+        html += `
+            <div class="report-card">
+                <div class="report-card-header">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">
+                            ${entry.data['Judul Laporan'] || 'Laporan Harian'}
+                        </div>
+                        <div class="report-card-date">
+                            📅 ${dateStr} &nbsp;• &nbsp;🕐 ${timeStr}
+                        </div>
+                    </div>
+                    <div class="report-card-badge" style="background:${color.bg};color:${color.text};border:1px solid ${color.border}">
+                        ${entry.cat || 'lainnya'}
+                    </div>
+                </div>
+                <div class="report-params">
+                    ${paramsHTML}
+                </div>
+            </div>`;
+    });
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
 
 // ══ REPORTING HELPERS ═════════════════════════════════════════
 function submitReport() {
@@ -4140,7 +6905,7 @@ function renderSensorList() {
 }
 
 // ── Modal helpers ─────────────────────────────────────────
-let _editIdx = -1;
+var _editIdx = -1;
 
 function openAddSensor() {
   _editIdx = -1;
@@ -4416,6 +7181,23 @@ window.delPJ       = delPJ;
 window.openSP      = openSP;
 window.closeSP     = closeSP;
 window.saveSP      = saveSP;
+
+// ── openCIP_enh / closeCIP_enh / saveCIP_enh ─────────────
+function openCIP_enh(type, idx) {
+  _cipPJIdx = idx;
+  const selProd = document.getElementById('dep-proj-sel-' + type);
+  const selLab  = document.getElementById('lab-proj-sel-' + type);
+  if (selProd) selProd.value = idx;
+  if (selLab)  selLab.value  = idx;
+  openCIPModal(type);
+}
+function closeCIP_enh(type) {
+  closeCIPModal();
+}
+async function saveCIP_enh(type, isFinish) {
+  await saveCIPModal(type, isFinish);
+}
+
 window.openCIP_enh = openCIP_enh;
 window.closeCIP_enh= closeCIP_enh;
 window.saveCIP_enh = saveCIP_enh;
@@ -4931,12 +7713,95 @@ function showSjSt(type,msg) {
   if(!b||!m)return; b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg;
   if(type==='success') setTimeout(()=>{if(b)b.style.display='none';},3000);
 }
+
+function switchReportTab(tab, el) {
+    _activeReportTab = tab;
+    document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderHarianReports();
+}
+
+function changeReportSort(sortBy) {
+    _reportSortBy = sortBy;
+    renderHarianReports();
+}
+
+function clearDateFilters() {
+    const dateFrom = document.getElementById('report-date-from');
+    const dateTo = document.getElementById('report-date-to');
+    if (dateFrom) dateFrom.value = '';
+    if (dateTo) dateTo.value = '';
+    renderHarianReports();
+}
+
+function getTabLabel(tab) {
+    const labels = {
+        'produksi': 'Produksi',
+        'lab': 'Lab',
+        'utility': 'Utility',
+        'limbah': 'Limbah'
+    };
+    return labels[tab] || tab;
+}
+
 window.editSuratJalan   = editSuratJalan;
 window.deleteSuratJalan = deleteSuratJalan;
 window.addSuratJalanItem = addSuratJalanItem;
 window.checkVacuum = checkVacuum;
 window.handlePhotoUpload = handlePhotoUpload;
+window.switchReportTab = switchReportTab;
+window.changeReportSort = changeReportSort;
+window.clearDateFilters = clearDateFilters;
 
-// ═══════════════════════════════════════════════════════════
-// Add Surat Jalan link to Reporting page nav
-// ═══════════════════════════════════════════════════════════
+// ── Status bar helpers ──────────────────────────────────────
+function _depStatus(key, type, msg) {
+  const sb = document.getElementById('dep-sb-' + key);
+  const sm = document.getElementById('dep-sm-' + key);
+  if (!sb || !sm) return;
+  sb.style.display = 'flex';
+  sb.className     = 'de-status-bar de-status-' + type;
+  sm.textContent   = msg;
+}
+
+// ── submitDE — Limbah save ke database ────────────────────────
+async function submitDE(key) {
+  const sb = document.getElementById(key + '-sb');
+  const sm = document.getElementById(key + '-sm');
+
+  if (key === 'limbah') {
+    const sel      = document.getElementById('limbah-proj-sel');
+    const projName = sel && sel.value ? (gPJ('ongoing')[+sel.value]?.name || '') : '';
+    const payload  = {
+      tanggal:   document.getElementById(key + '-date')?.value  || new Date().toISOString().split('T')[0],
+      vol:       document.getElementById(key + '-vol')?.value   || '',
+      cod:       document.getElementById(key + '-cod')?.value   || '',
+      bod:       document.getElementById(key + '-bod')?.value   || '',
+      tss:       document.getElementById(key + '-tss')?.value   || '',
+      ph:        document.getElementById(key + '-ph')?.value    || '',
+      temp:      document.getElementById(key + '-temp')?.value  || '',
+      notes:     document.getElementById(key + '-notes')?.value || '',
+      foto_urls: window._photoData?.[key] || [],
+    };
+    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-loading'; sm.textContent='⏳ Menyimpan ke database...'; }
+    try {
+      const res  = await fetch('/api/dataentry/limbah', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal simpan');
+      const entry = { ...payload, saved_at: new Date().toISOString(), projName, db_id: json.id };
+      const all   = JSON.parse(localStorage.getItem('limbah_entries') || '[]');
+      all.push(entry);
+      localStorage.setItem('limbah_entries', JSON.stringify(all));
+      if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data Limbah tersimpan ke database!'; setTimeout(()=>{if(sb)sb.style.display='none';},3000); }
+    } catch (err) {
+      console.error('submitDE limbah error:', err);
+      if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='❌ Gagal simpan: ' + err.message; }
+    }
+    return;
+  }
+  if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data berhasil disimpan!'; setTimeout(()=>{if(sb)sb.style.display='none';},3000); }
+}
+window.submitDE = submitDE;

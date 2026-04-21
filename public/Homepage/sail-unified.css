@@ -3,14 +3,19 @@
    Digunakan oleh semua halaman: Homepage, Register,
    Fingerprint Login, Fingerprint Register, Logout
 ═══════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* System fonts — tidak butuh internet, tidak ada ERR_NAME_NOT_RESOLVE */
+:root {
+  --font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-body:    'Segoe UI', system-ui, -apple-system, sans-serif;
+}
 
 /* ── RESET ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ── BASE ── */
 body {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   background: #eef1f5;
   min-height: 100vh;
 }
@@ -27,7 +32,7 @@ body {
 }
 .brand { display: flex; flex-direction: column; gap: 2px; }
 .brand-name {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 800;
   color: #ffffff;
@@ -85,7 +90,7 @@ body {
   margin-bottom: 20px;
 }
 .card-title {
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-display);
   font-size: 22px;
   font-weight: 700;
   color: #0f172a;
@@ -132,7 +137,7 @@ body {
   padding: 12px 14px;
   border: 1.5px solid #e2e8f0;
   border-radius: 10px;
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
   color: #0f172a;
   background: #f8fafc;
@@ -156,7 +161,7 @@ body {
   color: #ffffff;
   border: none;
   border-radius: 10px;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -178,7 +183,7 @@ body {
   color: #ffffff;
   border: none;
   border-radius: 10px;
-  font-family: 'Syne', sans-serif;
+  font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -306,3 +311,39 @@ body {
   font-size: 11px; font-weight: 700;
 }
 .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
+/* ══════════════════════════════════════════════
+   STATUS BARS (Login & Register)
+══════════════════════════════════════════════ */
+.login-status,
+.reg-status {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 12px;
+  border: 1px solid transparent;
+}
+.login-status.loading,
+.reg-status.loading  {
+  display: flex;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+.login-status.success,
+.reg-status.success  {
+  display: flex;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+.login-status.error,
+.reg-status.error    {
+  display: flex;
+  background: #fff5f5;
+  border-color: #fecaca;
+  color: #dc2626;
+}

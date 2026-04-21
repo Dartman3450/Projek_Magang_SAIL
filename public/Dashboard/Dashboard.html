@@ -4,17 +4,25 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>SAIL – Operational Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <!-- Google Fonts diganti system fonts agar tidak butuh internet -->
+  <style>
+    :root {
+      --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      --font-mono: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    }
+    body { font-family: var(--font-sans); }
+    code, pre, .mono { font-family: var(--font-mono); }
+  </style>
   <!-- ═══ STYLESHEET — split per fungsi ═══ -->
-  <link rel="stylesheet" href="css/01-base.css"/>        <!-- Variabel, reset, layout -->
-  <link rel="stylesheet" href="css/02-sidebar.css"/>     <!-- Sidebar & navigasi -->
-  <link rel="stylesheet" href="css/03-topbar.css"/>      <!-- Topbar, ESP badge, jam -->
-  <link rel="stylesheet" href="css/04-sensor-cards.css"/><!-- IoT cards, tank visual -->
-  <link rel="stylesheet" href="css/05-forms.css"/>       <!-- Form input, data entry -->
-  <link rel="stylesheet" href="css/06-modals-drawers.css"/><!-- Modal & drawer -->
-  <link rel="stylesheet" href="css/07-projects.css"/>    <!-- Halaman project -->
-  <link rel="stylesheet" href="css/08-alerts.css"/>      <!-- Water level alert -->
-  <link rel="stylesheet" href="css/09-v2-additions.css"/><!-- v2: Kartu Stok, Surat Jalan, Photo -->
+  <link rel="stylesheet" href="/Dashboard/css/01-base.css"/>        <!-- Variabel, reset, layout -->
+  <link rel="stylesheet" href="/Dashboard/css/02-sidebar.css"/>     <!-- Sidebar & navigasi -->
+  <link rel="stylesheet" href="/Dashboard/css/03-topbar.css"/>      <!-- Topbar, ESP badge, jam -->
+  <link rel="stylesheet" href="/Dashboard/css/04-sensor-cards.css"/><!-- IoT cards, tank visual -->
+  <link rel="stylesheet" href="/Dashboard/css/05-forms.css"/>       <!-- Form input, data entry -->
+  <link rel="stylesheet" href="/Dashboard/css/06-modals-drawers.css"/><!-- Modal & drawer -->
+  <link rel="stylesheet" href="/Dashboard/css/07-projects.css"/>    <!-- Halaman project -->
+  <link rel="stylesheet" href="/Dashboard/css/08-alerts.css"/>      <!-- Water level alert -->
+  <link rel="stylesheet" href="/Dashboard/css/09-v2-additions.css"/><!-- v2: Kartu Stok, Surat Jalan, Photo -->
 </head>
 <body>
 
@@ -97,7 +105,7 @@
   <div class="content" id="content"></div>
 </div>
 
-<script src="js/app.js"></script>
+<script src="/Dashboard/js/app.js"></script>
 
 <!-- ═══ IoT DETAIL DRAWER ═══ -->
 <div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>

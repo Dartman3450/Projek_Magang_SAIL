@@ -1,7 +1,7 @@
 const express = require("express");
-const router = express.Router();
-const crypto = require("crypto");
-const pool = require("../db");
+const router  = express.Router();
+const crypto  = require("crypto");
+const { pool } = require("../db");
 
 const {
   generateRegistrationOptions,
@@ -10,9 +10,20 @@ const {
   verifyAuthenticationResponse,
 } = require("@simplewebauthn/server");
 
-const challengeStore = {};
+// ── Ambil dari .env supaya tidak hardcode ──────────────────────
+const RP_ID     = process.env.RP_ID     || "localhost";
+const RP_ORIGIN = process.env.RP_ORIGIN || "http://localhost:3000";
+const RP_NAME   = process.env.RP_NAME   || "SAIL System";
 
-/* ================= REGISTER OPTIONS ================= */
+console.log(`[WebAuthn Route] RP_ID="${RP_ID}" | RP_ORIGIN="${RP_ORIGIN}"`);
+
+// Challenge store per user_id (Map lebih aman dari plain object)
+const challengeStore = new Map();
+
+/* ═══════════════════════════════════════════════════════════════
+   REGISTER OPTIONS
+   POST /api/webauthn/register/options
+═══════════════════════════════════════════════════════════════ */
 router.post("/register/options", async (req, res) => {
   try {
     const { user_id, email } = req.body;
@@ -27,8 +38,8 @@ router.post("/register/options", async (req, res) => {
       .digest();
 
     const options = await generateRegistrationOptions({
-      rpName: "SAIL System",
-      rpID: "localhost",
+      rpName: RP_NAME,
+      rpID:   RP_ID,       // ✅ dari .env
       userID,
       userName: email,
       authenticatorSelection: {
@@ -38,7 +49,7 @@ router.post("/register/options", async (req, res) => {
       attestationType: "none",
     });
 
-    challengeStore[user_id] = options.challenge;
+    challengeStore.set(user_id.toString(), options.challenge);
     res.json(options);
   } catch (err) {
     console.error("REGISTER OPTIONS ERROR:", err);
@@ -46,7 +57,10 @@ router.post("/register/options", async (req, res) => {
   }
 });
 
-/* ================= REGISTER VERIFY ================= */
+/* ═══════════════════════════════════════════════════════════════
+   REGISTER VERIFY
+   POST /api/webauthn/register/verify
+═══════════════════════════════════════════════════════════════ */
 router.post("/register/verify", async (req, res) => {
   try {
     const { user_id, credential } = req.body;
@@ -55,16 +69,16 @@ router.post("/register/verify", async (req, res) => {
       return res.status(400).json({ message: "user_id and credential required" });
     }
 
-    const expectedChallenge = challengeStore[user_id];
+    const expectedChallenge = challengeStore.get(user_id.toString());
     if (!expectedChallenge) {
       return res.status(400).json({ message: "No challenge found, restart registration" });
     }
 
     const verification = await verifyRegistrationResponse({
-      response: credential,
+      response:          credential,
       expectedChallenge,
-      expectedOrigin: "http://localhost:3000",
-      expectedRPID: "localhost",
+      expectedOrigin:    RP_ORIGIN,  // ✅ dari .env
+      expectedRPID:      RP_ID,      // ✅ dari .env
     });
 
     if (!verification.verified) {
@@ -73,22 +87,20 @@ router.post("/register/verify", async (req, res) => {
 
     const { credential: cred } = verification.registrationInfo;
 
-    // ✅ In v13, cred.id is already a base64url string
-    // ✅ cred.publicKey is a Uint8Array — save as base64url
-    const credentialId = cred.id;
-    const publicKeyBase64 = Buffer.from(cred.publicKey).toString("base64url");
-    const counter = cred.counter ?? 0;
+    const credentialId      = cred.id;
+    const publicKeyBase64   = Buffer.from(cred.publicKey).toString("base64url");
+    const counter           = cred.counter ?? 0;
 
     console.log("Saving credential_id:", credentialId);
-    console.log("Type:", typeof credentialId);
 
+    // Cek duplikat
     const existing = await pool.query(
       `SELECT id FROM webauthn_credentials WHERE credential_id = $1`,
       [credentialId]
     );
 
     if (existing.rows.length > 0) {
-      delete challengeStore[user_id];
+      challengeStore.delete(user_id.toString());
       return res.json({ success: true, message: "Fingerprint already registered" });
     }
 
@@ -98,7 +110,7 @@ router.post("/register/verify", async (req, res) => {
       [user_id, credentialId, publicKeyBase64, counter]
     );
 
-    delete challengeStore[user_id];
+    challengeStore.delete(user_id.toString());
     res.json({ success: true, message: "Fingerprint registered successfully!" });
   } catch (err) {
     console.error("REGISTER VERIFY ERROR:", err);
@@ -106,7 +118,10 @@ router.post("/register/verify", async (req, res) => {
   }
 });
 
-/* ================= LOGIN OPTIONS ================= */
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN OPTIONS
+   POST /api/webauthn/login/options
+═══════════════════════════════════════════════════════════════ */
 router.post("/login/options", async (req, res) => {
   try {
     const { user_id } = req.body;
@@ -124,30 +139,28 @@ router.post("/login/options", async (req, res) => {
       return res.status(400).json({ message: "No fingerprint registered for this user" });
     }
 
-    const credentialId = result.rows[0].credential_id;
-    console.log("RAW credential_id from DB:", credentialId);
-    console.log("Type:", typeof credentialId);
-
     const options = await generateAuthenticationOptions({
-      rpID: "localhost",
+      rpID: RP_ID,  // ✅ dari .env
       allowCredentials: result.rows.map((r) => ({
-        id: r.credential_id,  // ✅ must be a base64url string
+        id:   r.credential_id,
         type: "public-key",
       })),
       userVerification: "required",
       timeout: 60000,
     });
 
-    challengeStore[user_id] = options.challenge;
+    challengeStore.set(user_id.toString(), options.challenge);
     res.json(options);
-
   } catch (err) {
     console.error("LOGIN OPTIONS ERROR:", err);
     res.status(500).json({ message: err.message });
   }
 });
 
-/* ================= LOGIN VERIFY ================= */
+/* ═══════════════════════════════════════════════════════════════
+   LOGIN VERIFY
+   POST /api/webauthn/login/verify
+═══════════════════════════════════════════════════════════════ */
 router.post("/login/verify", async (req, res) => {
   try {
     const { user_id, id, rawId, type, response } = req.body;
@@ -156,7 +169,7 @@ router.post("/login/verify", async (req, res) => {
       return res.status(400).json({ message: "user_id required" });
     }
 
-    const expectedChallenge = challengeStore[user_id];
+    const expectedChallenge = challengeStore.get(user_id.toString());
     if (!expectedChallenge) {
       return res.status(400).json({ message: "No challenge found, restart login" });
     }
@@ -177,13 +190,12 @@ router.post("/login/verify", async (req, res) => {
     const verification = await verifyAuthenticationResponse({
       response: { id, rawId, type, response },
       expectedChallenge,
-      expectedOrigin: "http://localhost:3000",
-      expectedRPID: "localhost",
+      expectedOrigin: RP_ORIGIN,  // ✅ dari .env
+      expectedRPID:   RP_ID,      // ✅ dari .env
       credential: {
-        id: storedCred.credential_id,
-        // ✅ public_key was saved as base64url, decode the same way
+        id:        storedCred.credential_id,
         publicKey: Buffer.from(storedCred.public_key, "base64url"),
-        counter: storedCred.counter,
+        counter:   storedCred.counter,
       },
     });
 
@@ -191,12 +203,13 @@ router.post("/login/verify", async (req, res) => {
       return res.status(401).json({ success: false, message: "Fingerprint not registered!" });
     }
 
+    // Update counter (cegah replay attack)
     await pool.query(
       `UPDATE webauthn_credentials SET counter = $1 WHERE credential_id = $2`,
       [verification.authenticationInfo.newCounter, id]
     );
 
-    delete challengeStore[user_id];
+    challengeStore.delete(user_id.toString());
 
     const userResult = await pool.query(
       `SELECT id, email FROM users WHERE id = $1`,
@@ -206,7 +219,7 @@ router.post("/login/verify", async (req, res) => {
     res.json({
       success: true,
       message: "Login Success!",
-      user: userResult.rows[0],
+      user:    userResult.rows[0],
     });
   } catch (err) {
     console.error("LOGIN VERIFY ERROR:", err);

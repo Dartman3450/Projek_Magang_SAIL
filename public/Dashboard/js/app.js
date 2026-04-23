@@ -1,5 +1,126 @@
 var _pjCache = { ongoing: [], completed: [] };
-// ══ STATE ══════════════════════════════════════════
+// ── INJEKSI CSS UNTUK KOTAK SATUAN (UNIT ADD-ON) ──
+const unitAddonStyle = document.createElement('style');
+unitAddonStyle.innerHTML = `
+  .input-group { 
+    display: flex; 
+    align-items: stretch; 
+    width: 100%; 
+    margin-top: 4px; 
+  }
+  .input-group .de-input { 
+    flex: 1; 
+    border-top-right-radius: 0 !important; 
+    border-bottom-right-radius: 0 !important; 
+    margin-top: 0 !important; 
+  }
+  .input-group .group-unit { 
+    display: flex; 
+    align-items: center; 
+    background: #f8fafc; 
+    border: 1px solid var(--border); 
+    border-left: none; 
+    padding: 0 12px; 
+    border-top-right-radius: 8px; 
+    border-bottom-right-radius: 8px; 
+    color: var(--txt2); 
+    font-size: 11px; 
+    font-weight: 700; 
+    white-space: nowrap;
+  }
+`;
+document.head.appendChild(unitAddonStyle);
+
+// ── INJEKSI TAMPILAN KOTAK HITUNGAN OTOMATIS (READONLY) ──
+const autoInputStyle = document.createElement('style');
+autoInputStyle.innerHTML = `
+  /* Mengubah warna dasar, teks, dan border untuk semua input otomatis */
+  .de-input[readonly] {
+    background-color: #ebf2fd !important; /* Background biru sangat pudar */
+    color: #0284c7 !important; /* Teks warna biru laut pekat */
+    font-weight: 700 !important; /* Teks tebal */
+    border-color: #bae6fd !important; /* Garis pinggir biru muda */
+    cursor: not-allowed;
+  }
+  
+  /* Mengubah warna teks bayangan (placeholder) agar serasi */
+  .de-input[readonly]::placeholder {
+    color: #7dd3fc !important; /* Placeholder biru muda */
+    font-weight: normal !important;
+  }
+`;
+document.head.appendChild(autoInputStyle);
+
+// ── INJEKSI STYLE SIDEBAR — nav bold + SAIL lebih besar ──
+const sidebarStyle = document.createElement('style');
+sidebarStyle.innerHTML = `
+  /* SAIL title — lebih besar dan bold */
+  .logo-tag {
+    font-size: 24px !important;
+    font-weight: 800 !important;
+    letter-spacing: 4px;
+  }
+  
+  /* Support Operational System — lebih besar dan bold */
+  .logo-sub {
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    color: #555 !important;
+    letter-spacing: 1.5px;
+  }
+
+  /* Nav items utama — hitam dan bold */
+  .nav-item {
+    color: #111 !important;
+    font-weight: 700 !important;
+  }
+  .nav-item:hover {
+    color: #111 !important;
+  }
+  .nav-item.active {
+    color: var(--blue) !important;
+  }
+
+  /* Nav group header (Project, Data & Information, dll) — bold hitam */
+  .nav-group-head {
+    color: #111 !important;
+    font-weight: 700 !important;
+  }
+  .nav-group-head:hover {
+    color: #111 !important;
+  }
+
+  /* Sub-item (On Going Project, Completed Project, dll) — hitam bold */
+  .nav-sub-item {
+    color: #333 !important;
+    font-weight: 600 !important;
+  }
+  .nav-sub-item:hover {
+    color: var(--blue) !important;
+  }
+
+  /* Logout button — tetap merah */
+  .logout-btn {
+    color: var(--txt3) !important;
+    font-weight: 600 !important;
+  }
+  .logout-btn:hover {
+    color: var(--red) !important;
+  }
+  
+  /* ESP badge partial (sebagian konek) */
+  .esp-badge.partial {
+    background: #fffbeb;
+    border-color: #fde68a;
+    color: #b45309;
+  }
+  .esp-badge.partial .esp-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245,158,11,.5);
+  }
+`;
+document.head.appendChild(sidebarStyle);
+
 let espConnected = false;
 let _activeTab   = 'water-level';
 let _activeReportTab = 'lab';
@@ -34,8 +155,8 @@ const SP_FIELDS_PAGE1 = [
   {id:'sp-prod-out',   label:'Product Out',          type:'number', unit:'L/h'},
   {id:'sp-cond1',      label:'Condensate #1',        type:'number', unit:'L/h',      calculated:true, formula:'Condenser #1 % * Feed'},
   {id:'sp-cond2',      label:'Condensate #2',        type:'number', unit:'L/h',      calculated:true, formula:'(External strip rate % - Condenser #1 %) * Feed'},
-  {id:'sp-ext',        label:'Strip Rate External',  type:'number', unit:'%'},
-  {id:'sp-int',        label:'Strip Rate Internal',  type:'text',   unit:'',         calculated:true, formula:'100 * Stripping Steam / Feed'},
+  {id:'sp-ext',        label:'External Strip Rate ',  type:'number', unit:'%'},
+  {id:'sp-int',        label:'Internal Strip Rate ',  type:'text',   unit:'',         calculated:true, formula:'100 * Stripping Steam / Feed'},
   {id:'sp-cond-rate',  label:'Condenser #1',         type:'number', unit:'%'},
   {id:'sp-offset',     label:'Offset',               type:'number', unit:'°C'},
 ];
@@ -44,8 +165,8 @@ const SP_FIELDS_PAGE2 = [
   {id:'sp-temp-feed',  label:'Product Feed',         type:'number', unit:'°C'},
   {id:'sp-temp-heater',label:'Product Heater',       type:'number', unit:'°C',      calculated:true, formula:'Top of Column + Offset'},
   {id:'sp-temp-top',   label:'Top of Column',        type:'number', unit:'°C'},
-  {id:'sp-condensed1', label:'Condensed #1',         type:'number', unit:'°C'},
-  {id:'sp-condensed2', label:'Condensed #2',         type:'number', unit:'°C'},
+  {id:'sp-Condensate1', label:'Condensate #1',         type:'number', unit:'°C'},
+  {id:'sp-Condensate2', label:'Condensate #2',         type:'number', unit:'°C'},
   {id:'sp-temp-bot',   label:'Bottom of Column',     type:'number', unit:'°C'},
   {id:'sp-add1',       label:'Product Flowrate',                    type:'text',   unit:''},
   {id:'sp-add2',       label:'Product Flow Control Valve Position', type:'text',   unit:''},
@@ -58,7 +179,7 @@ const SP_FIELDS_PAGE2 = [
   {id:'sp-chilled',    label:'Chilled Water',                       type:'text',   unit:''},
   {id:'sp-condenser-water', label:'Condenser Water',                type:'text',   unit:''},
   {id:'sp-system-vacuum',   label:'System Vacuum',                  type:'text',   unit:''},
-  {id:'sp-steam-flow',      label:'Steam Flow',                     type:'text',   unit:''},
+  {id:'sp-steam-flow',      label:'Steam Flow',                     type:'text',   unit:'KG/h'},
 ];
 const SP_FIELDS = [...SP_FIELDS_PAGE1, ...SP_FIELDS_PAGE2];
 
@@ -77,7 +198,7 @@ const DE_SECTIONS = [
     color: '#1e40af',
     bg: '#eff6ff',
     border: '#93c5fd',
-    fields: ['sp-feed', 'sp-aroma', 'sp-steam', 'sp-prod-out', 'sp-cond1', 'sp-cond2']
+    fields: ['sp-feed', 'sp-aroma', 'sp-steam', 'sp-cond1', 'sp-cond2']
   },
   {
     label: 'Strip Rate',
@@ -90,34 +211,34 @@ const DE_SECTIONS = [
   {
     label: 'Temperature',
     icon: '🌡️',
-    color: '#9a3412',
+    color: '#b32222',
     bg: '#fff7ed',
     border: '#fdba74',
-    fields: ['sp-temp-feed', 'sp-temp-heater', 'sp-temp-top', 'sp-condensed1', 'sp-condensed2', 'sp-temp-bot']
-  },
-  {
-    label: 'Parameter CT',
-    icon: '🔬',
-    color: '#086000',
-    bg: '#455e42',
-    border: '#d1d5db',
-    fields: ['sp-add1', 'sp-add2', 'sp-add3', 'sp-add4', 'sp-add5', 'sp-add6', 'sp-add7', 'sp-add8']
+    fields: ['sp-temp-feed', 'sp-temp-heater', 'sp-temp-top', 'sp-Condensate1', 'sp-Condensate2', 'sp-temp-bot', 'sp-prod-out']
   },
   {
     label: 'Coolants',
     icon: '🧊',
-    color: '#0e83d1',
-    bg: '#a7d2fc',
-    border: '#d1d5db',
+    color: '#0284c7', // Biru laut pekat (mudah dibaca)
+    bg: '#f0f9ff',    // Biru es sangat lembut (cerah)
+    border: '#bae6fd',
     fields: ['sp-chilled', 'sp-condenser-water']
   },
   {
     label: 'Pressure',
     icon: '⚡',
-    color: '#ffe0b7',
-    bg: '#fff4da',
-    border: '#d1d5db',
+    color: '#d97706', // Oranye/Amber pekat tegas
+    bg: '#fffbeb',    // Kuning gading sangat lembut
+    border: '#fde68a',
     fields: ['sp-system-vacuum', 'sp-steam-flow']
+  },
+  {
+    label: 'Parameter CT',
+    icon: '🔬',
+    color: '#15803d', // Hijau tua (segar & jelas)
+    bg: '#f0fdf4',    // Hijau mint pucat (bersih)
+    border: '#bbf7d0',
+    fields: ['sp-add1', 'sp-add2', 'sp-add3', 'sp-add4', 'sp-add5', 'sp-add6', 'sp-add7', 'sp-add8']
   }
 ];
 
@@ -200,12 +321,12 @@ window.toggleNav = toggleNav;
 // ── Role-based access control ──────────────────────────────────────
 const ROLE_ACCESS = {
   admin:      null, // null = all pages allowed
-  superadmin: null, // sama seperti admin — akses semua
+  superadmin: null,
+  PPIC:       null, // sama seperti admin — akses semua halaman
   scientist:  ['iot', 'laboratorium', 'reporting', 'change-password'],
   utility:    ['iot', 'utility',      'reporting', 'change-password'],
   limbah:     ['iot', 'limbah',       'reporting', 'change-password'],
   Produksi:   ['iot', 'production',   'reporting', 'change-password'],
-  PPIC:       ['iot', 'production', 'utility', 'laboratorium', 'limbah', 'reporting', 'change-password'],
 };
 // ───────────────────────────────────────────────────────────────────
 
@@ -215,6 +336,7 @@ function loadPage(page) {
     iot:['Dashboard IoT','SAIL / Dashboard / Monitor IoT'],
     ongoing:['On Going Project','SAIL / Project / On Going'],
     completed:['Completed Project','SAIL / Project / Completed'],
+    receipt:['Receipt — Template Set Point','SAIL / Project / Receipt'],
     production:['Data Entry Production','SAIL / Data / Production'],
     utility:['Data Entry Utility','SAIL / Data / Utility'],
     laboratorium:['Data Entry Laboratorium','SAIL / Data / Laboratorium'],
@@ -236,6 +358,8 @@ function loadPage(page) {
     content.innerHTML = getProjectHTML('ongoing','On Going Projects'); initProjectPage('ongoing');
   } else if (page === 'completed') {
     content.innerHTML = getProjectHTML('completed','Completed Projects'); initProjectPage('completed');
+  } else if (page === 'receipt') {              // ← TAMBAH CASE INI
+    content.innerHTML = getReceiptPageHTML(); initReceiptPage();
   } else if (page === 'production') {
     content.innerHTML = getDataEntryProduction('production','Data Entry Production','Record daily production data','🏭'); initDataEntryForm('production');
   } else if (page === 'utility') {
@@ -436,18 +560,120 @@ function getReporting() {
 
 
 
-// ══ ESP STATUS ═════════════════════════════════════
+// ══ ESP STATUS — 3 ESP ═══════════════════════════════
+const _ESP_DEFS = [
+  { key: 'wl',  label: 'ESP Water Level' },
+  { key: 'wf',  label: 'ESP Water Flow'  },
+  { key: 'env', label: 'ESP Environment' },
+];
+// Simpan timestamp data terakhir tiap ESP
+const _espLastSeen = { wl: null, wf: null, env: null };
+
+// Threshold: jika data terakhir > 90 detik lalu → dianggap offline
+const ESP_TIMEOUT_MS = 90_000;
+
+function _isEspAlive(key) {
+  const t = _espLastSeen[key];
+  if (!t) return false;
+  return (Date.now() - new Date(t).getTime()) < ESP_TIMEOUT_MS;
+}
+
+function updateEspBadge() {
+  const wrap = document.getElementById('esp-badge');
+  if (!wrap) return;
+
+  const states = _ESP_DEFS.map(e => ({ ...e, alive: _isEspAlive(e.key) }));
+  const connCount = states.filter(e => e.alive).length;
+  const total     = states.length;
+
+  // Warna badge keseluruhan
+  let badgeClass = 'esp-badge';
+  if (connCount === total)      badgeClass += ' connected';
+  else if (connCount === 0)     badgeClass += ' waiting';
+  else                          badgeClass += ' partial';
+
+  const summaryText = 'ESP Status';
+
+  wrap.className = badgeClass;
+  wrap.onclick   = toggleEspPopup;
+  wrap.style.cursor = 'pointer';
+  wrap.style.userSelect = 'none';
+
+  wrap.innerHTML = `
+    <div class="esp-dot"></div>
+    <span id="esp-label">${summaryText}</span>
+    <span style="font-size:9px;margin-left:3px;color:inherit;opacity:.7">▾</span>
+  `;
+}
+
+function toggleEspPopup() {
+  let popup = document.getElementById('esp-popup');
+  if (popup) { popup.remove(); return; }
+
+  const wrap  = document.getElementById('esp-badge');
+  const rect  = wrap.getBoundingClientRect();
+  const states = _ESP_DEFS.map(e => ({ ...e, alive: _isEspAlive(e.key) }));
+
+  popup = document.createElement('div');
+  popup.id = 'esp-popup';
+  popup.style.cssText = `
+    position:fixed;
+    top:${rect.bottom + 8}px;
+    right:${window.innerWidth - rect.right}px;
+    background:#fff;
+    border:1px solid #e2e8f0;
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,.12);
+    padding:10px 4px;
+    z-index:9999;
+    min-width:210px;
+    font-family:inherit;
+  `;
+
+  popup.innerHTML = `
+    <div style="padding:4px 14px 8px;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;">
+      ESP Status
+    </div>
+    ${states.map(e => {
+      const alive   = e.alive;
+      const dotClr  = alive ? '#22c55e' : '#f59e0b';
+      const dotShadow = alive ? '0 0 6px rgba(34,197,94,.6)' : 'none';
+      const lastTs  = _espLastSeen[e.key];
+      const lastStr = lastTs
+        ? new Date(lastTs).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' })
+        : '—';
+      const statusTxt = alive ? 'Connected' : (lastTs ? 'Waiting / Off' : 'No Data');
+      const statusClr = alive ? '#16a34a' : '#b45309';
+      return `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 14px;border-radius:8px;transition:.15s;"
+          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+          <div style="width:9px;height:9px;border-radius:50%;background:${dotClr};box-shadow:${dotShadow};flex-shrink:0;"></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:#1e293b;">${e.label}</div>
+            <div style="font-size:10px;color:#94a3b8;">Last: ${lastStr}</div>
+          </div>
+          <div style="font-size:11px;font-weight:700;color:${statusClr};">${statusTxt}</div>
+        </div>`;
+    }).join('')}
+  `;
+
+  document.body.appendChild(popup);
+
+  // Tutup kalau klik di luar
+  setTimeout(() => {
+    document.addEventListener('click', function _close(ev) {
+      if (!popup.contains(ev.target) && ev.target.id !== 'esp-badge' && !document.getElementById('esp-badge')?.contains(ev.target)) {
+        popup.remove();
+        document.removeEventListener('click', _close);
+      }
+    });
+  }, 50);
+}
+window.toggleEspPopup = toggleEspPopup;
+
+// Legacy — masih dipanggil kalau ada kode lain
 function setEspStatus(state) {
-  const badge = $('esp-badge');
-  const label = $('esp-label');
-  badge.className = 'esp-badge ' + state;
-  if (state === 'connected') {
-    label.innerHTML = 'ESP Connected';
-  } else if (state === 'error') {
-    label.innerHTML = 'Connection Failed';
-  } else {
-    label.innerHTML = 'Waiting for ESP<span class="dots"></span>';
-  }
+  updateEspBadge();
 }
 
 // ══ IOT RENDER ═════════════════════════════════════
@@ -770,8 +996,6 @@ function mkPipe(id,n){
     c.appendChild(p);
   }
 }
-
-// ══ FETCH DATA (REAL API) ══════════════════════════
 async function fetchSummary() {
   try {
     const res = await fetch(API.summary);
@@ -780,10 +1004,17 @@ async function fetchSummary() {
     if (!j.success) throw new Error(j.message || 'error');
 
     espConnected = true;
-    setEspStatus('connected');
     showOverlays(false);
 
     const d = j.data;
+
+    // ── Update last-seen per ESP ──────────────────────
+    if (d.water_level?.created_at)  _espLastSeen.wl  = d.water_level.created_at;
+    if (d.water_flow?.created_at)   _espLastSeen.wf  = d.water_flow.created_at;
+    if (d.lingkungan?.created_at)   _espLastSeen.env = d.lingkungan.created_at;
+
+    updateEspBadge();
+
     applyWL(d.water_level);
     applyWF(d.water_flow);
     applyEnv(d.lingkungan);
@@ -794,7 +1025,6 @@ async function fetchSummary() {
     espConnected = false;
     setEspStatus('waiting');
     showOverlays(true);
-    // table removed
   }
 }
 
@@ -1318,6 +1548,31 @@ function applyEnv(env) {
   pill('gas-status', gas, 300, 500);
 }
 
+// ── pill: update status indicator element ────────────────────
+function pill(id, val, warn, danger) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseFloat(val);
+  if (isNaN(v)) { el.className = 's-pill st-wait'; return; }
+  if (v >= danger)    el.className = 's-pill st-danger';
+  else if (v >= warn) el.className = 's-pill st-warn';
+  else                el.className = 's-pill st-ok';
+}
+
+// ── applyPatroli: update patrol status display ───────────────
+function applyPatroli(data) {
+  if (!data) return;
+  const positions = Array.isArray(data) ? data : (data.positions || []);
+  positions.forEach(p => {
+    const el = document.getElementById('pat-pos-' + p.pos);
+    if (!el) return;
+    el.className = 'pat-status pat-' + (p.status || 'Aman').toLowerCase();
+    el.textContent = p.status || 'Aman';
+  });
+  const totalEl = document.getElementById('pat-total');
+  if (totalEl && data.total != null) totalEl.textContent = data.total;
+}
+
 // ══ TABLE ══════════════════════════════════════════
 const tabApi = {
   'water-level': API.waterLevel,
@@ -1601,6 +1856,9 @@ setTimeout(updateDashWidgets, 500);
 // DATA ENTRY
 // ═══════════════════════════════════════════════════════════
 function getDataEntryProduction(key,title,sub,icon){
+  // Ambil semua project ongoing untuk bisa mulai set point dari project baru atau ongoing
+  const projs = gPJ('ongoing');
+  const projOpts = projs.map((p,i)=>`<option value="${i}">${p.name}</option>`).join('');
   return `<div class="de-wrap">
   <div class="de-header"><div><div class="de-title">${title}</div><div class="de-sub">${sub}</div></div></div>
   <div class="de-card">
@@ -1609,6 +1867,7 @@ function getDataEntryProduction(key,title,sub,icon){
       <label class="de-label" style="color:#111;">Pilih Ongoing Project</label>
       <select id="dep-proj-sel-${key}" onchange="loadDEProjForm('${key}')">
         <option value="">-- Pilih project ongoing --</option>
+        ${projOpts}
       </select>
     </div>
     <div id="dep-form-${key}"></div>
@@ -1625,7 +1884,7 @@ function getDataEntryLimbah(key,title,sub,icon){
     <div class="de-grid">
       
       <div class="de-field de-full"><label class="de-label" style="color:#111; font-weight:700;">LINK KE PROJECT</label>
-        <select class="de-input de-select" id="limbah-proj-sel" style="margin-top:4px; border-color:var(--blue); background:#ebf2fd;">
+        <select class="de-input de-select" id="limbah-proj-sel" style="margin-top:4px; border-color:var(--blue); background:#ebf2fd;" onchange="toggleLimbahVolumeMode('${key}')">
           <option value="">-- Tidak ditautkan ke project (Simpan ke Laporan Harian) --</option>
         </select>
         <div style="font-size:10px; color:var(--txt3); margin-top:4px;">💡 Biarkan kosong jika ingin menyimpannya sebagai Laporan Harian biasa.</div>
@@ -1633,15 +1892,20 @@ function getDataEntryLimbah(key,title,sub,icon){
 
       <div class="de-field"><label class="de-label" style="color:#111;">DATE</label><input class="de-input" type="date" id="${key}-date"></div>
       
-      <div class="de-field"><label class="de-label" style="color:#111;">Awal<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-awal" placeholder="0" oninput="calcLimbahTotal('${key}')"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">Akhir<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-akhir" placeholder="0" oninput="calcLimbahTotal('${key}')"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">Total Volume<span class="de-unit"> (L)</span></label><input class="de-input" type="number" id="${key}-vol" placeholder="Hasil hitung..." readonly style="background:#f3f4f6; color:var(--blue); font-weight:700;"></div>
+      <div class="de-field" id="${key}-awal-wrap" style="display:none;"><label class="de-label" style="color:#111;">Awal</label>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-awal" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">L</span></div>
+      </div>
+      <div class="de-field" id="${key}-akhir-wrap" style="display:none;"><label class="de-label" style="color:#111;">Akhir</label>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-akhir" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">L</span></div>
+      </div>
+      <div class="de-field"><label class="de-label" style="color:#111;">Total Volume</label>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-vol" placeholder="Input manual..." style="background:#fff; color:var(--blue); font-weight:700;"><span class="group-unit">L</span></div>
+      </div>
       
-      <div class="de-field"><label class="de-label" style="color:#111;">COD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-cod" placeholder="0"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">BOD<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-bod" placeholder="0"></div>
-      <div class="de-field"><label class="de-label" style="color:#111;">TSS<span class="de-unit"> (mg/L)</span></label><input class="de-input" type="number" id="${key}-tss" placeholder="0"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">COD</label><div class="input-group"><input class="de-input" type="number" id="${key}-cod" placeholder="0"><span class="group-unit">mg/L</span></div></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">BOD</label><div class="input-group"><input class="de-input" type="number" id="${key}-bod" placeholder="0"><span class="group-unit">mg/L</span></div></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">TSS</label><div class="input-group"><input class="de-input" type="number" id="${key}-tss" placeholder="0"><span class="group-unit">mg/L</span></div></div>
       <div class="de-field"><label class="de-label" style="color:#111;">pH</label><input class="de-input" type="number" id="${key}-ph" placeholder="7.0" step="0.1"></div>
-      
       <div class="de-field de-full"><label class="de-label" style="color:#111;">NOTES</label><textarea class="de-input de-textarea" id="${key}-notes" placeholder="Add notes here..."></textarea></div>
       ${buildPhotoUpload(key)}
 
@@ -1660,16 +1924,60 @@ function getDataEntryLimbah(key,title,sub,icon){
 </div>`;
 }
 
-// Fungsi bantu hitung otomatis Akhir - Awal untuk Limbah Utama
-function calcLimbahTotal(key) {
-  const awal = parseFloat(document.getElementById(key + '-awal')?.value) || 0;
-  const akhir = parseFloat(document.getElementById(key + '-akhir')?.value) || 0;
+// 1. Fungsi Switch Tampilan & Mode
+function toggleLimbahVolumeMode(key) {
+  const sel = document.getElementById('limbah-proj-sel');
+  const awalWrap = document.getElementById(key + '-awal-wrap');
+  const akhirWrap = document.getElementById(key + '-akhir-wrap');
   const volEl = document.getElementById(key + '-vol');
-  if (volEl) {
-    volEl.value = (document.getElementById(key + '-awal').value !== '' || document.getElementById(key + '-akhir').value !== '') 
-      ? (akhir - awal).toFixed(2) : '';
+  
+  if (!sel || !awalWrap || !akhirWrap || !volEl) return;
+
+  if (sel.value === '') {
+    // JIKA TIDAK DITAUTKAN (LAPORAN HARIAN)
+    awalWrap.style.display = 'none';
+    akhirWrap.style.display = 'none';
+    
+    // Total Volume bisa diketik manual
+    volEl.readOnly = false;
+    volEl.style.background = '#fff';
+    volEl.placeholder = 'Input manual...';
+    
+    // Bersihkan angkanya agar tidak nyangkut
+    document.getElementById(key + '-awal').value = '';
+    document.getElementById(key + '-akhir').value = '';
+    volEl.value = '';
+  } else {
+    // JIKA DITAUTKAN KE PROJECT
+    awalWrap.style.display = '';
+    akhirWrap.style.display = '';
+    
+    // Total Volume digembok (Auto-hitung Akhir - Awal)
+    volEl.readOnly = true;
+    volEl.style.background = '#f3f4f6';
+    volEl.placeholder = 'Auto (Akhir - Awal)';
+    calcLimbahTotal(key); // Jalankan rumus
   }
 }
+window.toggleLimbahVolumeMode = toggleLimbahVolumeMode;
+
+// 2. Fungsi Hitung (AKHIR - AWAL)
+function calcLimbahTotal(key) {
+  const volEl = document.getElementById(key + '-vol');
+  if (volEl && !volEl.readOnly) return; // Cegah rumus berjalan jika sedang mode ketik manual
+  
+  const awal = parseFloat(document.getElementById(key + '-awal')?.value) || 0;
+  const akhir = parseFloat(document.getElementById(key + '-akhir')?.value) || 0;
+  
+  if (volEl) {
+    if (document.getElementById(key + '-awal').value !== '' || document.getElementById(key + '-akhir').value !== '') {
+      volEl.value = (akhir - awal).toFixed(2);
+    } else {
+      volEl.value = '';
+    }
+  }
+}
+window.calcLimbahTotal = calcLimbahTotal;
 
 // 3. Ganti fungsi Reset ini agar kotak Awal, Akhir, Total juga ikut terhapus saat direset
 function resetDE(key){
@@ -1750,7 +2058,7 @@ function openJarTestModal() {
   addJarTestRow();
 }
 
-// 1. Fungsi Tambah Baris (Dilengkapi ID spesifik untuk tiap kotak input)
+// 1. Fungsi Tambah Baris (Dilengkapi Unit Add-on & Fix Auto Mode)
 function addJarTestRow() {
   const container = document.getElementById('jar-row-container');
   const uid = Date.now() + Math.random().toString(36).substr(2, 5);
@@ -1758,21 +2066,31 @@ function addJarTestRow() {
   const row = document.createElement('div');
   row.className = 'jar-data-row';
   row.id = 'jar-row-' + uid;
-  row.style.cssText = 'display:grid; grid-template-columns:80px 1fr 1fr 1fr 1fr 40px; gap:10px; margin-bottom:8px; align-items:center; background:#fdfdfd; padding:5px; border-radius:6px; border:1px solid #f1f1f1;';
+  row.style.cssText = 'display:grid; grid-template-columns:70px 1fr 1fr 1fr 1fr 35px; gap:12px; margin-bottom:10px; align-items:center; background:#fdfdfd; padding:8px; border-radius:8px; border:1px solid #f1f1f1;';
   
   row.innerHTML = `
     <input class="de-input jar-ph" type="number" step="0.1" placeholder="7.0">
     
-    <input class="de-input jar-pac" id="pac-input-${uid}" type="number" placeholder="mg" oninput="calcJarRowDosing('${uid}', 'pac')">
-    <div style="position:relative">
-      <input class="de-input jar-doz-pac" id="doz-pac-${uid}" readonly style="background:#f3f4f6; padding-right:35px;" placeholder="PPM" data-mode="auto">
-      <button onclick="toggleJarRowMode('${uid}', 'pac')" id="btn-pac-${uid}" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); font-size:7px; padding:2px 4px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:3px; cursor:pointer; font-weight:700;">AUTO</button>
+    <div class="input-group">
+      <input class="de-input jar-pac" id="pac-input-${uid}" type="number" placeholder="0" oninput="calcJarRowDosing('${uid}', 'pac')">
+      <span class="group-unit">mg</span>
+    </div>
+
+    <div class="input-group" style="position:relative">
+      <input class="de-input jar-doz-pac" id="doz-pac-${uid}" readonly style="padding-right:45px;" placeholder="0">
+      <button onclick="toggleJarRowMode('${uid}', 'pac')" id="btn-pac-${uid}" data-mode="auto" style="position:absolute; right:46px; top:50%; transform:translateY(-50%); font-size:8px; padding:3px 6px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:4px; cursor:pointer; font-weight:700;">AUTO</button>
+      <span class="group-unit">ppm</span>
     </div>
     
-    <input class="de-input jar-pol" id="pol-input-${uid}" type="number" placeholder="mg" oninput="calcJarRowDosing('${uid}', 'pol')">
-    <div style="position:relative">
-      <input class="de-input jar-doz-pol" id="doz-pol-${uid}" readonly style="background:#f3f4f6; padding-right:35px;" placeholder="PPM" data-mode="auto">
-      <button onclick="toggleJarRowMode('${uid}', 'pol')" id="btn-pol-${uid}" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); font-size:7px; padding:2px 4px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:3px; cursor:pointer; font-weight:700;">AUTO</button>
+    <div class="input-group">
+      <input class="de-input jar-pol" id="pol-input-${uid}" type="number" placeholder="0" oninput="calcJarRowDosing('${uid}', 'pol')">
+      <span class="group-unit">mg</span>
+    </div>
+
+    <div class="input-group" style="position:relative">
+      <input class="de-input jar-doz-pol" id="doz-pol-${uid}" readonly style="padding-right:45px;" placeholder="0">
+      <button onclick="toggleJarRowMode('${uid}', 'pol')" id="btn-pol-${uid}" data-mode="auto" style="position:absolute; right:46px; top:50%; transform:translateY(-50%); font-size:8px; padding:3px 6px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:4px; cursor:pointer; font-weight:700;">AUTO</button>
+      <span class="group-unit">ppm</span>
     </div>
     
     <button onclick="document.getElementById('jar-row-${uid}').remove()" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px;">✕</button>
@@ -1781,9 +2099,8 @@ function addJarTestRow() {
 }
 window.addJarTestRow = addJarTestRow;
 
-// 2. Fungsi Hitung Otomatis Real-time
+// 2. Fungsi Hitung Otomatis Real-time (Anti Ngebug)
 function calcJarRowDosing(uid, type) {
-  // Ambil nilai secara presisi menggunakan ID kotak input
   const inputEl = document.getElementById(type + '-input-' + uid);
   if (!inputEl) return;
   
@@ -1791,15 +2108,14 @@ function calcJarRowDosing(uid, type) {
   const dozEl = document.getElementById('doz-' + type + '-' + uid);
   const btn = document.getElementById('btn-' + type + '-' + uid);
   
-  // Jika tombol statusnya AUTO, jalankan rumus
   if (dozEl && btn && btn.getAttribute('data-mode') === 'auto') {
-    // Rumus: mg * 2
+    // Rumus: mg * 2 (Sesuai volume sampel 500ml)
     dozEl.value = inputVal > 0 ? (inputVal * 2).toFixed(2) : '';
   }
 }
 window.calcJarRowDosing = calcJarRowDosing;
 
-// 3. Fungsi Switch AUTO/MANUAL
+// 3. Fungsi Switch AUTO/MANUAL (Dengan support CSS global)
 function toggleJarRowMode(uid, type) {
   const el = document.getElementById('doz-' + type + '-' + uid);
   const btn = document.getElementById('btn-' + type + '-' + uid);
@@ -1808,13 +2124,22 @@ function toggleJarRowMode(uid, type) {
   const isAuto = btn.getAttribute('data-mode') === 'auto';
   
   if (isAuto) {
+    // Pindah ke Manual
     btn.setAttribute('data-mode', 'manual');
-    el.readOnly = false; el.style.background = 'white'; btn.textContent = 'MAN';
-    btn.style.color = 'var(--orange)'; btn.style.borderColor = 'var(--orange)';
+    el.removeAttribute('readonly'); // Lepas efek biru readonly
+    btn.textContent = 'MAN';
+    btn.style.color = 'var(--orange)'; 
+    btn.style.borderColor = 'var(--orange)';
+    btn.style.background = '#fffbeb';
   } else {
+    // Pindah ke Auto
     btn.setAttribute('data-mode', 'auto');
-    el.readOnly = true; el.style.background = '#f3f4f6'; btn.textContent = 'AUTO';
-    btn.style.color = 'var(--blue)'; btn.style.borderColor = 'var(--blue)';
+    el.setAttribute('readonly', 'true'); // Kembalikan efek biru readonly
+    btn.textContent = 'AUTO';
+    btn.style.color = 'var(--blue)'; 
+    btn.style.borderColor = 'var(--blue)';
+    btn.style.background = '#ebf2fd';
+    
     // Langsung hitung ulang saat dikembalikan ke AUTO
     calcJarRowDosing(uid, type);
   }
@@ -1847,6 +2172,7 @@ window.resetJarModalInputs = resetJarModalInputs;
 // ─── FUNGSI SUBMIT & TUTUP JAR TEST (ANTI-FREEZE) ───────────────
 
 function submitJarTestModal() {
+  if (!confirm('Apakah Anda yakin ingin menyimpan semua baris Jar Test ini?')) return;
   const projIdx = document.getElementById('jar-proj-sel').value;
   const date = document.getElementById('jar-date').value;
   const rows = document.querySelectorAll('.jar-data-row');
@@ -1962,43 +2288,76 @@ function getDataEntryUtility(key,title,sub,icon){return`<div class="de-wrap">
 </div>`;}
 
 function utilSwitchType(key, type) {
-  const harianSub = document.getElementById('util-harian-sub-'+key);
-  const projSub   = document.getElementById('util-project-sub-'+key);
-  const tabH      = document.getElementById('util-tab-harian');
-  const tabP      = document.getElementById('util-tab-project');
-  const area      = document.getElementById('util-form-area-'+key);
-  if (!harianSub || !projSub) return;
+  const harianSub = document.getElementById('util-harian-sub-' + key);
+  const projectSub = document.getElementById('util-project-sub-' + key);
+  const area = document.getElementById('util-form-area-' + key);
+  
+  // Ambil elemen label berdasarkan ID asli yang ada di HTML
+  const tabH = document.getElementById('util-tab-harian');
+  const tabP = document.getElementById('util-tab-project');
+  
+  if (!harianSub || !projectSub || !area) return;
 
+  // 1. Ganti warna / background tombol saat diklik
+  if (tabH && tabP) {
+    // Reset warna ke putih/abu-abu (Non-aktif)
+    tabH.style.borderColor = 'var(--border)';
+    tabH.style.background = 'var(--bg)';
+    tabH.style.color = '#111';
+    
+    tabP.style.borderColor = 'var(--border)';
+    tabP.style.background = 'var(--bg)';
+    tabP.style.color = '#111';
+    
+    // Warnai Biru tombol yang aktif
+    if (type === 'harian') {
+      tabH.style.borderColor = 'var(--blue)';
+      tabH.style.background = '#ebf2fd';
+      tabH.style.color = 'var(--blue)';
+    } else {
+      tabP.style.borderColor = 'var(--blue)';
+      tabP.style.background = '#ebf2fd';
+      tabP.style.color = 'var(--blue)';
+    }
+  }
+
+  // 2. Bersihkan form lama agar tidak bertumpuk
+  area.innerHTML = ''; 
+
+  // 3. Tampilkan dropdown sesuai tipe
   if (type === 'harian') {
-    harianSub.style.display = '';
-    projSub.style.display = 'none';
-    tabH.style.borderColor = 'var(--blue)'; tabH.style.background = '#ebf2fd';
-    tabP.style.borderColor = 'var(--border)'; tabP.style.background = 'var(--bg)';
-    // Reset sub dropdowns
-    document.getElementById('util-harian-cat-'+key).value = '';
-    if (area) area.innerHTML = '';
+    harianSub.style.display = 'block';
+    projectSub.style.display = 'none';
+    
+    // Render otomatis jika kategori harian sudah ada isinya
+    const cat = document.getElementById('util-harian-cat-' + key).value;
+    if (cat) utilRenderHarian(key, cat);
+    
   } else {
     harianSub.style.display = 'none';
-    projSub.style.display = '';
-    tabH.style.borderColor = 'var(--border)'; tabH.style.background = 'var(--bg)';
-    tabP.style.borderColor = 'var(--blue)'; tabP.style.background = '#ebf2fd';
-    // Populate ongoing projects — filter berdasarkan role
-    const sel         = document.getElementById('util-project-cat-'+key);
-    const currentRole = localStorage.getItem('role') || 'utility';
-    const isAdmin     = ['admin','superadmin'].includes(currentRole);
-    const allProjs    = gPJ('ongoing');
-    const projs       = isAdmin ? allProjs : allProjs.filter(p => {
-      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
-      return p.allowed_roles.includes(currentRole);
-    });
-    sel.innerHTML = '<option value="">-- Pilih project --</option>';
-    projs.forEach(p => {
-      const realIdx = allProjs.indexOf(p);
-      const opt = document.createElement('option');
-      opt.value = realIdx; opt.textContent = p.name;
-      sel.appendChild(opt);
-    });
-    if (area) area.innerHTML = '';
+    projectSub.style.display = 'block';
+    
+    // Muat daftar project Ongoing ke dropdown Project
+    const projSel = document.getElementById('util-project-cat-' + key);
+    if (projSel) {
+      const currentRole = localStorage.getItem('role') || 'utility';
+      const isAdmin     = ['admin','superadmin'].includes(currentRole);
+      const allProjs    = gPJ('ongoing');
+      const projs       = isAdmin ? allProjs : allProjs.filter(p => {
+        if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+        return p.allowed_roles.includes(currentRole);
+      });
+      projSel.innerHTML = '<option value="">-- Pilih project --</option>';
+      projs.forEach(p => {
+        const realIdx = allProjs.indexOf(p);
+        const opt = document.createElement('option');
+        opt.value = realIdx; opt.textContent = p.name;
+        projSel.appendChild(opt);
+      });
+      
+      // Render jika sebelumnya sudah ada project yang dipilih
+      if (projSel.value !== '') utilRenderProject(key, projSel.value);
+    }
   }
 }
 window.utilSwitchType = utilSwitchType;
@@ -2107,7 +2466,7 @@ function utilCalcTotal(uid) {
     if (strAwal !== '' || strAkhir !== '') {
       // Jika kategori adalah Solar ATAU khusus Air Baku saja
       // Rumus: AWAL - AKHIR
-      if (uid.includes('solar') || uid.includes('air_baku')) {
+      if (uid.includes('solar') || uid.includes('air_proses') || uid.includes('air_sibel')) {
         t.value = (a - b).toFixed(2);
       } 
       // Jika kategori Listrik, Air Proses (Feed Slurry), atau Air Sibel (Steam Gen)
@@ -2134,6 +2493,7 @@ function utilResetHarian(uid) {
 window.utilResetHarian = utilResetHarian;
 
 function utilSaveHarian(uid, cat) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Utility Harian ini?')) return;
   // ── Collect all harian form fields and save to localStorage ──
   const formArea = document.getElementById('util-form-area-utility');
   const data = {};
@@ -2176,10 +2536,37 @@ function _utilProjField(uid, rowId, label, type='number', unit='') {
     </tr>`;
 }
 
+// 1. Fungsi untuk berpindah tab Boiler / Chiller
+function utilSwitchTab(uid, tab) {
+  const tabBoiler = document.getElementById('util-'+uid+'-tab-boiler');
+  const tabChiller = document.getElementById('util-'+uid+'-tab-chiller');
+  const formBoiler = document.getElementById('util-'+uid+'-form-boiler');
+  const formChiller = document.getElementById('util-'+uid+'-form-chiller');
+  
+  if (!tabBoiler || !tabChiller || !formBoiler || !formChiller) return;
+  
+  if (tab === 'boiler') {
+    formBoiler.style.display = 'block';
+    formChiller.style.display = 'none';
+    tabBoiler.style.borderBottomColor = 'var(--blue)';
+    tabBoiler.style.color = '#111';
+    tabChiller.style.borderBottomColor = 'transparent';
+    tabChiller.style.color = '#666';
+  } else {
+    formBoiler.style.display = 'none';
+    formChiller.style.display = 'block';
+    tabBoiler.style.borderBottomColor = 'transparent';
+    tabBoiler.style.color = '#666';
+    tabChiller.style.borderBottomColor = 'var(--blue)';
+    tabChiller.style.color = '#111';
+  }
+}
+window.utilSwitchTab = utilSwitchTab;
+
+// 2. Render Project Form (Tampilan Tab Terpisah)
 function utilRenderProject(key, idx) {
   const area = document.getElementById('util-form-area-'+key);
   if (!area) return;
-  // Form kosong sebelum pilih project
   if (idx === '') { area.innerHTML = ''; return; }
   const proj = gPJ('ongoing')[+idx];
   if (!proj) { area.innerHTML = ''; return; }
@@ -2197,158 +2584,66 @@ function utilRenderProject(key, idx) {
         </div>
       </div>
 
-      <!-- Grid Container 2-Kolom (Kanan-Kiri) -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
-        <!-- Kolom Kiri: Boiler Fields -->
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#111;margin:0 0 14px;display:flex;align-items:center;gap:8px;">🔥 Boiler</div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Steam Press</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b1', prevData.b1, 'kPa')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Flue gass temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b2', prevData.b2, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Feed water temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b3', prevData.b3, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Scale monitor temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b4', prevData.b4, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Overheat sensor temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b5', prevData.b5, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">To Next Blowdown</label>
-            ${makeInputField('util-'+uid+'-b6', prevData.b6, 'text')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Conductivity</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'µS/cm')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Air pressure</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'bar')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Ignition count</label>
-            ${makeNumberInput('util-'+uid+'-b9')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Oil L-fire time</label>
-            ${makeInputField('util-'+uid+'-b10', prevData.b10, 'text')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Oil H-fire time</label>
-            ${makeInputField('util-'+uid+'-b11', prevData.b11, 'text')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Fuel Gas Temp (L-fire)</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b12', prevData.b12, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Fuel Gas Temp (H-fire)</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b13', prevData.b13, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Feed Water Avg Temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b14', prevData.b14, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Oil B-Efficiency</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b15', prevData.b15, '%')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#7e1818;background:#FFD1D1;padding:8px 12px;border-radius:6px;font-weight:600;display:inline-block;">O Fuel Consumption</label>
-            ${makeNumberInput('util-'+uid+'-b16')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Steam output</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b17', prevData.b17, 'kg/h')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Surface blowdown</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-b18', prevData.b18, 'L')}
-          </div>
-        </div>
-
-        <!-- Kolom Kanan: Chiller Fields -->
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#111;margin:0 0 14px;display:flex;align-items:center;gap:8px;">❄️ Chiller</div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Set Point</label>
-            ${makeNumberInput('util-'+uid+'-c1', prevData.c1)}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Water in temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-c2', prevData.c2, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Water out temperature</label>
-            ${makeNumberInputWithUnit('util-'+uid+'-c3', prevData.c3, '°C')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">CAP</label>
-            ${makeNumberInput('util-'+uid+'-c4')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Discharge Pressure A</label>
-            ${makeNumberInput('util-'+uid+'-c5')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Main Suction A</label>
-            ${makeNumberInput('util-'+uid+'-c6')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Discharge Pressure B</label>
-            ${makeNumberInput('util-'+uid+'-c7')}
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Main Suction B</label>
-            ${makeNumberInput('util-'+uid+'-c8')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Unit Total Capacity</label>
-            ${makeNumberInput('util-'+uid+'-c9')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Cir A Capacity</label>
-            ${makeNumberInput('util-'+uid+'-c10')}
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">Cir B Capacity</label>
-            ${makeNumberInput('util-'+uid+'-c11')}
-          </div>
-          <div class="de-field" style="margin-top:8px;">
-            <label class="de-label" style="color:#111;">Catatan Chiller</label>
-            ${makeTextareaField('util-'+uid+'-cnotes', prevData.cnotes)}
-          </div>
-        </div>
-      </div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);">
+        <button id="util-${uid}-tab-boiler" class="de-btn" type="button" style="padding:12px 24px;font-size:13px;font-weight:600;background:transparent;border:none;border-bottom:3px solid var(--blue);cursor:pointer;color:#111;transition:all .2s;" 
+          onclick="utilSwitchTab('${uid}','boiler')">🔥 BOILER</button>
+        <button id="util-${uid}-tab-chiller" class="de-btn" type="button" style="padding:12px 24px;font-size:13px;font-weight:600;background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;color:#666;transition:all .2s;" 
+          onclick="utilSwitchTab('${uid}','chiller')">❄️ CHILLER</button>
       </div>
 
-      <!-- NOTES & FOTO di paling bawah (Full Width) -->
-      <div class="de-grid" style="margin-bottom:18px;">
-        <div class="de-field de-full">
-          <label class="de-label" style="color:#111;">Catatan Boiler</label>
-          ${makeTextareaField('util-'+uid+'-notes', prevData.notes)}
+      <div id="util-${uid}-form-boiler" style="display:block;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Steam Press</label>${makeNumberInputWithUnit('util-'+uid+'-b1', prevData.b1, 'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Flue gass temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b2', prevData.b2, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Feed water temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b3', prevData.b3, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Scale monitor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b4', prevData.b4, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Overheat sensor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b5', prevData.b5, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">To Next Blowdown</label>${makeInputField('util-'+uid+'-b6', prevData.b6, 'text')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Conductivity</label>${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'µS/cm')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Air pressure</label>${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'bar')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Ignition count</label>${makeNumberInput('util-'+uid+'-b9', prevData.b9)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Oil L-fire time</label>${makeInputField('util-'+uid+'-b10', prevData.b10, 'text')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Oil H-fire time</label>${makeInputField('util-'+uid+'-b11', prevData.b11, 'text')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Fuel Gas Temp (L-fire)</label>${makeNumberInputWithUnit('util-'+uid+'-b12', prevData.b12, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Fuel Gas Temp (H-fire)</label>${makeNumberInputWithUnit('util-'+uid+'-b13', prevData.b13, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Feed Water Avg Temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b14', prevData.b14, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Oil B-Efficiency</label>${makeNumberInputWithUnit('util-'+uid+'-b15', prevData.b15, '%')}</div>
+          <div class="de-field"><label class="de-label" style="color:#7e1818;background:#FFD1D1;padding:8px 12px;border-radius:6px;font-weight:600;display:inline-block;">O Fuel Consumption</label>${makeNumberInputWithUnit('util-'+uid+'-b16', prevData.b16, 'KG/h')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Steam output</label>${makeNumberInputWithUnit('util-'+uid+'-b17', prevData.b17, 'kg/h')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Surface blowdown</label>${makeNumberInputWithUnit('util-'+uid+'-b18', prevData.b18, 'L')}</div>
+          <div class="de-field" style="grid-column: 1 / -1;"><label class="de-label" style="color:#111;">Catatan Boiler</label>${makeTextareaField('util-'+uid+'-notes', prevData.notes)}</div>
         </div>
       </div>
 
-      ${buildPhotoUpload(uid)}
+      <div id="util-${uid}-form-chiller" style="display:none;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Set Point</label>${makeNumberInput('util-'+uid+'-c1', prevData.c1)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Water in temperature</label>${makeNumberInputWithUnit('util-'+uid+'-c2', prevData.c2, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Water out temperature</label>${makeNumberInputWithUnit('util-'+uid+'-c3', prevData.c3, '°C')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">CAP</label>${makeNumberInput('util-'+uid+'-c4', prevData.c4)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure A</label>${makeNumberInput('util-'+uid+'-c5', prevData.c5)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction A</label>${makeNumberInput('util-'+uid+'-c6', prevData.c6)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure B</label>${makeNumberInput('util-'+uid+'-c7', prevData.c7)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction B</label>${makeNumberInput('util-'+uid+'-c8', prevData.c8)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Unit Total Capacity</label>${makeNumberInput('util-'+uid+'-c9', prevData.c9)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Cir A Capacity</label>${makeNumberInput('util-'+uid+'-c10', prevData.c10)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Cir B Capacity</label>${makeNumberInput('util-'+uid+'-c11', prevData.c11)}</div>
+          <div class="de-field" style="grid-column: 1 / -1;"><label class="de-label" style="color:#111;">Catatan Chiller</label>${makeTextareaField('util-'+uid+'-cnotes', prevData.cnotes)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 20px;">
+        ${buildPhotoUpload(uid)}
+      </div>
 
       <div class="de-status-bar" id="util-${uid}-sb" style="display:none"><span id="util-${uid}-sm"></span></div>
       <div class="de-actions">
-        <button class="de-btn de-btn-ghost" onclick="utilResetProj('${uid}',11)">🔄 Reset</button>
+        <button class="de-btn de-btn-ghost" onclick="utilResetProj('${uid}')">🔄 Reset</button>
         <button class="de-btn de-btn-primary" onclick="utilSaveProject('${uid}','${proj.name.replace(/'/g,"\\'")}')">💾 Simpan</button>
       </div>
     </div>`;
 }
 window.utilRenderProject = utilRenderProject;
-
 // ── Reset Form Utility ──────────────────────────────────────
 function utilResetProj(uid, count) {
   // Reset Boiler fields (b1-b18)
@@ -2369,52 +2664,35 @@ function utilResetProj(uid, count) {
 }
 window.utilResetProj = utilResetProj;
 
-// ── Simpan Data Utility (Project) ───────────────────────────
 function utilSaveProject(uid, projName) {
-  // Extract project index from uid (uid format: utility_proj_0)
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Utility Project ini?')) return;
   const projIdx = +uid.split('_').pop();
   const projs = gPJ('ongoing');
   const proj = projs[projIdx];
   if (!proj) return;
   
-  // Load previous entry data for fallback
   const prevData = proj.utilityData?.[uid] || {};
-  
-  // Collect all form field values
   const formData = {};
   
-  // Boiler fields (b1-b18)
+  // Tangkap nilai Boiler (b1-b18) sesuai ketikan user (termasuk nol)
   for (let i = 1; i <= 18; i++) {
-    let val = document.getElementById('util-'+uid+'-b'+i)?.value || '';
-    if (!val || val === '0') {
-      val = prevData['b' + i] || '';
-    }
-    formData['b' + i] = val;
+    const el = document.getElementById('util-'+uid+'-b'+i);
+    formData['b' + i] = el ? el.value : '';
   }
   
-  // Chiller fields (c1-c11)
+  // Tangkap nilai Chiller (c1-c11)
   for (let i = 1; i <= 11; i++) {
-    let val = document.getElementById('util-'+uid+'-c'+i)?.value || '';
-    if (!val || val === '0') {
-      val = prevData['c' + i] || '';
-    }
-    formData['c' + i] = val;
+    const el = document.getElementById('util-'+uid+'-c'+i);
+    formData['c' + i] = el ? el.value : '';
   }
   
-  // Tangkap Catatan Boiler
-  let notes = document.getElementById('util-'+uid+'-notes')?.value || '';
-  if (!notes) notes = prevData.notes || '';
-  formData.notes = notes;
-
-  // Tangkap Catatan Chiller (cnotes)
-  let cnotes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
-  if (!cnotes) cnotes = prevData.cnotes || '';
-  formData.cnotes = cnotes;
+  // Tangkap Catatan
+  formData.notes = document.getElementById('util-'+uid+'-notes')?.value || '';
+  formData.cnotes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
   
-  // Initialize utilityData if doesn't exist
   if (!proj.utilityData) proj.utilityData = {};
 
-  // ── Record utility history with old→new values ──────
+  // Record history
   const utilHistFields = [];
   const boilerLabels = {b1:'Steam Press (kPa)',b2:'Flue Gass Temperature (°C)',b3:'Feed Water Temperature (°C)',b4:'Scale Monitor Temperature (°C)',b5:'Overheat Sensor Temperature (°C)',b6:'To Next Blowdown',b7:'Conductivity (µS/cm)',b8:'Air Pressure (bar)',b9:'Ignition Count',b10:'Oil L-fire Time',b11:'Oil H-fire Time',b12:'Fuel Gas Temp (L-fire) (°C)',b13:'Fuel Gas Temp (H-fire) (°C)',b14:'Feed Water Avg Temperature (°C)',b15:'Oil B-Efficiency (%)',b16:'Oil Fuel Consumption',b17:'Steam Output (kg/h)',b18:'Surface Blowdown (L)'};
   const chillerLabels = {c1:'Set Point',c2:'Water In Temperature (°C)',c3:'Water Out Temperature (°C)',c4:'CAP',c5:'Discharge A',c6:'Suction A',c7:'Discharge B',c8:'Suction B',c9:'Unit Capacity',c10:'Cir A Capacity',c11:'Cir B Capacity'};
@@ -2425,17 +2703,13 @@ function utilSaveProject(uid, projName) {
     if (newVal || oldVal) utilHistFields.push({ label: lbl, oldVal, newVal });
   });
 
-  // PISAHKAN CATATAN KE DALAM TABEL HISTORY
-  if (notes || prevData.notes) utilHistFields.push({ label: 'Catatan Boiler', oldVal: prevData.notes||'', newVal: notes||'' });
-  if (cnotes || prevData.cnotes) utilHistFields.push({ label: 'Catatan Chiller', oldVal: prevData.cnotes||'', newVal: cnotes||'' });
+  if (formData.notes || prevData.notes) utilHistFields.push({ label: 'Catatan Boiler', oldVal: prevData.notes||'', newVal: formData.notes });
+  if (formData.cnotes || prevData.cnotes) utilHistFields.push({ label: 'Catatan Chiller', oldVal: prevData.cnotes||'', newVal: formData.cnotes });
 
   if (!proj.utilityHistory) proj.utilityHistory = [];
   proj.utilityHistory.push({ saved_at: new Date().toISOString(), uid, fields: utilHistFields });
 
-  // Save form data for this uid
   proj.utilityData[uid] = formData;
-  
-  // Save back to localStorage
   sPJ('ongoing', projs);
   
   const b = document.getElementById('util-'+uid+'-sb');
@@ -2448,28 +2722,27 @@ function utilSaveProject(uid, projName) {
 }
 window.utilSaveProject = utilSaveProject;
 
-function getDataEntryLaboratorium(key,title,sub,icon){return`<div class="de-wrap">
+// ── 1. FUNGSI PEMBUAT FORM LAB UTAMA ──
+function getDataEntryLaboratorium(key, title, sub, icon) {
+  return `<div class="de-wrap">
   <div class="de-header"><div><div class="de-title">${title}</div><div class="de-sub">${sub}</div></div></div>
   <div class="de-card">
     <div class="de-card-title"><span class="de-card-ico">${icon}</span> ${title}</div>
 
-    <!-- Tab Harian / Project -->
     <div style="margin-bottom:20px;">
       <label class="de-label" style="color:#111;">TIPE ENTRY</label>
-      <div style="display:flex;gap:10px;margin-top:6px;">
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--blue);border-radius:10px;cursor:pointer;background:#ebf2fd;flex:1;justify-content:center;" id="lab-tab-harian-${key}" onclick="labSwitchType('${key}','harian')">
-          <input type="radio" name="${key}-lab-type" value="harian" checked style="accent-color:var(--blue);">
-          <span style="font-size:13px;font-weight:700;color:#111;">📅 Harian</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;padding:10px 18px;border:2px solid var(--border);border-radius:10px;cursor:pointer;background:var(--bg);flex:1;justify-content:center;" id="lab-tab-project-${key}" onclick="labSwitchType('${key}','project')">
-          <input type="radio" name="${key}-lab-type" value="project" style="accent-color:var(--blue);">
-          <span style="font-size:13px;font-weight:700;color:#111;">📋 Project</span>
-        </label>
+      <div style="display:flex; gap:10px; margin-top:6px;">
+        <button type="button" id="lab-tab-harian-${key}" class="de-btn" style="flex:1; cursor:pointer; padding:12px; border:2px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:10px; display:flex; align-items:center; justify-content:center; gap:8px; transition:0.2s; font-weight:700; font-size:13px;" onclick="labSwitchType('${key}', 'harian')">
+          📅 Harian
+        </button>
+        
+        <button type="button" id="lab-tab-project-${key}" class="de-btn" style="flex:1; cursor:pointer; padding:12px; border:2px solid var(--border); background:var(--bg); color:#111; border-radius:10px; display:flex; align-items:center; justify-content:center; gap:8px; transition:0.2s; font-weight:700; font-size:13px;" onclick="labSwitchType('${key}', 'project')">
+          📋 Project
+        </button>
       </div>
     </div>
 
-    <!-- HARIAN: Analisa Air -->
-    <div id="lab-harian-area-${key}">
+    <div id="lab-harian-sub-${key}">
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;">
         <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:16px;">🧪 Analisa Air — Entry Harian</div>
         <div class="de-grid">
@@ -2483,15 +2756,15 @@ function getDataEntryLaboratorium(key,title,sub,icon){return`<div class="de-wrap
           </div>
           <div class="de-field">
             <label class="de-label" style="color:#111;">TDS</label>
-            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-tds" placeholder="—">
+            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-tds" placeholder="—"><span class="group-unit">mg/L</span></div>
           </div>
           <div class="de-field">
             <label class="de-label" style="color:#111;">HARDNESS</label>
-            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-hardness" placeholder="—">
+            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-hardness" placeholder="—"><span class="group-unit">mg/L</span></div>
           </div>
           <div class="de-field">
             <label class="de-label" style="color:#111;">ALKALI</label>
-            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-alkali" placeholder="—">
+            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-alkali" placeholder="—"><span class="group-unit">mg/L</span></div>
           </div>
           <div class="de-field de-full">
             <label class="de-label" style="color:#111;">NOTES</label>
@@ -2506,8 +2779,7 @@ function getDataEntryLaboratorium(key,title,sub,icon){return`<div class="de-wrap
       </div>
     </div>
 
-    <!-- PROJECT: CIP Lab + Brix -->
-    <div id="lab-project-area-${key}" style="display:none;">
+    <div id="lab-project-sub-${key}" style="display:none;">
       <div style="margin-bottom:16px;">
         <label class="de-label" style="color:#111;">PILIH ONGOING PROJECT</label>
         <select class="de-input de-select" id="lab-proj-sel-${key}" onchange="labRenderProject('${key}')" style="margin-top:6px;">
@@ -2516,62 +2788,80 @@ function getDataEntryLaboratorium(key,title,sub,icon){return`<div class="de-wrap
       </div>
       <div id="lab-proj-form-${key}"></div>
     </div>
+
   </div>
-</div>`;}
-function onLabProjChange(key) {
-  const sel  = document.getElementById('lab-proj-sel-' + key);
-  const form = document.getElementById('lab-proj-form-' + key);
-  if (!sel || !form) return;
-  const idx  = sel.value;
-  if (idx === '') { form.innerHTML = ''; return; }
-  const proj = gPJ('ongoing')[+idx];
-  if (!proj) return;
-  labRenderProject(key);
+</div>`;
 }
-window.onLabProjChange = onLabProjChange;
+window.getDataEntryLaboratorium = getDataEntryLaboratorium;
 
-// ── pill: update status indicator element ─────────────────
-function pill(id, val, warn, danger) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const v = parseFloat(val);
-  if (isNaN(v)) { el.className = 'st-wait'; return; }
-  if (v >= danger)     el.className = 's-pill st-danger';
-  else if (v >= warn)  el.className = 's-pill st-warn';
-  else                 el.className = 's-pill st-ok';
-}
 
+// ── 2. FUNGSI SWITCH TIPE LAB (Anti Ngebug) ──
 function labSwitchType(key, type) {
-  const harianArea = document.getElementById('lab-harian-area-'+key);
-  const projArea   = document.getElementById('lab-project-area-'+key);
-  const tabH = document.getElementById('lab-tab-harian-'+key);
-  const tabP = document.getElementById('lab-tab-project-'+key);
+  const harianSub = document.getElementById('lab-harian-sub-' + key);
+  const projectSub = document.getElementById('lab-project-sub-' + key);
+  
+  // Ambil elemen tombol dengan ID yang presisi
+  const tabH = document.getElementById('lab-tab-harian-' + key);
+  const tabP = document.getElementById('lab-tab-project-' + key);
+  
+  if (!harianSub || !projectSub) return;
+
+  // 1. Ubah warna tombol saat diklik
+  if (tabH && tabP) {
+    // Reset warna ke putih/abu-abu (Non-aktif)
+    tabH.style.borderColor = 'var(--border)';
+    tabH.style.background = 'var(--bg)';
+    tabH.style.color = '#111';
+    
+    tabP.style.borderColor = 'var(--border)';
+    tabP.style.background = 'var(--bg)';
+    tabP.style.color = '#111';
+    
+    // Warnai Biru tombol yang aktif
+    if (type === 'harian') {
+      tabH.style.borderColor = 'var(--blue)';
+      tabH.style.background = '#ebf2fd';
+      tabH.style.color = 'var(--blue)';
+    } else {
+      tabP.style.borderColor = 'var(--blue)';
+      tabP.style.background = '#ebf2fd';
+      tabP.style.color = 'var(--blue)';
+    }
+  }
+
+  // 2. Tampilkan area yang sesuai
   if (type === 'harian') {
-    harianArea.style.display = '';
-    projArea.style.display = 'none';
-    tabH.style.borderColor = 'var(--blue)'; tabH.style.background = '#ebf2fd';
-    tabP.style.borderColor = 'var(--border)'; tabP.style.background = 'var(--bg)';
+    harianSub.style.display = 'block';
+    projectSub.style.display = 'none';
   } else {
-    harianArea.style.display = 'none';
-    projArea.style.display = '';
-    tabH.style.borderColor = 'var(--border)'; tabH.style.background = 'var(--bg)';
-    tabP.style.borderColor = 'var(--blue)'; tabP.style.background = '#ebf2fd';
-    const sel         = document.getElementById('lab-proj-sel-'+key);
-    const currentRole = localStorage.getItem('role') || 'scientist';
-    const isAdmin     = ['admin','superadmin'].includes(currentRole);
-    const allProjs    = gPJ('ongoing');
-    const projs       = isAdmin ? allProjs : allProjs.filter(p => {
-      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
-      return p.allowed_roles.includes(currentRole);
-    });
-    sel.innerHTML = '<option value="">-- Pilih project --</option>';
-    projs.forEach(p => {
-      const realIdx = allProjs.indexOf(p);
-      const o = document.createElement('option');
-      o.value = realIdx; o.textContent = p.name;
-      sel.appendChild(o);
-    });
-    document.getElementById('lab-proj-form-'+key).innerHTML = '';
+    harianSub.style.display = 'none';
+    projectSub.style.display = 'block';
+    
+    // Muat daftar project ke dropdown Project
+    const projSel = document.getElementById('lab-proj-sel-' + key);
+    if (projSel) {
+      const currentRole = localStorage.getItem('role') || 'scientist';
+      const isAdmin     = ['admin','superadmin'].includes(currentRole);
+      const allProjs    = gPJ('ongoing');
+      const projs = isAdmin ? allProjs : allProjs.filter(p => {
+  // Jika role adalah scientist atau utility, izinkan melihat semua project ongoing
+     if (currentRole === 'scientist' || currentRole === 'utility') return true; 
+     if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+     return p.allowed_roles.includes(currentRole);
+     });
+      projSel.innerHTML = '<option value="">-- Pilih project --</option>';
+      projs.forEach(p => {
+        const realIdx = allProjs.indexOf(p);
+        const o = document.createElement('option');
+        o.value = realIdx; o.textContent = p.name;
+        projSel.appendChild(o);
+      });
+      
+      // Jika project sudah pernah dipilih, tampilkan langsung form-nya
+      if (projSel.value !== '' && typeof labRenderProject === 'function') {
+        labRenderProject(key);
+      }
+    }
   }
 }
 window.labSwitchType = labSwitchType;
@@ -2585,28 +2875,19 @@ window.labSwitchType = labSwitchType;
 // ─────────────────────────────────────────────────
 
 // Helper untuk membuat input number field dengan unit
-function makeNumberInputWithUnit(id, value, unit='') {
-  const hasValue = value && value !== '';
-  const style = hasValue ? 'color:#999;' : '';
-  const prevValue = value || '';
-  const input = `<input class="de-input" type="number" step="0.01" id="${id}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}"
-    onfocus="
-      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
-        this.value='';
-        this.style.color='#111';
-      }
-    "
-    onblur="
-      if(!this.value && this.dataset.prevValue){
-        this.value=this.dataset.prevValue;
-        this.style.color='#999';
-      } else if(this.value) {
-        this.style.color='#111';
-      }
-    "
-  >`;
-  return `<div class="de-input-wrap">${input}<span class="de-input-unit">${unit}</span></div>`;
+function makeNumberInputWithUnit(id, val, unit) {
+  const v = (val !== undefined && val !== null) ? val : '';
+  // Jika tidak ada satuan, render input biasa
+  if (!unit) return `<input class="de-input" id="${id}" type="number" step="any" value="${v}" placeholder="0">`;
+  
+  // Jika ada satuan, render menggunakan gaya menempel
+  return `
+  <div class="input-group">
+    <input class="de-input" id="${id}" type="number" step="any" value="${v}" placeholder="0">
+    <span class="group-unit">${unit}</span>
+  </div>`;
 }
+window.makeNumberInputWithUnit = makeNumberInputWithUnit;
 
 // Helper untuk membuat input text field dengan styling dari nilai sebelumnya
 function makeNumberInput(id, value, placeholder='—') {
@@ -2981,6 +3262,7 @@ window.labResetProject = labResetProject;
 
 // ── Save Lab Form ────────────────────────────────────
 function labSaveProject(uid, projName) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Lab Project ini?')) return;
   const projIdx = +uid.split('_').pop();
   const projs = gPJ('ongoing');
   const proj = projs[projIdx];
@@ -3114,6 +3396,7 @@ window.labResetCIPEntries = labResetCIPEntries;
 
 // ── Save semua entry CIP ke project ─────────────────
 function labSaveCIPEntries(uid, key) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data CIP Lab ini?')) return;
   const container = document.getElementById(uid+'-cip-entries');
   if (!container) return;
 
@@ -3172,6 +3455,7 @@ function labResetHarian(key) {
 window.labResetHarian = labResetHarian;
 
 function labSaveHarian(key) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Lab Harian ini?')) return;
   // 1. Ambil semua nilai dari input form
   const sample = document.getElementById('lab-h-'+key+'-sample')?.value.trim();
   const ph = document.getElementById('lab-h-'+key+'-ph')?.value;
@@ -3321,50 +3605,20 @@ function resetLabAll(key) {
 }
 window.resetLabAll = resetLabAll;
 
-async function saveLabAll(key) {
-  const sb = document.getElementById(key + '-lab-sb');
-  const sm = document.getElementById(key + '-lab-sm');
-
-  const sel  = document.getElementById('dep-proj-sel-' + key);
-  const proj = sel && sel.value !== '' ? gPJ('ongoing')[+sel.value] : null;
-
-  const payload = {
-    project_name:   proj?.name || null,
-    boiler_notes:   document.getElementById(key + '-boiler-notes')?.value.trim() || '',
-    chiller_notes:  document.getElementById(key + '-chiller-notes')?.value.trim() || '',
-    notes:          '',
-    foto_urls:      window._photoData?.[key + '-chiller'] || [],
-    cip_lab_done:   proj?.cip_lab_done   || false,
-    cip_lab_checks: proj?.cip_lab_checks || {},
-  };
-  for (let i = 1; i <= 18; i++) payload['b' + i] = document.getElementById(key + '-b' + i)?.value || '';
-  for (let i = 1; i <= 18; i++) payload['c' + i] = document.getElementById(key + '-c' + i)?.value || '';
-
-  if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-loading'; sm.textContent='\u23F3 Menyimpan ke database...'; }
-
-  try {
-    const res  = await fetch('/api/dataentry/laboratorium', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(payload),
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'Gagal simpan');
-
-    if (sb && sm) {
-      sb.style.display='flex'; sb.className='de-status-bar de-status-success';
-      sm.textContent='\u2705 Boiler & Chiller tersimpan ke database! (' + (json.action||'saved') + ')';
-      setTimeout(() => { if (sb) sb.style.display = 'none'; }, 3000);
-    }
-  } catch (err) {
-    console.error('saveLabAll error:', err);
-    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='\u274C Gagal simpan: ' + err.message; }
+function saveLabAll(key) {
+  const sb = document.getElementById(key+'-lab-sb');
+  const sm = document.getElementById(key+'-lab-sm');
+  if (sb && sm) {
+    sb.style.display = 'flex'; sb.className = 'de-status-bar de-status-success';
+    sm.textContent = '✅ Boiler dan Chiller checklist tersimpan!';
+    setTimeout(() => { if (sb) sb.style.display = 'none'; }, 3000);
   }
 }
 window.saveLabAll = saveLabAll;
 
 
 // Fungsi dummy untuk mencegah reference error apabila ada event listener usang yang memanggil ini.
+window.onLabProjChange = function(key) {}; 
 
 function initDataEntryForm(key){
   // ── UTILITY ──────────────────────────────────────────────
@@ -3384,11 +3638,11 @@ function initDataEntryForm(key){
     if(area) area.innerHTML = '';
     return;
   }
-
   // ── LIMBAH ───────────────────────────────────────────────
   if(key === 'limbah'){
     const d = document.getElementById(key+'-date');
     if(d) d.value = new Date().toISOString().split('T')[0];
+    
     const psel = document.getElementById('limbah-proj-sel');
     if (psel) {
       const currentRole = localStorage.getItem('role') || 'limbah';
@@ -3405,7 +3659,10 @@ function initDataEntryForm(key){
         opt.value = realIdx; opt.textContent = p.name;
         psel.appendChild(opt);
       });
+      // Panggil fungsi toggle ini agar Awal & Akhir langsung sembunyi!
+      toggleLimbahVolumeMode(key); 
     }
+    
     if(window._deClock) clearInterval(window._deClock);
     window._deClock = setInterval(()=>{
       const el = document.getElementById('de-dt-'+key);
@@ -3430,8 +3687,6 @@ function initDataEntryForm(key){
   // ── PRODUCTION ───────────────────────────────────────────
   const sel = document.getElementById('dep-proj-sel-'+key);
   if(!sel) return;
-
-  // Muat project terbaru dari API dulu, lalu populate dropdown
   sel.innerHTML = '<option value="">⏳ Memuat project...</option>';
   sel.disabled = true;
 
@@ -3456,10 +3711,6 @@ function initDataEntryForm(key){
       sel.appendChild(opt);
     });
     sel.disabled = false;
-
-    if (visibleProjs.length === 0) {
-      sel.innerHTML = '<option value="">-- Belum ada project yang tersedia --</option>';
-    }
   }).catch(() => {
     sel.innerHTML = '<option value="">-- Gagal memuat project --</option>';
     sel.disabled = false;
@@ -3660,7 +3911,9 @@ function buildSetpointField(f, key, spVal) {
   const isCalc = f.calculated;
   // Jika ini adalah field kalkulasi otomatis, setting awal adalah AUTO (Terkunci)
   const calcAttrs = isCalc ? ' data-mode="auto" readonly style="background:#f3f4f6;color:var(--txt3);cursor:not-allowed;" title="Auto-calculated"' : '';
-  const inputAttrs = `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${spVal}" onfocus="this.classList.remove('sp-ghost');this.placeholder=''" onblur="if(this.value===''){this.classList.add('sp-ghost');this.placeholder='${spVal}';}${extraNote}" ${calcAttrs}`;
+  // Non-calculated fields: set value so DOM reads correctly for calculations and save
+  const valueAttr = (!isCalc && spVal !== '' && spVal !== undefined) ? ` value="${spVal}"` : '';
+  const inputAttrs = `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${spVal}"${valueAttr} onfocus="this.classList.remove('sp-ghost');this.placeholder=''" onblur="if(this.value===''){this.classList.add('sp-ghost');this.placeholder='${spVal}';}${extraNote}" ${calcAttrs}`;
 
   // Tombol Toggle Auto/Manual
   const autoTag = isCalc ? ` <button type="button" id="btn-mode-dep-${f.id}-${key}" onclick="toggleSPMode('dep-${f.id}-${key}', '${f.id}', '${key}')" style="margin-left:auto;font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid var(--blue);background:#ebf2fd;color:var(--blue);cursor:pointer;font-weight:700;transition:all 0.2s;">AUTO</button>` : '';
@@ -3770,8 +4023,15 @@ function setupSetpointCalculations(key) {
   ['sp-ext', 'sp-feed', 'sp-cond-rate', 'sp-temp-top', 'sp-offset'].forEach(triggerId => {
     const el = document.getElementById('dep-' + triggerId + '-' + key);
     if (!el) return;
+    // Pastikan value di DOM sudah terisi dari data tersimpan sebelum recalc
+    if ((el.value === '' || el.value === undefined) && sp[triggerId] !== undefined && sp[triggerId] !== '') {
+      el.value = sp[triggerId];
+    }
     el.addEventListener('input', () => recalcChain(key));
   });
+
+  // Recalc chain setelah semua trigger fields terisi
+  recalcChain(key);
 }
 
 function calculateSPModalField(fieldId, type) {
@@ -3877,18 +4137,9 @@ function renderSetpointPage(key, proj, page) {
   console.log('Rendering setpoint page for:', key, proj);
 
   const draft = window._spDrafts?.[key] || {};
-  // Ambil nilai dari production history terakhir (jika ada) sebagai referensi placeholder
-  // Ini supaya setelah save, placeholder menampilkan nilai yang baru diinput, bukan SP awal
-  const lastHistory = proj.productionHistory?.length
-    ? proj.productionHistory[proj.productionHistory.length - 1]
-    : null;
-  const lastValuesCache = lastHistory?.values || {};
-  // Baca juga dari localStorage (persist setelah page refresh)
-  const lsLastValues = (() => {
-    try { return JSON.parse(localStorage.getItem('dep_last_values_' + proj.name) || '{}'); }
-    catch(e) { return {}; }
-  })();
-  const sp = { ...(proj.setPoint || {}), ...lsLastValues, ...lastValuesCache, ...draft };
+  // setPoint dari cache (sudah di-map dbToApp), set_point dari raw DB response
+  // Draft paling prioritas (perubahan belum disimpan), lalu setPoint, lalu set_point
+  const sp = { ...(proj.setPoint || proj.set_point || {}), ...draft };
   const fields = SP_FIELDS; // Gunakan semua field dalam satu page
   const pageTitle = 'Set Point — All Fields';
 
@@ -3949,17 +4200,15 @@ window.goToSetpointPage2 = goToSetpointPage2;
 // LOAD DATA ENTRY PROJECT FORM - Refactored Version with Pagination
 // ═══════════════════════════════════════════════════════════
 
-async function loadDEProjForm(key) {
+function loadDEProjForm(key) {
   const sel = document.getElementById('dep-proj-sel-'+key);
   const wrap = document.getElementById('dep-form-'+key);
   if(!sel || !wrap) return;
   if(sel.value === '') { wrap.innerHTML = ''; return; }
 
-  // Reload dari DB supaya nilai selalu fresh
-  await loadPJ('ongoing');
-
+  // Ambil dari cache — kalau dipanggil setelah loadPJ, data sudah fresh
   const projs = gPJ('ongoing');
-  const proj = projs[+sel.value];
+  const proj  = projs[+sel.value];
   if(!proj) { wrap.innerHTML = ''; return; }
 
   // Store current project info in window for CIP modal
@@ -4018,7 +4267,10 @@ function resetDEP(key){
 
 function buildCIPChecklist(key, cipData) {
   const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
-  
+
+  // Support format baru (checks dengan key unik) dan lama
+  const checks = cipData?.checks || cipData?.cip_prod_checks || cipData?.cip_lab_checks || {};
+
   let checklistHTML = '';
   config.sections.forEach((section, sIdx) => {
     checklistHTML += `
@@ -4028,34 +4280,33 @@ function buildCIPChecklist(key, cipData) {
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;">
     `;
-    
+
     section.items.forEach((item, iIdx) => {
-      const checkId = `cip-check-${sIdx}-${iIdx}`;
-      const timeId = `cip-time-${sIdx}-${iIdx}`;
-      const isChecked = cipData?.checklist?.[checkId] || false;
-      const timestamp = cipData?.checklist?.[timeId] || '';
-      
+      const checkId  = `cip-check-${sIdx}-${iIdx}`;
+      const timeId   = `cip-time-${sIdx}-${iIdx}`;
+      // Key unik per section supaya "Rinsing Prod" di section berbeda tidak saling overwrite
+      const uniqueKey = `${sIdx}__${item}`;
+      const isChecked = checks[uniqueKey] || checks[item] || false;
+      const timestamp = cipData?.timestamps?.[uniqueKey] || '';
+
       checklistHTML += `
         <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
-          <input type="checkbox" id="${checkId}" ${isChecked ? 'checked' : ''} 
+          <input type="checkbox" id="${checkId}" data-key="${uniqueKey}" ${isChecked ? 'checked' : ''}
                  onchange="handleCIPCheckbox('${checkId}', '${timeId}')"
                  style="width:16px;height:16px;cursor:pointer;">
           <label for="${checkId}" style="font-size:13px;color:var(--txt2);cursor:pointer;user-select:none;">
             ${item}
           </label>
-          <span id="${timeId}" style="font-size:10px;color:var(--txt3);font-family:'DM Mono',monospace;min-width:120px;text-align:right;">
+          <span id="${timeId}" style="font-size:10px;color:var(--txt3);font-family:monospace;min-width:120px;text-align:right;">
             ${timestamp || '—'}
           </span>
         </div>
       `;
     });
-    
-    checklistHTML += `
-        </div>
-      </div>
-    `;
+
+    checklistHTML += `</div></div>`;
   });
-  
+
   return checklistHTML;
 }
 
@@ -4099,6 +4350,16 @@ window.handleCIPCheckbox = handleCIPCheckbox;
 window.buildCIPChecklist = buildCIPChecklist;
 window.buildCIPFields = buildCIPFields;
 
+function closeCIPModal() {
+  const overlay = document.getElementById('cip-modal-overlay');
+  if (overlay) overlay.remove();
+  const container = document.getElementById('cip-modal-container');
+  if (container) container.remove();
+  if (window._cipClockTimer) { clearInterval(window._cipClockTimer); window._cipClockTimer = null; }
+  window._currentCIPKey = null;
+  document.body.style.overflow = '';
+}
+
 function openCIPModal(key) {
   console.log('🔍 openCIPModal called with key:', key);
   try {
@@ -4123,7 +4384,10 @@ function openCIPModal(key) {
       return;
     }
 
-    const cipData = key === 'production' ? proj.cipProdData : proj.cipLabData;
+    // Load cipData dari field DB yang benar
+    const cipData = key === 'production'
+      ? { checks: proj.cip_prod_checks || proj.cipProdChecks || {} }
+      : { checks: proj.cip_lab_checks  || proj.cipLabChecks  || {} };
     const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
 
     const now = new Date();
@@ -4198,139 +4462,68 @@ function openCIPModal(key) {
 }
 
 async function saveCIPModal(key, isFinish) {
+  const aksi = isFinish ? "MENYELESAIKAN" : "MENYIMPAN DRAF";
+  if (!confirm(`Apakah Anda yakin ingin ${aksi} data CIP ${key === 'production' ? 'Produksi' : 'Laboratorium'} ini?`)) return;
+
   const config  = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
   const checks  = {};
   let   allDone = true;
-  config.sections.forEach(sec => {
-    sec.items.forEach(item => {
-      const id  = 'cip-cb-' + key + '-' + item.replace(/\s+/g,'_');
-      const el  = document.getElementById(id);
+
+  // Kumpulkan semua checkbox berdasarkan data-item attribute
+  // supaya tidak bergantung pada format ID yang berubah-ubah
+  config.sections.forEach((sec, sIdx) => {
+    sec.items.forEach((item, iIdx) => {
+      const checkId   = `cip-check-${sIdx}-${iIdx}`;
+      const uniqueKey = `${sIdx}__${item}`;
+      const el  = document.getElementById(checkId);
       const val = el ? el.checked : false;
-      checks[item] = val;
+      checks[uniqueKey] = val;
       if (!val) allDone = false;
     });
   });
+
   // Cari project yang sedang aktif
-  const sel  = document.getElementById('dep-proj-sel-'+key) || document.getElementById('cip-proj-sel-'+key);
+  let sel = document.getElementById('dep-proj-sel-'+key) || document.getElementById('cip-proj-sel-'+key);
+  if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
   const proj = sel && sel.value !== '' ? gPJ('ongoing')[+sel.value] : null;
+
   if (proj && proj._id) {
     try {
       const isProd = key === 'production';
       const body   = isProd
         ? { cip_prod_done: isFinish || allDone, cip_prod_checks: checks }
         : { cip_lab_done:  isFinish || allDone, cip_lab_checks:  checks };
-      await fetch('/api/projects/'+proj._id+'/cip', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      const res  = await fetch('/api/projects/'+proj._id+'/cip', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
       await loadPJ('ongoing');
-    } catch(e) { console.error('saveCIPModal API error:', e); }
+    } catch(e) {
+      console.error('saveCIPModal API error:', e);
+      showQuickToast('❌ Gagal simpan CIP: ' + e.message);
+      return;
+    }
   } else if (proj) {
     // Fallback localStorage
-    if (key === 'production') { proj.cipProdDone = isFinish||allDone; proj.cipProdChecks = checks; }
-    else                      { proj.cipLabDone  = isFinish||allDone; proj.cipLabChecks  = checks; }
-    const ps = gPJ('ongoing'); sPJ('ongoing', ps);
-  }
-  closeCIPModal(key);
-  showQuickToast((isFinish||allDone) ? '✅ CIP selesai!' : '💾 CIP progress tersimpan.');
-}
-
-function openLabSetPoint(key) {
-  let sel = document.getElementById('dep-proj-sel-'+key);
-  if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
-  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
-  openSP('ongoing', +sel.value);
-}
-function openLabCIP(key) {
-  let sel = document.getElementById('dep-proj-sel-'+key);
-  if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
-  if (!sel || sel.value === '') { showQuickToast('❌ Pilih project dulu!'); return; }
-  openCIPModal(key);
-}
-
-window.openLabSetPoint = openLabSetPoint;
-window.openLabCIP = openLabCIP;
-
-function closeCIPModal() {
-  const container = document.getElementById('cip-modal-container');
-  if (container) container.remove();
-  if (window._cipClockTimer) { clearInterval(window._cipClockTimer); window._cipClockTimer = null; }
-  window._currentCIPKey = null;
-  // Restore body scroll
-  document.body.style.overflow = '';
-}
-
-function saveCIPModal(key, isFinish) {
-  // Collect form fields
-  const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
-  const fields = {};
-  config.fields.forEach(f => {
-    const el = document.getElementById('cip-field-' + f.id);
-    if (el) fields[f.id] = el.value;
-  });
-
-  // Collect checklist data & check if all items are checked (for isFinish)
-  const checklist = {};
-  let allItemsChecked = true;
-  let totalItems = 0;
-  
-  config.sections.forEach((section, sIdx) => {
-    section.items.forEach((item, iIdx) => {
-      totalItems++;
-      const checkId = `cip-check-${sIdx}-${iIdx}`;
-      const timeId = `cip-time-${sIdx}-${iIdx}`;
-      const checkEl = document.getElementById(checkId);
-      const timeEl = document.getElementById(timeId);
-      
-      if (checkEl) {
-        checklist[checkId] = checkEl.checked;
-        if (!checkEl.checked) allItemsChecked = false;
-      }
-      if (timeEl) checklist[timeId] = timeEl.textContent !== '—' ? timeEl.textContent : '';
-    });
-  });
-
-  // Find and save to project
-  const sel = document.getElementById('dep-proj-sel-'+key);
-  const allProjs = gPJ('ongoing');
-  const proj = allProjs[+sel.value];
-  if (!proj) return;
-
-  const realIdx = +sel.value;
-
-  // Save CIP data
-  const cipData = { fields, checklist, savedAt: new Date().toISOString() };
-  
-  if (key === 'production') {
-    allProjs[realIdx].cipProdDone = isFinish;
-    allProjs[realIdx].cipProdData = cipData;
-  } else if (key === 'laboratorium') {
-    allProjs[realIdx].cipLabDone = isFinish;
-    allProjs[realIdx].cipLabData = cipData;
-  }
-  
-  sPJ('ongoing', allProjs);
-
-  // Update status indicator
-  const statusEl = document.getElementById('dep-cip-status-'+key);
-  if (statusEl) {
-    const savedAt = new Date().toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    if (isFinish) {
-      statusEl.textContent = '✅ CIP Selesai · ' + savedAt;
-      statusEl.style.background = '#dcfce7';
-      statusEl.style.color = '#15803d';
-      statusEl.style.borderColor = '#86efac';
+    const allProjs = gPJ('ongoing');
+    const realIdx  = +sel.value;
+    if (key === 'production') {
+      allProjs[realIdx].cipProdDone   = isFinish || allDone;
+      allProjs[realIdx].cipProdChecks = checks;
+      allProjs[realIdx].cip_prod_checks = checks;
     } else {
-      statusEl.textContent = '💾 CIP Tersimpan · ' + savedAt;
-      statusEl.style.background = '#dbeafe';
-      statusEl.style.color = '#1e40af';
-      statusEl.style.borderColor = '#93c5fd';
+      allProjs[realIdx].cipLabDone   = isFinish || allDone;
+      allProjs[realIdx].cipLabChecks = checks;
+      allProjs[realIdx].cip_lab_checks = checks;
     }
+    sPJ('ongoing', allProjs);
   }
 
-  // Show success message
-  const action = isFinish ? 'selesai' : 'tersimpan';
-  showQuickToast(`✅ CIP ${key === 'production' ? 'Production' : 'Laboratorium'} ${action}!`);
-  
-  // Close modal
-  closeCIPModal();
+  closeCIPModal(key);
+  showQuickToast((isFinish || allDone) ? '✅ CIP selesai!' : '💾 CIP progress tersimpan.');
 }
 
 window.openCIPModal = openCIPModal;
@@ -4339,6 +4532,10 @@ window.saveCIPModal = saveCIPModal;
 
 // ── LEGACY: Keep old saveCIPFromDE for backwards compatibility ──
 function saveCIPFromDE(key) {
+  // --- TAMBAHKAN BARIS INI ---
+  if (!confirm('Apakah Anda yakin ingin menyimpan data CIP ini?')) return;
+  // ---------------------------
+
   const sel = document.getElementById('dep-proj-sel-'+key);
   if (!sel || sel.value === '') {
     const msg = document.getElementById('dep-cip-msg-'+key);
@@ -4391,45 +4588,69 @@ function saveCIPFromDE(key) {
 }
 window.saveCIPFromDE = saveCIPFromDE;
 
-async function submitDEP(key) {
-  const sel = document.getElementById('dep-proj-sel-' + key);
-  if (!sel || sel.value === '') {
-    _depStatus(key, 'error', '\u274C Pilih project dulu!');
-    return;
-  }
+async function submitDEP(key){
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Set Point Produksi ini?')) return;
+
+  const sel = document.getElementById('dep-proj-sel-'+key);
+  const b   = document.getElementById('dep-sb-'+key);
+  const m   = document.getElementById('dep-sm-'+key);
+  const showStatus = (type, msg) => {
+    if(b&&m){ b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg; }
+  };
+
+  if(!sel || sel.value === '') { showStatus('error','❌ Pilih project dulu!'); return; }
+
   const projs   = gPJ('ongoing');
   const projIdx = +sel.value;
   const proj    = projs[projIdx];
-  if (!proj) return;
+  if(!proj) return;
 
-  const draft = window._spDrafts?.[key] || {};
-  const payload = {
-    project_name:    proj.name,
-    notes:           document.getElementById('dep-notes-' + key)?.value.trim() || draft.notes || '',
-    foto_urls:       window._photoData?.[key] || [],
-    cip_prod_done:   proj.cip_prod_done   || false,
-    cip_prod_checks: proj.cip_prod_checks || {},
-    cip_lab_done:    proj.cip_lab_done    || false,
-    cip_lab_checks:  proj.cip_lab_checks  || {},
-    fp_entries:      proj.fp_entries      || [],
-  };
-
+  // Kumpulkan semua SP field dari DOM
+  const draft   = window._spDrafts?.[key] || {};
+  const spData  = {};
   let anyFilled = false;
+
   SP_FIELDS.forEach(f => {
-    const el  = document.getElementById('dep-' + f.id + '-' + key);
-    const val = el ? el.value.trim() : (draft[f.id] || '');
-    payload[f.id] = val;
-    if (!f.calculated && val !== '') anyFilled = true;
+    const el    = document.getElementById('dep-'+f.id+'-'+key);
+    const domVal = el ? el.value.trim() : '';
+    // Kalau DOM kosong, coba ambil dari draft atau setPoint yang sudah ada
+    const value = domVal !== '' ? domVal : (draft[f.id] || proj.setPoint?.[f.id] || '');
+    if (f.calculated) { if (value) spData[f.id] = value; return; }
+    // Hanya set jika ada nilai — jangan overwrite field lama dengan string kosong
+    if (value !== '') {
+      anyFilled = true;
+      spData[f.id] = value;
+    }
+    // Jika kosong, biarkan mergedSP mengambil dari proj.setPoint (tidak di-set di sini)
   });
 
-  if (!anyFilled && !payload.notes) {
-    _depStatus(key, 'error', '\u274C Isi minimal satu field sebelum menyimpan!');
+  const notesValue = document.getElementById('dep-notes-'+key)?.value.trim() || draft.notes || '';
+  if (notesValue) spData.notes = notesValue;
+
+  if (!anyFilled && !notesValue) {
+    showStatus('error','❌ Isi minimal satu field atau tambahkan notes sebelum menyimpan!');
     return;
   }
 
-  _depStatus(key, 'loading', '\u23F3 Menyimpan ke database...');
+  // Gabungkan dengan setPoint yang sudah ada — agar field lama tidak hilang
+  const mergedSP = { ...(proj.setPoint || {}), ...spData };
 
+  showStatus('loading','⏳ Menyimpan ke database...');
+
+  // Kirim ke API
   try {
+    const payload = {
+      project_name:    proj.name,
+      notes:           notesValue,
+      foto_urls:       window._photoData?.[key] || [],
+      cip_prod_done:   proj.cip_prod_done   || false,
+      cip_prod_checks: proj.cip_prod_checks || {},
+      cip_lab_done:    proj.cip_lab_done    || false,
+      cip_lab_checks:  proj.cip_lab_checks  || {},
+      fp_entries:      proj.fp_entries      || [],
+      ...mergedSP, // semua field set point
+    };
+
     const res  = await fetch('/api/dataentry/production', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -4438,49 +4659,44 @@ async function submitDEP(key) {
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Gagal simpan');
 
-    // Simpan nilai yang diinput ke cache lokal supaya placeholder terupdate setelah reload
-    await loadPJ('ongoing');
-    const freshProjs = gPJ('ongoing');
-    const freshIdx = freshProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
-    if (freshIdx >= 0) {
-      const lsKey = 'dep_last_values_' + proj.name;
-      // Ambil nilai yang sudah tersimpan sebelumnya (kumulatif)
-      let existingValues = {};
-      try { existingValues = JSON.parse(localStorage.getItem(lsKey) || '{}'); } catch(e) {}
+    // Simpan juga ke API project set_point agar renderPJ tahu SP sudah diisi
+    if (proj._id) {
+      await fetch('/api/projects/'+proj._id+'/setpoint', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(mergedSP),
+      }).catch(e => console.warn('setpoint API warn:', e));
+    }
 
-      // Merge: nilai lama sebagai base, nilai baru (yang diinput) menimpa field yang diisi
-      // Field kosong di form TIDAK menimpa nilai lama → nilai lama tetap terjaga
-      const mergedValues = { ...existingValues };
-      SP_FIELDS.forEach(f => {
-        if (payload[f.id] !== '') {
-          mergedValues[f.id] = payload[f.id]; // field diisi → update
-        }
-        // field kosong → biarkan nilai lama (tidak overwrite)
-      });
+    // Update cache lokal dengan data merged agar tidak perlu reload penuh
+    const allProjs = gPJ('ongoing');
+    const realIdx  = allProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
+    if (realIdx >= 0) {
+      // Record history
+      const oldSP = allProjs[realIdx].setPoint || {};
+      const histFields = SP_FIELDS
+        .map(f => ({ id:f.id, label:f.label, unit:f.unit||'', oldVal:oldSP[f.id]||'', newVal:mergedSP[f.id]||'' }))
+        .filter(f => f.newVal !== '' || f.oldVal !== '');
+      if (!allProjs[realIdx].productionHistory) allProjs[realIdx].productionHistory = [];
+      allProjs[realIdx].productionHistory.push({ saved_at: new Date().toISOString(), source: key, fields: histFields, db_id: json.id });
 
-      if (!freshProjs[freshIdx].productionHistory) freshProjs[freshIdx].productionHistory = [];
-      const hist = freshProjs[freshIdx].productionHistory;
-      if (hist.length > 0) {
-        hist[hist.length - 1].values = mergedValues;
-      } else {
-        hist.push({ saved_at: new Date().toISOString(), source: key, db_id: json.id, values: mergedValues });
-      }
-      _pjCache['ongoing'] = freshProjs;
-      // Persist secara kumulatif ke localStorage
-      localStorage.setItem(lsKey, JSON.stringify(mergedValues));
+      allProjs[realIdx].setPoint = mergedSP;
+      sPJ('ongoing', allProjs);
     }
 
     if (window._spDrafts) delete window._spDrafts[key];
-    _depStatus(key, 'success', '\u2705 Data Production tersimpan! (' + (json.action || 'saved') + ')');
-    setTimeout(() => {
-      const b = document.getElementById('dep-sb-' + key);
-      if (b) b.style.display = 'none';
-      loadDEProjForm(key);
-    }, 1500);
+    showStatus('success','✅ Set Point tersimpan ke database!');
 
-  } catch (err) {
+    // Reload data segar dari API lalu render ulang form
+    setTimeout(async () => {
+      if(b) b.style.display = 'none';
+      await loadPJ('ongoing');
+      loadDEProjForm(key);
+    }, 1200);
+
+  } catch(err) {
     console.error('submitDEP error:', err);
-    _depStatus(key, 'error', '\u274C Gagal simpan: ' + err.message);
+    showStatus('error','❌ Gagal simpan: ' + err.message);
   }
 }
 
@@ -4493,6 +4709,7 @@ function resetDE(key){
   const d=document.getElementById(key+'-date'); if(d) d.value=new Date().toISOString().split('T')[0];
 }
 function submitLimbah(key) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Limbah ini?')) return;
   const projSel = document.getElementById('limbah-proj-sel');
   const selectedIdx = projSel ? projSel.value : "";
   
@@ -4516,16 +4733,18 @@ function submitLimbah(key) {
     
     // Susun fields untuk tabel summary bergaya Excel
     const fields = [
+      { label: 'Tanggal', newVal: basicData.date },
       { label: 'Volume (L)', newVal: basicData.vol },
       { label: 'COD (mg/L)', newVal: basicData.cod },
       { label: 'BOD (mg/L)', newVal: basicData.bod },
       { label: 'TSS (mg/L)', newVal: basicData.tss },
-      { label: 'pH', newVal: basicData.ph }
+      { label: 'pH', newVal: basicData.ph },
+      { label: 'Catatan', newVal: basicData.notes }
     ];
     // Tambah info jar test jika ada
     if (basicData.jar) {
-      fields.push({ label: 'Jar Test Alum', newVal: basicData.jar.alum });
-      fields.push({ label: 'Jar Test Total', newVal: basicData.jar.total });
+      fields.push({ label: 'Jar Test Alum (PPM)', newVal: basicData.jar.alum });
+      fields.push({ label: 'Jar Test Total (PPM)', newVal: basicData.jar.total });
     }
 
     p.limbahHistory.push({
@@ -4539,25 +4758,21 @@ function submitLimbah(key) {
     // ── JALUR B: SIMPAN KE LAPORAN HARIAN ──
     const harian = JSON.parse(localStorage.getItem('harian_entries') || '[]');
     
-    // Build data object with jar test info if available
+    // Build data object with all limbah fields
     const reportData = {
-      'Volume': basicData.vol + ' L',
-      'pH': basicData.ph,
-      'COD/BOD': `${basicData.cod}/${basicData.bod} mg/L`
+      'Tanggal': basicData.date || '—',
+      'Volume (L)': basicData.vol || '—',
+      'COD (mg/L)': basicData.cod || '—',
+      'BOD (mg/L)': basicData.bod || '—',
+      'TSS (mg/L)': basicData.tss || '—',
+      'pH': basicData.ph || '—',
+      'Catatan': basicData.notes || '—'
     };
     
-    // Add jar test data if present - get from latest jar test entries
-    const jarTestEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]')
-      .filter(e => e.cat === 'limbah' && e.projName === 'Jar Test Harian')
-      .sort((a, b) => new Date(b.saved_at) - new Date(a.saved_at));
-    
-    if (jarTestEntries.length > 0) {
-      // Get the most recent jar test
-      const latestJar = jarTestEntries[0];
-      if (latestJar.data) {
-        reportData['PAC (PPM)'] = latestJar.data['Doz. PAC'] || '—';
-        reportData['Polimer (PPM)'] = latestJar.data['Doz. Polimer'] || '—';
-      }
+    // Add jar test data if present
+    if (basicData.jar) {
+      reportData['Jar Test - Alum (PPM)'] = basicData.jar.alum || '—';
+      reportData['Jar Test - Total (PPM)'] = basicData.jar.total || '—';
     }
     
     harian.unshift({
@@ -4689,6 +4904,24 @@ const UPD_FIELDS = [
 
 function getProjectHTML(type, title) {
   const isOngoing = type === 'ongoing';
+  const deletedCats = JSON.parse(localStorage.getItem('deleted_default_categories') || '[]');
+  const customCats = JSON.parse(localStorage.getItem('custom_categories') || '[]');
+  const DEFAULT_CATEGORIES = [
+    { value: 'teh-hijau', label: '🍵 Teh Hijau' },
+    { value: 'oolong', label: '🍵 Oolong' },
+    { value: 'black-tea', label: '☕ Black Tea' },
+    { value: 'roasted-jasmine', label: '🌸 Roasted Green Tea Jasmine' },
+    { value: 'robusta', label: '☕ Kopi Robusta' },
+    { value: 'arabika', label: '☕ Kopi Arabika' }
+  ];
+  let catOptions = '<option value="">-- Pilih kategori --</option>';
+  DEFAULT_CATEGORIES.forEach(c => {
+    if (!deletedCats.includes(c.value)) catOptions += `<option value="${c.value}">${c.label}</option>`;
+  });
+  customCats.forEach(c => {
+    catOptions += `<option value="${c.value}">📌 ${c.label}</option>`;
+  });
+
   return `<div class="proj-wrap">
   <div class="proj-header">
     <div><div class="proj-title">${title}</div><div class="proj-sub">Manage and track your projects</div></div>
@@ -4699,7 +4932,6 @@ function getProjectHTML(type, title) {
 </div>
 ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'') ? '<button class="proj-fab" onclick="openAPJ(\'ongoing\')">＋</button>' : ''}
 
-<!-- ADD modal -->
 <div class="proj-modal-overlay" id="pmo-${type}">
   <div class="proj-modal">
     <div class="proj-modal-head"><div class="proj-modal-title">📋 Add New Project</div><button class="proj-modal-close" onclick="closeAPJ('${type}')">✕</button></div>
@@ -4708,25 +4940,25 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
         <div class="de-field proj-modal-full"><label class="de-label">PROJECT TITLE *</label><input class="de-input" id="pf-nm-${type}" type="text" placeholder="Enter project title..."></div>
         <div class="de-field"><label class="de-label">START DATE</label><input class="de-input" id="pf-st-${type}" type="date"></div>
         <div class="de-field"><label class="de-label">EXPECTED END</label><input class="de-input" id="pf-en-${type}" type="date"></div>
+        
         <div class="de-field proj-modal-full">
           <label class="de-label">KATEGORI PRODUK</label>
           <div style="display:flex;gap:6px;align-items:center">
             <select class="de-input de-select" id="pf-cat-${type}" style="flex:1" onchange="onProjCatChange('${type}','pf')">
-              <option value="">-- Pilih kategori --</option>
-              <option value="teh-hijau">🍵 Teh Hijau</option>
-              <option value="oolong">🍵 Oolong</option>
-              <option value="black-tea">☕ Black Tea</option>
-              <option value="roasted-jasmine">🌸 Roasted Green Tea Jasmine</option>
-              <option value="robusta">☕ Kopi Robusta</option>
-              <option value="arabika">☕ Kopi Arabika</option>
+              ${catOptions}
             </select>
+            <button type="button" id="pf-cat-del-${type}" style="display:none;background:none;border:none;color:var(--red);font-size:20px;font-weight:bold;cursor:pointer;padding:0 5px;" onclick="deleteSelectedCategory('${type}','pf')" title="Hapus Kategori Ini">✕</button>
             <button type="button" class="de-btn de-btn-ghost" style="padding:6px 10px;font-size:11px;white-space:nowrap" onclick="addCustomCategory('${type}','pf')">＋ Tambah</button>
           </div>
           <div id="pf-cat-custom-${type}" style="display:none;margin-top:6px">
-            <input class="de-input" id="pf-cat-new-${type}" type="text" placeholder="Nama kategori baru..." style="margin-bottom:4px">
-            <button type="button" class="de-btn de-btn-primary" style="padding:5px 14px;font-size:11px" onclick="saveCustomCategory('${type}','pf')">Simpan</button>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input class="de-input" id="pf-cat-new-${type}" type="text" placeholder="Nama kategori baru..." style="flex:1;">
+              <button type="button" class="de-btn de-btn-primary" style="padding:7px 14px;font-size:11px" onclick="saveCustomCategory('${type}','pf')">Simpan</button>
+              <button type="button" onclick="document.getElementById('pf-cat-custom-${type}').style.display='none'" style="background:none;border:none;color:var(--red);font-size:18px;font-weight:bold;cursor:pointer;padding:0 5px;" title="Batal Tambah">✕</button>
+            </div>
           </div>
         </div>
+
         <div class="de-field proj-modal-full">
           <label class="de-label">PREPARATION METHOD</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)" id="pf-tl-${type}">
@@ -4739,25 +4971,7 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
         <div class="de-field proj-modal-full"><label class="de-label">MATERIALS USED</label><textarea class="de-input de-textarea" id="pf-mat-${type}" placeholder="e.g. Steel pipes, concrete..." style="min-height:60px"></textarea></div>
         <div class="de-field proj-modal-full"><label class="de-label">NOTES</label><textarea class="de-input de-textarea" id="pf-nt-${type}" placeholder="Additional notes..." style="min-height:60px"></textarea></div>
 
-        <!-- Role visibility — hanya tampil untuk admin/superadmin -->
-        ${['admin','superadmin'].includes(localStorage.getItem('role')||'') ? `
-        <div class="de-field proj-modal-full">
-          <label class="de-label">👥 VISIBLE UNTUK ROLE</label>
-          <div style="font-size:11px;color:var(--txt3);margin-bottom:8px;">Centang role yang bisa melihat & mengakses project ini di Data Entry mereka. Kosongkan = semua role bisa lihat.</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)" id="pf-roles-${type}">
-            ${[
-              {val:'Produksi',   lbl:'🏭 Produksi'},
-              {val:'utility',    lbl:'⚡ Utility'},
-              {val:'scientist',  lbl:'🧪 Scientist'},
-              {val:'limbah',     lbl:'♻️ Limbah'},
-              {val:'PPIC',       lbl:'📊 PPIC'},
-            ].map(r=>`
-              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--surface);transition:all .15s">
-                <input type="checkbox" value="${r.val}" name="pf-role-check-${type}" style="accent-color:var(--blue);cursor:pointer"> ${r.lbl}
-              </label>`).join('')}
-          </div>
-          <div style="font-size:10px;color:var(--txt3);margin-top:6px;">💡 admin & superadmin selalu bisa melihat semua project.</div>
-        </div>` : ''}
+
       </div>
       <div class="de-status-bar" id="psb-${type}" style="display:none"><span id="psm-${type}"></span></div>
       <div class="de-actions" style="margin-top:18px">
@@ -4768,39 +4982,38 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
   </div>
 </div>
 
-<!-- EDIT modal -->
 <div class="proj-modal-overlay" id="edit-overlay-${type}">
   <div class="proj-modal">
     <div class="proj-modal-head"><div class="proj-modal-title">✏️ Edit Project</div><button class="proj-modal-close" onclick="closeEditPJ('${type}')">✕</button></div>
     <div class="proj-modal-body">
       <div class="proj-modal-grid">
         <div class="de-field proj-modal-full"><label class="de-label">PROJECT TITLE *</label><input class="de-input" id="ef-nm-${type}" type="text"></div>
-        <div class="de-field">
+        
+        <div class="de-field"><label class="de-label">START DATE</label><input class="de-input" id="ef-st-${type}" type="date"></div>
+        <div class="de-field"><label class="de-label">EXPECTED END</label><input class="de-input" id="ef-en-${type}" type="date"></div>
+
+        <div class="de-field proj-modal-full">
           <label class="de-label">KATEGORI PRODUK</label>
           <div style="display:flex;gap:6px;align-items:center">
-            <select class="de-input de-select" id="ef-cat-${type}" style="flex:1" onchange="onProjCatChange('${type}','ef')">
-              <option value="">-- Pilih kategori --</option>
-              <option value="teh-hijau">🍵 Teh Hijau</option>
-              <option value="oolong">🍵 Oolong</option>
-              <option value="black-tea">☕ Black Tea</option>
-              <option value="roasted-jasmine">🌸 Roasted Green Tea Jasmine</option>
-              <option value="robusta">☕ Kopi Robusta</option>
-              <option value="arabika">☕ Kopi Arabika</option>
+            <select class="de-input de-select" id="ef-cat-${type}" style="flex:1">
+              ${catOptions}
             </select>
             <button type="button" class="de-btn de-btn-ghost" style="padding:6px 10px;font-size:11px;white-space:nowrap" onclick="addCustomCategory('${type}','ef')">＋ Tambah</button>
           </div>
           <div id="ef-cat-custom-${type}" style="display:none;margin-top:6px">
-            <input class="de-input" id="ef-cat-new-${type}" type="text" placeholder="Nama kategori baru..." style="margin-bottom:4px">
-            <button type="button" class="de-btn de-btn-primary" style="padding:5px 14px;font-size:11px" onclick="saveCustomCategory('${type}','ef')">Simpan</button>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <input class="de-input" id="ef-cat-new-${type}" type="text" placeholder="Nama kategori baru..." style="flex:1;">
+              <button type="button" class="de-btn de-btn-primary" style="padding:7px 14px;font-size:11px" onclick="saveCustomCategory('${type}','ef')">Simpan</button>
+              <button type="button" onclick="document.getElementById('ef-cat-custom-${type}').style.display='none'" style="background:none;border:none;color:var(--red);font-size:18px;font-weight:bold;cursor:pointer;padding:0 5px;" title="Batal Tambah">✕</button>
+            </div>
           </div>
         </div>
-        <div class="de-field"><label class="de-label">START DATE</label><input class="de-input" id="ef-st-${type}" type="date"></div>
-        <div class="de-field"><label class="de-label">EXPECTED END</label><input class="de-input" id="ef-en-${type}" type="date"></div>
+
         <div class="de-field proj-modal-full"><label class="de-label">MATERIALS USED</label><textarea class="de-input de-textarea" id="ef-mat-${type}" style="min-height:70px"></textarea></div>
         <div class="de-field proj-modal-full">
           <label class="de-label">PREPARATION METHOD</label>
           <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg)" id="ef-tl-${type}">
-            ${['Ekstraksi','Separator Kasar','Separator Halus','Filtrasi','Evaporasi'].map(m=>`
+            ${['Ekstraksi','Decanter (Separator Kasar)','Centrifuge (Separator Halus)','Filtrasi','Evaporasi', 'Full Condensation', 'Separate Condensation'].map(m=>`
               <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);transition:all .15s" class="method-chip">
                 <input type="checkbox" value="${m}" style="accent-color:var(--blue);cursor:pointer"> ${m}
               </label>`).join('')}
@@ -4834,6 +5047,15 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
       </div>
       <button class="proj-modal-close" onclick="closeSP('${type}')">✕</button>
     </div>
+
+      <!-- ── Receipt Selector ── -->
+      <div style="padding:12px 14px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;margin-bottom:14px;display:flex;gap:10px;align-items:center;">
+        <div style="font-size:13px;font-weight:700;color:#7c3aed;white-space:nowrap;">📋 Pakai Receipt:</div>
+        <select class="de-input de-select" id="sp-receipt-sel-${type}" style="flex:1;border-color:#e9d5ff;background:#faf5ff;" onchange="applyReceiptToSP('${type}')">
+          <option value="">— Isi manual —</option>
+        </select>
+      </div>
+      <div id="sp-receipt-banner-${type}" style="display:none;padding:10px 14px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;font-size:12px;color:#6d28d9;margin-bottom:12px;align-items:center;justify-content:space-between;gap:8px;"></div>
     <div class="proj-modal-body">
 
       <!-- ═══ PAGE 1 ═══ -->
@@ -4855,7 +5077,6 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
             <div class="de-field"><label class="de-label">Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
             <div class="de-field"><label class="de-label">Aroma Flowrate</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-aroma-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
             <div class="de-field"><label class="de-label">Stripping Steam</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-steam-${type}" type="number" step="0.1"><span class="de-input-unit">kg/h</span></div></div>
-            <div class="de-field"><label class="de-label">Product Out</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-prod-out-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
             <div class="de-field"><label class="de-label">Condensate #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond1-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
             <div class="de-field"><label class="de-label">Condensate #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-cond2-${type}" type="number" step="0.1"><span class="de-input-unit">L/h</span></div></div>
           </div>
@@ -4875,9 +5096,10 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
             <div class="de-field"><label class="de-label">Product Feed</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-feed-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
             <div class="de-field"><label class="de-label">Product Heater</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-heater-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
             <div class="de-field"><label class="de-label">Top of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-top-${type}" type="number" step="0.1" oninput="checkTopColumnVacuum('${type}',this.value)"><span class="de-input-unit">°C</span></div><div id="sp-top-vacuum-note-${type}" style="display:none;margin-top:6px;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;"></div></div>
-            <div class="de-field"><label class="de-label">Condensed #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-condensed1-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
-            <div class="de-field"><label class="de-label">Condensed #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-condensed2-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Condensate #1</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-Condensate1-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Condensate #2</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-Condensate2-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
             <div class="de-field"><label class="de-label">Bottom of Column</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-temp-bot-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
+            <div class="de-field"><label class="de-label">Product Outlet</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-prod-out-${type}" type="number" step="0.1"><span class="de-input-unit">°C</span></div></div>
           </div>
         </div>
         <div class="setpoint-section">
@@ -4920,7 +5142,10 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
         </div>
         <div class="de-status-bar" id="sp-sb-${type}" style="display:none"><span id="sp-sm-${type}"></span></div>
         <div class="de-actions" style="margin-top:20px;justify-content:space-between">
-          <button class="de-btn de-btn-ghost" onclick="spGoPage1('${type}')">← Back</button>
+          <div style="display:flex;gap:8px;">
+            <button class="de-btn de-btn-ghost" onclick="spGoPage1('${type}')">← Back</button>
+            <button class="de-btn" style="border-color:#7c3aed;color:#7c3aed;background:#f5f3ff;" onclick="saveCurrentSPAsReceipt('${type}')" title="Simpan nilai set point ini sebagai template receipt">📋 Simpan sebagai Receipt</button>
+          </div>
           <button class="de-btn de-btn-primary" onclick="saveSP('${type}')">💾 Save Set Point</button>
         </div>
       </div>
@@ -5032,15 +5257,13 @@ async function initProjectPage(t) {
   await loadPJ(t);
   renderPJ(t);
 }
-// ═══ PROJECT CACHE — sync dari database ═══════════════════
-// Cache lokal supaya UI tetap responsif
 
 // Ambil dari cache (sync), load dari API (async)
 function gPJ(t) {
   return _pjCache[t] || [];
 }
 
-// Simpan ke cache lokal (tidak lagi ke localStorage)
+// Simpan ke cache lokal
 function sPJ(t, l) {
   _pjCache[t] = l;
 }
@@ -5051,12 +5274,10 @@ async function loadPJ(type) {
     const res  = await fetch('/api/projects?type=' + type);
     const json = await res.json();
     if (!json.success) throw new Error(json.error);
-    // Konversi format DB → format app (snake_case → camelCase)
     _pjCache[type] = json.data.map(dbToApp);
     return _pjCache[type];
   } catch (err) {
     console.error('loadPJ error:', err);
-    // Fallback ke localStorage kalau API tidak bisa
     _pjCache[type] = JSON.parse(localStorage.getItem('pj_'+type) || '[]');
     return _pjCache[type];
   }
@@ -5084,8 +5305,7 @@ function dbToApp(p) {
     cip_lab_checks: p.cip_lab_checks  || {},
     fp_done:        p.fp_done         || false,
     fp_entries:     p.fp_entries      || [],
-    allowed_roles:  p.allowed_roles   || null, // null = semua role boleh lihat
-    // Alias lama
+    allowed_roles:  p.allowed_roles   || null,
     cipProdDone:    p.cip_prod_done   || false,
     cipLabDone:     p.cip_lab_done    || false,
     fpDone:         p.fp_done         || false,
@@ -5115,7 +5335,7 @@ function renderPJ(type) {
     });
   }
 
-  if (q) ps = ps.filter(p => p.name.toLowerCase().includes(q));
+  if (q) ps = ps.filter(p=>p.name.toLowerCase().includes(q));
   if(cnt) cnt.textContent=ps.length+' project'+(ps.length!==1?'s':'');
   if(!ps.length){list.innerHTML=`<div class="proj-empty"><div class="proj-empty-ico">📂</div>${q?'No projects match.':'No projects yet — click ＋ to add one!'}</div>`;return;}
   const col={ongoing:'var(--blue)',recent:'var(--orange)',completed:'var(--green)'};
@@ -5146,7 +5366,12 @@ function renderPJ(type) {
       else                   { statusCls = 'ongoing';  statusLbl = 'ONGOING'; }
     } else if (isCompleted)  { statusCls = 'completed'; statusLbl = 'DONE'; }
 
-    const actionBtns = isOngoing ? `
+    // admin/superadmin = bisa edit penuh
+    // PPIC = lihat saja (view-only) untuk project card actions
+    const canEdit = ['admin','superadmin'].includes(currentRole);
+    const canReceipt = ['admin','superadmin','PPIC'].includes(currentRole);
+
+    const actionBtns = isOngoing && canEdit ? `
       <div class="proj-card-divider"></div>
       <div class="proj-card-actions" onclick="event.stopPropagation()">
         <button class="pj-btn pj-btn-edit" onclick="openEditPJ('${type}',${i})">✏️ Edit</button>
@@ -5155,8 +5380,7 @@ function renderPJ(type) {
           title="${hasSetPoint?'Set Point sudah dikunci':'Isi Set Point'}">
           ${hasSetPoint ? '🔒 Set Point' : '⚙️ Set Point'}
         </button>
-        <button class="pj-btn pj-btn-finish" onclick="openFP('${type}',${i})"
-          title="Finish Production">
+        <button class="pj-btn pj-btn-finish" onclick="openFP('${type}',${i})" title="Finish Production">
           ${p.fpDone ? '✓ Finish Prod' : '🏭 Finish Prod'}
         </button>
         ${cipStatus ? `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:var(--green-bg);color:var(--green);border:1px solid #6ee7b7;font-weight:600">${cipStatus}</span>` : `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db">⏳ CIP Belum</span>`}
@@ -5165,6 +5389,11 @@ function renderPJ(type) {
           title="${!(hasCIP && hasFP)?'Lengkapi CIP (Prod+Lab) dan Finish Production dulu':'Akhiri produksi'}">
           🏁 End
         </button>
+      </div>` : isOngoing ? `
+      <div class="proj-card-divider"></div>
+      <div class="proj-card-actions" onclick="event.stopPropagation()">
+        ${cipStatus ? `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:var(--green-bg);color:var(--green);border:1px solid #6ee7b7;font-weight:600">${cipStatus}</span>` : `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db">⏳ CIP Belum</span>`}
+        <span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f0f9ff;color:#0284c7;border:1px solid #bae6fd;font-weight:600">👁️ View Only</span>
       </div>` : '';
     const viewBtn = isCompleted ? `
       <div class="proj-card-divider"></div>
@@ -5191,18 +5420,172 @@ function renderPJ(type) {
       </div>`}).join('');
 }
 
-// ── Add project ───────────────────────────────────────────
-function openAPJ(t){
-  document.getElementById('pmo-'+t)?.classList.add('show');
-  const pfCatSel = document.getElementById('pf-cat-'+t);
-  if (pfCatSel) loadCustomCategoriesIntoSelect(pfCatSel);
+function openAPJ(type) {
+  // Tampilkan picker modal dulu (bukan langsung form)
+  document.getElementById('apj-picker-overlay')?.remove();
+
+  const receipts = getReceipts();
+  const hasReceipts = receipts.length > 0;
+
+  const picker = document.createElement('div');
+  picker.id = 'apj-picker-overlay';
+  picker.className = 'proj-modal-overlay show';
+  picker.innerHTML = `
+    <div class="proj-modal" style="max-width:400px;width:95vw;">
+      <div class="proj-modal-head">
+        <div class="proj-modal-title">➕ Buat Project Baru</div>
+        <button class="proj-modal-close" onclick="document.getElementById('apj-picker-overlay').remove()">✕</button>
+      </div>
+      <div class="proj-modal-body" style="padding:20px;">
+        <p style="font-size:13px;color:var(--txt2);margin-bottom:20px;">Pilih cara membuat project baru:</p>
+
+        <!-- Create New -->
+        <div onclick="closePicker_openForm('${type}', false)"
+          style="display:flex;align-items:center;gap:14px;padding:16px 18px;border:2px solid var(--border);border-radius:12px;cursor:pointer;margin-bottom:12px;transition:.15s;background:var(--surface);"
+          onmouseover="this.style.borderColor='var(--blue)';this.style.background='#ebf2fd'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'">
+          <div style="width:44px;height:44px;border-radius:10px;background:#ebf2fd;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">📋</div>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--txt);">Create New</div>
+            <div style="font-size:12px;color:var(--txt3);margin-top:2px;">Isi semua data dari awal</div>
+          </div>
+        </div>
+
+        <!-- Use Receipt -->
+        <div onclick="${hasReceipts ? `closePicker_openForm('${type}', true)` : ''}"
+          style="display:flex;align-items:center;gap:14px;padding:16px 18px;border:2px solid var(--border);border-radius:12px;cursor:${hasReceipts ? 'pointer' : 'not-allowed'};transition:.15s;background:var(--surface);opacity:${hasReceipts ? '1' : '0.5'};"
+          ${hasReceipts ? `onmouseover="this.style.borderColor='#7c3aed';this.style.background='#f5f3ff'" onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface)'"` : ''}>
+          <div style="width:44px;height:44px;border-radius:10px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">⚡</div>
+          <div>
+            <div style="font-weight:700;font-size:14px;color:var(--txt);">Use Receipt</div>
+            <div style="font-size:12px;color:var(--txt3);margin-top:2px;">${hasReceipts ? `Gunakan template (${receipts.length} receipt tersedia)` : 'Belum ada receipt — buat dulu di tab Receipt'}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(picker);
 }
-function closeAPJ(t){
+window.openAPJ = openAPJ;
+
+function closePicker_openForm(type, useReceipt) {
+  document.getElementById('apj-picker-overlay')?.remove();
+
+  if (useReceipt) {
+    // Tampilkan receipt selector modal
+    openAPJFromReceipt(type);
+  } else {
+    // Buka form biasa
+    _openNewProjectForm(type, null);
+  }
+}
+window.closePicker_openForm = closePicker_openForm;
+
+// Form Create New (atau form dengan prefill receipt)
+function _openNewProjectForm(type, receipt) {
+  const o = document.getElementById('pmo-'+type);
+  if (!o) return;
+
+  // Reset semua field
+  document.getElementById('pf-nm-'+type).value = '';
+  // Tanggal: set hari ini, tidak bisa diketik manual (hanya klik)
+  const stEl = document.getElementById('pf-st-'+type);
+  const enEl = document.getElementById('pf-en-'+type);
+  if (stEl) { stEl.value = new Date().toISOString().split('T')[0]; stEl.setAttribute('readonly', true); stEl.onclick = () => stEl.removeAttribute('readonly'); stEl.onblur = () => stEl.setAttribute('readonly', true); }
+  if (enEl) { enEl.value = ''; enEl.setAttribute('readonly', true); enEl.onclick = () => enEl.removeAttribute('readonly'); enEl.onblur = () => enEl.setAttribute('readonly', true); }
+
+  document.getElementById('pf-mat-'+type).value = '';
+  document.getElementById('pf-nt-'+type).value  = '';
+  document.querySelectorAll('#pf-tl-'+type+' input[type=checkbox]').forEach(cb => cb.checked = false);
+
+  const pfCatSel = document.getElementById('pf-cat-'+type);
+  if (pfCatSel) { loadCategoriesIntoSelect(pfCatSel); pfCatSel.value = ''; onProjCatChange(type, 'pf'); }
+
+  // Jika dari receipt → prefill semua field kecuali nama & tanggal
+  if (receipt) {
+    const pjInfo = receipt.proj_info || {};
+    if (pjInfo.kategori && pfCatSel) { pfCatSel.value = pjInfo.kategori; onProjCatChange(type, 'pf'); }
+    if (pjInfo.materials) document.getElementById('pf-mat-'+type).value = pjInfo.materials;
+    if (pjInfo.notes)     document.getElementById('pf-nt-'+type).value  = pjInfo.notes;
+    if (pjInfo.tools) {
+      const toolArr = pjInfo.tools.split(', ').filter(Boolean);
+      document.querySelectorAll('#pf-tl-'+type+' input[type=checkbox]').forEach(cb => {
+        cb.checked = toolArr.includes(cb.value);
+      });
+    }
+    // Tampilkan banner receipt
+    const head = document.querySelector('#pmo-'+type+' .proj-modal-head .proj-modal-title');
+    if (head) head.textContent = `⚡ Dari Receipt: ${receipt.name}`;
+    // Simpan receipt ke state sementara untuk nanti dipakai submitPJ
+    window._activeReceiptForPJ = { type, receipt };
+  } else {
+    const head = document.querySelector('#pmo-'+type+' .proj-modal-head .proj-modal-title');
+    if (head) head.textContent = '📋 Add New Project';
+    window._activeReceiptForPJ = null;
+  }
+
+  o.classList.add('show');
+}
+window._openNewProjectForm = _openNewProjectForm;
+
+// Tampilkan picker receipt sebelum buka form
+function openAPJFromReceipt(type) {
+  document.getElementById('apj-receipt-picker')?.remove();
+  const receipts = getReceipts();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'apj-receipt-picker';
+  overlay.className = 'proj-modal-overlay show';
+  overlay.innerHTML = `
+    <div class="proj-modal" style="max-width:520px;width:95vw;max-height:85vh;display:flex;flex-direction:column;">
+      <div class="proj-modal-head">
+        <div class="proj-modal-title">⚡ Pilih Receipt</div>
+        <button class="proj-modal-close" onclick="document.getElementById('apj-receipt-picker').remove()">✕</button>
+      </div>
+      <div class="proj-modal-body" style="overflow-y:auto;flex:1;">
+        <p style="font-size:12px;color:var(--txt3);margin-bottom:14px;">Pilih template receipt. Semua data (kategori, bahan, metode, catatan, set point) akan terisi otomatis — Anda hanya perlu mengisi nama dan tanggal project.</p>
+        ${receipts.map((r, ri) => `
+          <div onclick="applyReceiptToPJForm('${type}', ${ri})"
+            style="display:flex;align-items:center;gap:12px;padding:13px 15px;border:1.5px solid var(--border);border-radius:10px;cursor:pointer;margin-bottom:8px;transition:.15s;background:var(--bg);"
+            onmouseover="this.style.borderColor='#7c3aed';this.style.background='#f5f3ff'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg)'">
+            <div style="width:36px;height:36px;border-radius:8px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">📋</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:13px;color:var(--txt);">${r.name}</div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:2px;">
+                ${r.proj_info?.kategori ? `🏷️ ${r.proj_info.kategori} &nbsp;·&nbsp;` : ''}
+                📅 ${new Date(r.created_at).toLocaleDateString('id-ID')}
+                &nbsp;·&nbsp; ✅ ${Object.values(r.sp_data || {}).filter(v=>v!=='').length} field SP terisi
+              </div>
+            </div>
+            <div style="font-size:11px;font-weight:700;color:#7c3aed;">Pilih →</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.openAPJFromReceipt = openAPJFromReceipt;
+
+function applyReceiptToPJForm(type, receiptIdx) {
+  document.getElementById('apj-receipt-picker')?.remove();
+  const receipts = getReceipts();
+  const r = receipts[receiptIdx];
+  if (!r) return;
+  _openNewProjectForm(type, r);
+}
+window.applyReceiptToPJForm = applyReceiptToPJForm;
+
+function closeAPJ(t) {
   document.getElementById('pmo-'+t)?.classList.remove('show');
-  ['pf-nm-','pf-st-','pf-en-','pf-cat-','pf-mat-','pf-nt-'].forEach(f=>{const el=document.getElementById(f+t);if(el)el.value='';});
-  document.querySelectorAll('#pf-tl-'+t+' input[type=checkbox]').forEach(cb=>cb.checked=false);
-  const b=document.getElementById('psb-'+t);if(b)b.style.display='none';
+  ['pf-nm-','pf-st-','pf-en-','pf-cat-','pf-mat-','pf-nt-'].forEach(f => {
+    const el = document.getElementById(f+t); if (el) el.value = '';
+  });
+  document.querySelectorAll('#pf-tl-'+t+' input[type=checkbox]').forEach(cb => cb.checked = false);
+  // Reset title dan active receipt
+  const head = document.querySelector('#pmo-'+t+' .proj-modal-head .proj-modal-title');
+  if (head) head.textContent = '📋 Add New Project';
+  window._activeReceiptForPJ = null;
 }
+
 function genBatchNo() {
   const today = new Date();
   const dd = String(today.getDate()).padStart(2,'0');
@@ -5240,61 +5623,123 @@ function getCatLabel(val) {
   const found = customs.find(c=>c.value===val);
   return found ? found.label : val;
 }
-function onProjCatChange(type, prefix) {}
+// Memunculkan tombol Silang ✕ hanya saat ada kategori yang dipilih
+function onProjCatChange(type, prefix) {
+  const sel = document.getElementById(prefix + '-cat-' + type);
+  const delBtn = document.getElementById(prefix + '-cat-del-' + type);
+  if (!sel || !delBtn) return;
+  
+  if (sel.value !== '') {
+    delBtn.style.display = 'block';
+  } else {
+    delBtn.style.display = 'none';
+  }
+}
+window.onProjCatChange = onProjCatChange;
+
 function addCustomCategory(type, prefix) {
   const wrap = document.getElementById(prefix+'-cat-custom-'+type);
   if (wrap) wrap.style.display = wrap.style.display==='none' ? 'block' : 'none';
 }
+window.addCustomCategory = addCustomCategory;
+
+// Fungsi Refresh Dropdown saat Edit Project / Ada kategori baru
+function loadCategoriesIntoSelect(selEl) {
+  if (!selEl) return;
+  const deletedCats = JSON.parse(localStorage.getItem('deleted_default_categories') || '[]');
+  const customCats = JSON.parse(localStorage.getItem('custom_categories') || '[]');
+  const DEFAULT_CATEGORIES = [
+    { value: 'teh-hijau', label: '🍵 Teh Hijau' }, { value: 'oolong', label: '🍵 Oolong' },
+    { value: 'black-tea', label: '☕ Black Tea' }, { value: 'roasted-jasmine', label: '🌸 Roasted Green Tea Jasmine' },
+    { value: 'robusta', label: '☕ Kopi Robusta' }, { value: 'arabika', label: '☕ Kopi Arabika' }
+  ];
+  
+  const currVal = selEl.value; // Simpan nilai yg sedang dipilih
+  let html = '<option value="">-- Pilih kategori --</option>';
+  
+  DEFAULT_CATEGORIES.forEach(c => {
+    if (!deletedCats.includes(c.value)) html += `<option value="${c.value}">${c.label}</option>`;
+  });
+  customCats.forEach(c => {
+    html += `<option value="${c.value}">📌 ${c.label}</option>`;
+  });
+  
+  selEl.innerHTML = html;
+  selEl.value = currVal;
+}
+window.loadCategoriesIntoSelect = loadCategoriesIntoSelect;
+
+// Simpan Kategori
 function saveCustomCategory(type, prefix) {
   const inp = document.getElementById(prefix+'-cat-new-'+type);
   const sel = document.getElementById(prefix+'-cat-'+type);
   if (!inp || !sel) return;
   const label = inp.value.trim();
   if (!label) return;
+  
   const value = 'custom-'+label.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
   const customs = JSON.parse(localStorage.getItem('custom_categories')||'[]');
   if (!customs.find(c=>c.value===value)) {
     customs.push({value, label});
     localStorage.setItem('custom_categories', JSON.stringify(customs));
   }
-  // Add to this select if not already there
-  if (!sel.querySelector('option[value="'+value+'"]')) {
-    const opt = document.createElement('option');
-    opt.value = value; opt.textContent = '📌 '+label;
-    sel.appendChild(opt);
-  }
+  
+  // Sinkronkan semua dropdown kategori
+  document.querySelectorAll('.de-select[id$="-cat-'+type+'"]').forEach(el => loadCategoriesIntoSelect(el));
+  
   sel.value = value;
   inp.value = '';
-  const wrap = document.getElementById(prefix+'-cat-custom-'+type);
-  if (wrap) wrap.style.display = 'none';
+  document.getElementById(prefix+'-cat-custom-'+type).style.display = 'none';
+  onProjCatChange(type, prefix);
   showQuickToast('✅ Kategori "'+label+'" ditambahkan!');
 }
-function loadCustomCategoriesIntoSelect(selEl) {
-  if (!selEl) return;
-  const customs = JSON.parse(localStorage.getItem('custom_categories')||'[]');
-  customs.forEach(c => {
-    if (!selEl.querySelector('option[value="'+c.value+'"]')) {
-      const opt = document.createElement('option');
-      opt.value = c.value; opt.textContent = '📌 '+c.label;
-      selEl.appendChild(opt);
-    }
-  });
-}
-async function submitPJ(t){
-  const name=document.getElementById('pf-nm-'+t)?.value.trim();
-  if(!name){showPSt(t,'error','❌ Project title is required!');return;}
-  const kategori = document.getElementById('pf-cat-'+t)?.value || '';
-  const batch = genBatchNo();
+window.saveCustomCategory = saveCustomCategory;
 
-  // Kumpulkan role yang dicentang (hanya admin yang lihat form ini)
-  const checkedRoles = [...document.querySelectorAll(`input[name="pf-role-check-${t}"]:checked`)]
-    .map(cb => cb.value);
-  // null = semua role bisa lihat; array = hanya role tertentu
+// HAPUS KATEGORI TERPILIH (Berlaku Custom & Bawaan)
+function deleteSelectedCategory(type, prefix) {
+  const sel = document.getElementById(prefix + '-cat-' + type);
+  if (!sel || sel.value === '') return;
+  
+  const valToDelete = sel.value;
+  const optToDelete = sel.options[sel.selectedIndex];
+  const labelName = optToDelete.text.replace('📌 ', '');
+
+  if (!confirm(`Hapus kategori "${labelName}" secara permanen dari daftar?`)) return;
+
+  if (valToDelete.startsWith('custom-')) {
+    // Hapus dari penyimpanan Custom
+    let customs = JSON.parse(localStorage.getItem('custom_categories') || '[]');
+    customs = customs.filter(c => c.value !== valToDelete);
+    localStorage.setItem('custom_categories', JSON.stringify(customs));
+  } else {
+    // Sembunyikan dari penyimpanan Bawaan (Default)
+    let deletedDefaults = JSON.parse(localStorage.getItem('deleted_default_categories') || '[]');
+    if (!deletedDefaults.includes(valToDelete)) {
+      deletedDefaults.push(valToDelete);
+      localStorage.setItem('deleted_default_categories', JSON.stringify(deletedDefaults));
+    }
+  }
+
+  // Bersihkan layar
+  optToDelete.remove();
+  sel.value = '';
+  onProjCatChange(type, prefix);
+  showQuickToast(`🗑️ Kategori "${labelName}" berhasil dihapus.`);
+}
+window.deleteSelectedCategory = deleteSelectedCategory;
+
+async function submitPJ(t) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data project ini?')) return;
+  const name = document.getElementById('pf-nm-'+t)?.value.trim();
+  if (!name) { showPSt(t,'error','❌ Project title is required!'); return; }
+  const kategori    = document.getElementById('pf-cat-'+t)?.value || '';
+  const batch       = genBatchNo();
+  const checkedRoles = [...document.querySelectorAll(`input[name="pf-role-check-${t}"]:checked`)].map(cb => cb.value);
   const allowedRoles = checkedRoles.length > 0 ? checkedRoles : null;
 
   const payload = {
     type:          t,
-    name,          kategori,  batch,
+    name, kategori, batch,
     start:         document.getElementById('pf-st-'+t)?.value || null,
     end:           document.getElementById('pf-en-'+t)?.value || null,
     materials:     document.getElementById('pf-mat-'+t)?.value.trim() || '',
@@ -5308,13 +5753,32 @@ async function submitPJ(t){
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Gagal simpan');
     await loadPJ(t);
+
+    // Jika dari receipt → auto-save set point juga
+    const activeRcpt = window._activeReceiptForPJ;
+    if (activeRcpt?.receipt?.sp_data && Object.keys(activeRcpt.receipt.sp_data).length > 0) {
+      const newProjs = gPJ(t);
+      const newProj  = newProjs.find(p => p.name === name && p.batch === batch);
+      if (newProj?._id) {
+        try {
+          await fetch('/api/projects/'+newProj._id+'/setpoint', {
+            method:'PUT',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(activeRcpt.receipt.sp_data)
+          });
+          await loadPJ(t);
+        } catch(e) { console.warn('Auto-save SP from receipt failed:', e); }
+      }
+    }
+    window._activeReceiptForPJ = null;
     showPSt(t,'success','✅ Project saved! Batch: '+batch);
-    setTimeout(()=>{closeAPJ(t);renderPJ(t);},900);
+    setTimeout(() => { closeAPJ(t); renderPJ(t); }, 900);
   } catch(e) {
     console.error('Save error:', e);
     showPSt(t,'error','❌ Failed to save: '+e.message);
   }
 }
+
 function showPSt(t, k, m) {
   const b  = document.getElementById('psb-'+t);
   const el = document.getElementById('psm-'+t);
@@ -5329,8 +5793,14 @@ function openEditPJ(type, idx) {
   _editPJIdx = idx;
   const p = gPJ(type)[idx]; if(!p) return;
   document.getElementById('ef-nm-'+type).value  = p.name || '';
+  
   const efCatSel = document.getElementById('ef-cat-'+type);
-  if (efCatSel) { loadCustomCategoriesIntoSelect(efCatSel); efCatSel.value = p.kategori || ''; }
+  if (efCatSel) { 
+    loadCategoriesIntoSelect(efCatSel); // <--- Memuat ulang agar list terupdate
+    efCatSel.value = p.kategori || ''; 
+    onProjCatChange(type, 'ef'); 
+  }
+  
   document.getElementById('ef-st-'+type).value  = p.start || '';
   document.getElementById('ef-en-'+type).value  = p.end || '';
   document.getElementById('ef-mat-'+type).value = p.materials || '';
@@ -5426,11 +5896,25 @@ function spGoPage1(type) {
 window.spGoPage1 = spGoPage1;
 window.spGoPage2 = spGoPage2;
 
-// ── Set Point functions ───────────────────────────────────
 function openSP(type, idx) {
   _spPJIdx = idx;
   const p = gPJ(type)[idx]; if (!p) return;
   document.getElementById('sp-proj-nm-'+type).textContent = p.name;
+
+  // ── Populate receipt dropdown ──────────────────────────
+  const rcptSel = document.getElementById('sp-receipt-sel-'+type);
+  if (rcptSel) {
+    const receipts = getReceipts();
+    rcptSel.innerHTML = '<option value="">— Isi manual —</option>' +
+      receipts.map((r, ri) =>
+        `<option value="${ri}">📋 ${r.name}${r.kategori ? ' · ' + r.kategori : ''}</option>`
+      ).join('');
+    rcptSel.value = '';
+    // Tampilkan banner area tapi kosong
+    const banner = document.getElementById('sp-receipt-banner-'+type);
+    if (banner) banner.style.display = 'none';
+  }
+
   // Clear all SP fields
   document.querySelectorAll('.sp-field-'+type).forEach(f => f.value = '');
   // Load existing set point
@@ -5441,11 +5925,39 @@ function openSP(type, idx) {
     });
   }
   const sb = document.getElementById('sp-sb-'+type); if(sb) sb.style.display='none';
-  // Always start on page 1
   spGoPage1(type);
   document.getElementById('sp-overlay-'+type)?.classList.add('show');
   setupSPModalCalculations(type);
 }
+
+// Import receipt ke SP modal dari dropdown di header SP modal
+function applyReceiptToSP(type) {
+  const sel = document.getElementById('sp-receipt-sel-'+type);
+  if (!sel || sel.value === '') return;
+  const receipts = getReceipts();
+  const r = receipts[+sel.value];
+  if (!r) return;
+
+  let count = 0;
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id+'-'+type);
+    if (el && r.sp_data[f.id] !== undefined && r.sp_data[f.id] !== '') {
+      el.value = r.sp_data[f.id]; count++;
+    }
+  });
+
+  // Tampilkan banner konfirmasi
+  const banner = document.getElementById('sp-receipt-banner-'+type);
+  if (banner) {
+    banner.style.display = 'flex';
+    banner.innerHTML = `
+      <span>✅ Receipt <strong>"${r.name}"</strong> di-import (${count} field). Edit manual jika perlu.</span>
+      <button onclick="this.parentElement.style.display='none'" style="background:none;border:none;color:#6d28d9;font-size:16px;cursor:pointer;padding:0 4px;">✕</button>`;
+  }
+  showQuickToast(`✅ Receipt "${r.name}" diaplikasikan!`);
+}
+window.applyReceiptToSP = applyReceiptToSP;
+
 function closeSP(type) {
   document.getElementById('sp-overlay-'+type)?.classList.remove('show');
   _spPJIdx = -1;
@@ -5479,7 +5991,663 @@ async function saveSP(type) {
   setTimeout(()=>{closeSP(type);renderPJ(type);},900);
 }
 
-// ── Fungsi Reset Finish Production (Update Final) ────────────────────────
+// ═══════════════════════════════════════════════════════════
+// RECEIPT SYSTEM — Template Set Point yang bisa disimpan & diimport
+// ═══════════════════════════════════════════════════════════
+
+// Helpers localStorage receipt
+function getReceipts()       { try { return JSON.parse(localStorage.getItem('sail_receipts') || '[]'); } catch { return []; } }
+function saveReceipts(list)  { localStorage.setItem('sail_receipts', JSON.stringify(list)); }
+
+// Buka modal Receipt untuk project tertentu
+function openReceiptModal(type, projIdx) {
+  // Hapus modal lama kalau ada
+  document.getElementById('receipt-modal-overlay')?.remove();
+
+  const receipts = getReceipts();
+  const proj = gPJ(type)[projIdx];
+  if (!proj) return;
+
+  const listHTML = receipts.length === 0
+    ? `<div style="text-align:center;padding:32px;color:var(--txt3);font-size:13px;">Belum ada receipt. Simpan receipt baru dari Set Point yang sudah diisi.</div>`
+    : receipts.map((r, ri) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);margin-bottom:8px;">
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:13px;color:var(--txt);">📋 ${r.name}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px;">
+            ${r.kategori ? `🏷️ ${r.kategori} &nbsp;·&nbsp;` : ''}
+            Dibuat: ${new Date(r.created_at).toLocaleDateString('id-ID')}
+            &nbsp;·&nbsp; ${Object.keys(r.sp_data).filter(k=>r.sp_data[k]!=='').length} field terisi
+          </div>
+        </div>
+        <button class="pj-btn" style="border-color:var(--blue);color:var(--blue);background:#eff6ff;white-space:nowrap;"
+          onclick="importReceiptToSP('${type}',${projIdx},${ri})">⬇️ Import</button>
+        <button class="pj-btn" style="border-color:#7c3aed;color:#7c3aed;background:#f5f3ff;white-space:nowrap;"
+          onclick="editReceipt(${ri})">✏️ Edit</button>
+        <button class="pj-btn pj-btn-end" style="white-space:nowrap;"
+          onclick="deleteReceipt(${ri})">🗑️</button>
+      </div>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'receipt-modal-overlay';
+  modal.className = 'proj-modal-overlay show';
+  modal.innerHTML = `
+    <div class="proj-modal" style="max-width:680px;width:95vw;">
+      <div class="proj-modal-head">
+        <div>
+          <div class="proj-modal-title">📋 Receipt — Template Set Point</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:3px;">Project: <strong>${proj.name}</strong></div>
+        </div>
+        <button class="proj-modal-close" onclick="document.getElementById('receipt-modal-overlay').remove()">✕</button>
+      </div>
+      <div class="proj-modal-body">
+        <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;">
+          <div style="flex:1;font-size:13px;color:var(--txt2);">
+            Pilih receipt untuk di-import ke Set Point project ini, atau buat receipt baru.
+          </div>
+          <button class="de-btn de-btn-primary" style="white-space:nowrap;" onclick="openAddReceiptModal('${type}',${projIdx})">＋ Buat Receipt</button>
+        </div>
+        <div id="receipt-list-body">${listHTML}</div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+window.openReceiptModal = openReceiptModal;
+
+// Import receipt ke Set Point modal (buka SP modal dengan nilai receipt)
+function importReceiptToSP(type, projIdx, receiptIdx) {
+  const receipts = getReceipts();
+  const r = receipts[receiptIdx];
+  if (!r) return;
+
+  // Tutup receipt modal
+  document.getElementById('receipt-modal-overlay')?.remove();
+
+  // Buka SP modal dulu
+  openSP(type, projIdx);
+
+  // Tunggu modal render lalu isi semua field dari receipt
+  setTimeout(() => {
+    let importedCount = 0;
+    SP_FIELDS.forEach(f => {
+      const el = document.getElementById(f.id + '-' + type);
+      if (el && r.sp_data[f.id] !== undefined && r.sp_data[f.id] !== '') {
+        el.value = r.sp_data[f.id];
+        importedCount++;
+      }
+    });
+
+    // Tampilkan banner notifikasi di dalam SP modal
+    const page1 = document.getElementById('sp-page1-' + type);
+    if (page1) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'padding:10px 14px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;font-size:12px;color:#6d28d9;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;';
+      banner.innerHTML = `
+        <span>✅ Receipt <strong>"${r.name}"</strong> berhasil di-import (${importedCount} field). Anda bisa edit manual sebelum disimpan.</span>
+        <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#6d28d9;font-size:16px;cursor:pointer;padding:0 4px;">✕</button>`;
+      page1.insertBefore(banner, page1.firstChild);
+    }
+
+    showQuickToast(`✅ Receipt "${r.name}" di-import ke Set Point!`);
+  }, 150);
+}
+window.importReceiptToSP = importReceiptToSP;
+
+function openAddReceiptModal(type, projIdx, editIdx = -1) {
+  document.getElementById('receipt-add-overlay')?.remove();
+
+  const receipts = getReceipts();
+  const isEdit   = editIdx >= 0;
+  const existing = isEdit ? receipts[editIdx] : null;
+  const proj     = gPJ(type)?.[projIdx];
+
+  // Pre-fill dari set point project yang sedang dipilih (kalau bukan edit)
+  const prefill  = existing?.sp_data || (proj?.setPoint || {});
+
+  // ═══ TAMBAHAN BARU: Dropdown completed projects ═══
+  const completedProjs = gPJ('completed').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const projOpts = completedProjs.length === 0
+    ? '<option value="">— Tidak ada project selesai dengan Set Point —</option>'
+    : '<option value="">— Isi manual —</option>' +
+      completedProjs.map((p, i) => `<option value="${i}">${p.name}${p.kategori ? ' · ' + p.kategori : ''}</option>`).join('');
+  // ═══ AKHIR TAMBAHAN ═══
+
+  const fieldsHTML = SP_FIELDS.map(f => {
+    const val = prefill[f.id] || '';
+    const isCalc = f.calculated;
+    return `
+      <div class="de-field">
+        <label class="de-label" style="color:#111;">${f.label}${isCalc ? ' <span style="font-size:9px;color:var(--txt3)">(auto)</span>' : ''}</label>
+        <div class="de-input-wrap">
+          <input class="de-input receipt-sp-field" id="rsp-${f.id}"
+            type="${f.type}" step="0.1"
+            value="${val}"
+            placeholder="${val || '—'}"
+            ${isCalc ? 'readonly style="background:#f3f4f6;color:var(--txt3)"' : ''}>
+          ${f.unit ? `<span class="de-input-unit">${f.unit}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'receipt-add-overlay';
+  overlay.className = 'proj-modal-overlay show';
+  overlay.innerHTML = `
+    <div class="proj-modal sp-modal" style="max-width:760px;width:95vw;max-height:90vh;">
+      <div class="proj-modal-head">
+        <div class="proj-modal-title">${isEdit ? '✏️ Edit Receipt' : '＋ Buat Receipt Baru'}</div>
+        <button class="proj-modal-close" onclick="document.getElementById('receipt-add-overlay').remove()">✕</button>
+      </div>
+      <div class="proj-modal-body" style="overflow-y:auto;max-height:calc(90vh - 120px);">
+        <div class="de-field" style="margin-bottom:16px;">
+          <label class="de-label" style="color:#111;">NAMA RECEIPT *</label>
+          <input class="de-input" id="receipt-name-inp" type="text"
+            value="${existing?.name || ''}"
+            placeholder="Contoh: Teh Hijau Standard, Oolong Premium...">
+        </div>
+        <div class="de-field" style="margin-bottom:20px;">
+          <label class="de-label" style="color:#111;">KATEGORI (opsional)</label>
+          <input class="de-input" id="receipt-cat-inp" type="text"
+            value="${existing?.kategori || proj?.kategori || ''}"
+            placeholder="Contoh: Teh Hijau, Oolong...">
+        </div>
+        
+        ${completedProjs.length > 0 ? `
+        <!-- ═══ TAMBAHAN BARU: Import Section ═══ -->
+        <div style="padding:12px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:20px;">
+          <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:8px;">🏭 Import Set Point dari Project Selesai</div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select class="de-input de-select" id="receipt-proj-import-modal" style="flex:1;" onchange="importCompletedToReceiptModal()">
+              ${projOpts}
+            </select>
+          </div>
+          <div style="font-size:10px;color:#16a34a;margin-top:5px;">Memilih project akan mengisi otomatis semua field di bawah. Anda tetap bisa edit manual.</div>
+        </div>
+        <!-- ═══ AKHIR TAMBAHAN ═══ -->
+        ` : ''}
+        
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:12px;">📊 Nilai Set Point</div>
+        <div class="setpoint-grid" style="margin-bottom:20px;">${fieldsHTML}</div>
+        <div class="de-status-bar" id="receipt-sb" style="display:none"><span id="receipt-sm"></span></div>
+        <div class="de-actions" style="margin-top:8px;">
+          <button class="de-btn de-btn-ghost" onclick="document.getElementById('receipt-add-overlay').remove()">Batal</button>
+          <button class="de-btn de-btn-primary" onclick="saveReceiptFromModal('${type}',${projIdx},${editIdx})">
+            💾 ${isEdit ? 'Update Receipt' : 'Simpan Receipt'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Import set point dari completed project ke receipt modal
+function importCompletedToReceiptModal() {
+  const sel = document.getElementById('receipt-proj-import-modal');
+  if (!sel || sel.value === '') return;
+  
+  const completedProjs = gPJ('completed').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const proj = completedProjs[+sel.value];
+  if (!proj?.setPoint) return;
+  
+  // Fill semua field SP
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById('rsp-' + f.id);
+    if (el && proj.setPoint[f.id] !== undefined) {
+      el.value = proj.setPoint[f.id];
+    }
+  });
+  
+  // Auto-isi nama receipt dari nama project jika masih kosong
+  const nameEl = document.getElementById('receipt-name-inp');
+  if (nameEl && !nameEl.value.trim()) {
+    nameEl.value = proj.name + (proj.kategori ? ' — ' + proj.kategori : '');
+  }
+  
+  // Auto-isi kategori
+  const catEl = document.getElementById('receipt-cat-inp');
+  if (catEl && !catEl.value.trim() && proj.kategori) {
+    catEl.value = proj.kategori;
+  }
+  
+  showQuickToast('✅ Set Point dari "' + proj.name + '" berhasil di-import!');
+}
+window.importCompletedToReceiptModal = importCompletedToReceiptModal;
+
+// Simpan receipt dari modal (buat baru atau update)
+function saveReceiptFromModal(type, projIdx, editIdx = -1) {
+  const name = document.getElementById('receipt-name-inp')?.value.trim();
+  if (!name) {
+    const sb = document.getElementById('receipt-sb');
+    const sm = document.getElementById('receipt-sm');
+    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='❌ Nama receipt wajib diisi!'; }
+    return;
+  }
+
+  const sp_data = {};
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById('rsp-' + f.id);
+    if (el) sp_data[f.id] = el.value.trim();
+  });
+
+  const receipts = getReceipts();
+  const entry = {
+    name,
+    kategori:   document.getElementById('receipt-cat-inp')?.value.trim() || '',
+    sp_data,
+    created_at: editIdx >= 0 ? receipts[editIdx].created_at : new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (editIdx >= 0) {
+    receipts[editIdx] = entry;
+  } else {
+    receipts.unshift(entry);
+  }
+  saveReceipts(receipts);
+
+  document.getElementById('receipt-add-overlay')?.remove();
+  showQuickToast(`✅ Receipt "${name}" ${editIdx >= 0 ? 'diupdate' : 'disimpan'}!`);
+
+  // Refresh receipt list kalau modal receipt masih terbuka
+  if (document.getElementById('receipt-modal-overlay')) {
+    openReceiptModal(type, projIdx);
+  }
+}
+window.saveReceiptFromModal = saveReceiptFromModal;
+
+// Edit receipt yang sudah ada
+function editReceipt(receiptIdx) {
+  // Ambil type dan projIdx dari context — pakai dummy 'ongoing',0 karena hanya edit data receipt
+  document.getElementById('receipt-modal-overlay')?.remove();
+  openAddReceiptModal('ongoing', 0, receiptIdx);
+}
+window.editReceipt = editReceipt;
+
+// Hapus receipt
+function deleteReceipt(receiptIdx) {
+  if (!confirm('Hapus receipt ini?')) return;
+  const receipts = getReceipts();
+  const name = receipts[receiptIdx]?.name || '';
+  receipts.splice(receiptIdx, 1);
+  saveReceipts(receipts);
+  showQuickToast(`🗑️ Receipt "${name}" dihapus.`);
+  // Refresh list — ambil type/projIdx dari modal yg masih terbuka
+  const overlay = document.getElementById('receipt-modal-overlay');
+  if (overlay) {
+    // Re-render list saja
+    const listBody = document.getElementById('receipt-list-body');
+    const recs = getReceipts();
+    if (listBody) {
+      listBody.innerHTML = recs.length === 0
+        ? `<div style="text-align:center;padding:32px;color:var(--txt3);font-size:13px;">Belum ada receipt.</div>`
+        : recs.map((r, ri) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:13px;color:var(--txt);">📋 ${r.name}</div>
+              <div style="font-size:11px;color:var(--txt3);margin-top:2px;">
+                ${r.kategori ? `🏷️ ${r.kategori} &nbsp;·&nbsp;` : ''}
+                ${new Date(r.created_at).toLocaleDateString('id-ID')}
+                &nbsp;·&nbsp; ${Object.keys(r.sp_data).filter(k=>r.sp_data[k]!=='').length} field terisi
+              </div>
+            </div>
+            <button class="pj-btn" style="border-color:var(--blue);color:var(--blue);background:#eff6ff;" onclick="importReceiptToSP('ongoing',0,${ri})">⬇️ Import</button>
+            <button class="pj-btn" style="border-color:#7c3aed;color:#7c3aed;background:#f5f3ff;" onclick="editReceipt(${ri})">✏️ Edit</button>
+            <button class="pj-btn pj-btn-end" onclick="deleteReceipt(${ri})">🗑️</button>
+          </div>`).join('');
+    }
+  }
+}
+window.deleteReceipt = deleteReceipt;
+
+// Shortcut: simpan Set Point yang sudah diisi sebagai receipt baru
+function saveCurrentSPAsReceipt(type) {
+  const sp_data = {};
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById(f.id + '-' + type);
+    if (el) sp_data[f.id] = el.value.trim();
+  });
+
+  const filled = Object.values(sp_data).filter(v => v !== '').length;
+  if (filled === 0) { showQuickToast('❌ Isi minimal satu field Set Point dulu!'); return; }
+
+  const name = prompt('Nama receipt ini?');
+  if (!name || !name.trim()) return;
+
+  const receipts = getReceipts();
+  receipts.unshift({
+    name: name.trim(),
+    kategori: '',
+    sp_data,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  saveReceipts(receipts);
+  showQuickToast(`✅ Receipt "${name.trim()}" disimpan dari Set Point saat ini!`);
+}
+window.saveCurrentSPAsReceipt = saveCurrentSPAsReceipt;
+
+// ═══════════════════════════════════════════════════════════
+// RECEIPT PAGE — Halaman manajemen semua receipt
+// ═══════════════════════════════════════════════════════════
+function getReceiptPageHTML() {
+  return `
+<div class="de-wrap">
+  <div class="de-header">
+    <div>
+      <div class="de-title">📋 Receipt — Template Set Point</div>
+      <div class="de-sub">Simpan dan kelola template set point untuk digunakan kembali</div>
+    </div>
+    <button class="de-btn de-btn-primary" onclick="openAddReceiptStandalone()">＋ Tambah Receipt</button>
+  </div>
+  <div class="de-card" id="receipt-page-card">
+    <div id="receipt-page-list" style="padding:4px 0;">
+      <div style="text-align:center;padding:48px;color:var(--txt3);font-size:13px;">⏳ Memuat...</div>
+    </div>
+  </div>
+</div>`;
+}
+
+function initReceiptPage() {
+  renderReceiptPage();
+}
+
+function renderReceiptPage() {
+  const list = document.getElementById('receipt-page-list');
+  if (!list) return;
+  const receipts = getReceipts();
+
+  if (receipts.length === 0) {
+    list.innerHTML = `
+      <div style="text-align:center;padding:64px 24px;">
+        <div style="font-size:40px;margin-bottom:12px;">📋</div>
+        <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px;">Belum ada receipt</div>
+        <div style="font-size:13px;color:var(--txt3);margin-bottom:20px;">Buat template set point baru atau simpan dari Set Point project yang sudah ada.</div>
+        <button class="de-btn de-btn-primary" onclick="openAddReceiptStandalone()">＋ Buat Receipt Pertama</button>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = receipts.map((r, ri) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg);margin-bottom:10px;transition:.15s;"
+      onmouseover="this.style.borderColor='var(--blue)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="width:40px;height:40px;border-radius:10px;background:#f5f3ff;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📋</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;color:var(--txt);">${r.name}</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:3px;display:flex;gap:10px;flex-wrap:wrap;">
+          ${r.kategori ? `<span>🏷️ ${r.kategori}</span>` : ''}
+          <span>📅 ${new Date(r.created_at).toLocaleDateString('id-ID', {day:'2-digit',month:'long',year:'numeric'})}</span>
+          <span>✅ ${Object.values(r.sp_data).filter(v=>v!=='').length} field terisi</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0;">
+        <button class="pj-btn" style="border-color:#7c3aed;color:#7c3aed;background:#f5f3ff;"
+          onclick="openEditReceiptStandalone(${ri})">✏️ Edit</button>
+        <button class="pj-btn pj-btn-end"
+          onclick="deleteReceiptFromPage(${ri})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+window.renderReceiptPage = renderReceiptPage;
+
+function deleteReceiptFromPage(ri) {
+  if (!confirm('Hapus receipt ini? Tindakan tidak bisa dibatalkan.')) return;
+  const receipts = getReceipts();
+  const name = receipts[ri]?.name || '';
+  receipts.splice(ri, 1);
+  saveReceipts(receipts);
+  renderReceiptPage();
+  showQuickToast(`🗑️ Receipt "${name}" dihapus.`);
+}
+window.deleteReceiptFromPage = deleteReceiptFromPage;
+
+// Buka modal add receipt dari halaman Receipt (standalone, tanpa context project)
+function openAddReceiptStandalone(editIdx = -1) {
+  document.getElementById('receipt-standalone-overlay')?.remove();
+  const receipts  = getReceipts();
+  const isEdit    = editIdx >= 0;
+  const existing  = isEdit ? receipts[editIdx] : null;
+  const sp_prefill = existing?.sp_data || {};
+  const pj_prefill = existing?.proj_info || {};
+  const today     = new Date().toISOString().split('T')[0];
+
+  const deletedCats = JSON.parse(localStorage.getItem('deleted_default_categories') || '[]');
+  const customCats  = JSON.parse(localStorage.getItem('custom_categories') || '[]');
+  const DEFAULT_CATEGORIES = [
+    { value:'teh-hijau', label:'🍵 Teh Hijau' },{ value:'oolong', label:'🍵 Oolong' },
+    { value:'black-tea', label:'☕ Black Tea' },{ value:'roasted-jasmine', label:'🌸 Roasted Green Tea Jasmine' },
+    { value:'robusta', label:'☕ Kopi Robusta' },{ value:'arabika', label:'☕ Kopi Arabika' },
+  ];
+  let catOpts = '<option value="">-- Pilih kategori --</option>';
+  DEFAULT_CATEGORIES.forEach(c => { if (!deletedCats.includes(c.value)) catOpts += `<option value="${c.value}" ${pj_prefill.kategori===c.value?'selected':''}>${c.label}</option>`; });
+  customCats.forEach(c => { catOpts += `<option value="${c.value}" ${pj_prefill.kategori===c.value?'selected':''}>📌 ${c.label}</option>`; });
+
+  const completedProjs = gPJ('completed').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+  const projOpts = completedProjs.length === 0
+    ? '<option value="">— Tidak ada project selesai dengan Set Point —</option>'
+    : '<option value="">— Isi manual —</option>' +
+      completedProjs.map((p,i) => `<option value="${i}">${p.name}${p.kategori?' · '+p.kategori:''}</option>`).join('');
+
+  const spFieldsHTML = buildReceiptSPForm(sp_prefill);
+
+  const savedTools = (pj_prefill.tools || '').split(', ').filter(Boolean);
+  const toolsHTML  = ['Ekstraksi','Decanter (Separator Kasar)','Centrifuge (Separator Halus)','Filtrasi','Evaporasi','Full Condensation','Separate Condensation']
+    .map(m => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--txt2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);">
+      <input type="checkbox" value="${m}" ${savedTools.includes(m)?'checked':''} style="accent-color:var(--blue);"> ${m}
+    </label>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'receipt-standalone-overlay';
+  overlay.className = 'proj-modal-overlay show';
+  overlay.innerHTML = `
+    <div class="proj-modal sp-modal" style="max-width:780px;width:95vw;max-height:93vh;display:flex;flex-direction:column;">
+      <div class="proj-modal-head">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <div class="proj-modal-title">${isEdit ? '✏️ Edit Receipt' : '＋ Tambah Receipt Baru'}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span id="rcpt-dot1" style="width:8px;height:8px;border-radius:50%;background:var(--blue);display:inline-block;"></span>
+            <span id="rcpt-dot2" style="width:8px;height:8px;border-radius:50%;background:#d1d5db;display:inline-block;"></span>
+            <span id="rcpt-page-lbl" style="font-size:10px;color:var(--txt3);font-weight:600;">Halaman 1 / 2 — Info Project</span>
+          </div>
+        </div>
+        <button class="proj-modal-close" onclick="document.getElementById('receipt-standalone-overlay').remove()">✕</button>
+      </div>
+      <div class="proj-modal-body" style="overflow-y:auto;flex:1;">
+
+        <!-- ════ PAGE 1: PROJECT INFO ════ -->
+        <div id="rcpt-page1">
+          <div style="padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;font-size:11px;color:#7c3aed;margin-bottom:16px;">
+            <strong>ℹ️ Halaman 1:</strong> Isi info project yang akan jadi template receipt. Nama & tanggal akan bisa diubah saat pakai receipt.
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">NAMA RECEIPT *</label>
+              <input class="de-input" id="rcpt-name" type="text"
+                value="${existing?.name || ''}" placeholder="Contoh: Teh Hijau Standard...">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">TANGGAL RECEIPT</label>
+              <input class="de-input" id="rcpt-date" type="date"
+                value="${existing ? existing.created_at?.split('T')[0] : today}"
+                readonly onclick="this.removeAttribute('readonly')" onblur="this.setAttribute('readonly',true)">
+            </div>
+          </div>
+
+          <div class="de-field proj-modal-full" style="margin-bottom:14px;">
+            <label class="de-label" style="color:#111;">KATEGORI PRODUK</label>
+            <select class="de-input de-select" id="rcpt-kategori">${catOpts}</select>
+          </div>
+
+          <div class="de-field proj-modal-full" style="margin-bottom:14px;">
+            <label class="de-label" style="color:#111;">PREPARATION METHOD</label>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);">${toolsHTML}</div>
+          </div>
+
+          <div class="de-field proj-modal-full" style="margin-bottom:14px;">
+            <label class="de-label" style="color:#111;">MATERIALS USED</label>
+            <textarea class="de-input de-textarea" id="rcpt-materials" style="min-height:60px;" placeholder="e.g. Steel pipes, concrete...">${pj_prefill.materials || ''}</textarea>
+          </div>
+
+          <div class="de-field proj-modal-full" style="margin-bottom:20px;">
+            <label class="de-label" style="color:#111;">NOTES</label>
+            <textarea class="de-input de-textarea" id="rcpt-notes" style="min-height:60px;" placeholder="Catatan tambahan...">${pj_prefill.notes || ''}</textarea>
+          </div>
+
+          <div class="de-actions" style="margin-top:8px;justify-content:space-between;">
+            <button class="de-btn de-btn-ghost" onclick="document.getElementById('receipt-standalone-overlay').remove()">Batal</button>
+            <button class="de-btn de-btn-primary" onclick="rcptGoPage2()">Next → Set Point</button>
+          </div>
+        </div>
+
+        <!-- ════ PAGE 2: SET POINT ════ -->
+        <div id="rcpt-page2" style="display:none;">
+          <div style="padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;font-size:11px;color:#15803d;margin-bottom:16px;">
+            <strong>📊 Halaman 2:</strong> Isi nilai Set Point untuk template ini. Bisa dikosongkan jika tidak diperlukan.
+          </div>
+
+          ${completedProjs.length > 0 && !isEdit ? `
+          <div style="padding:11px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;margin-bottom:16px;">
+            <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:7px;">🏭 Import SP dari Project Selesai</div>
+            <select class="de-input de-select" id="rcpt-proj-import" style="width:100%;" onchange="importCompletedProjectToReceipt()">${projOpts}</select>
+          </div>` : ''}
+
+          <div id="rcpt-sp-fields">${spFieldsHTML}</div>
+
+          <div class="de-status-bar" id="rcpt-sb" style="display:none"><span id="rcpt-sm"></span></div>
+          <div class="de-actions" style="margin-top:16px;justify-content:space-between;">
+            <button class="de-btn de-btn-ghost" onclick="rcptGoPage1()">← Back</button>
+            <button class="de-btn de-btn-primary" onclick="saveReceiptStandalone(${editIdx})">
+              💾 ${isEdit ? 'Update Receipt' : 'Simpan Receipt'}
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.openAddReceiptStandalone = openAddReceiptStandalone;
+
+function rcptGoPage2() {
+  document.getElementById('rcpt-page1').style.display = 'none';
+  document.getElementById('rcpt-page2').style.display = '';
+  document.getElementById('rcpt-dot1').style.background = '#d1d5db';
+  document.getElementById('rcpt-dot2').style.background = 'var(--blue)';
+  document.getElementById('rcpt-page-lbl').textContent = 'Halaman 2 / 2 — Set Point';
+  document.querySelector('#receipt-standalone-overlay .proj-modal-body').scrollTop = 0;
+}
+window.rcptGoPage2 = rcptGoPage2;
+
+function rcptGoPage1() {
+  document.getElementById('rcpt-page2').style.display = 'none';
+  document.getElementById('rcpt-page1').style.display = '';
+  document.getElementById('rcpt-dot1').style.background = 'var(--blue)';
+  document.getElementById('rcpt-dot2').style.background = '#d1d5db';
+  document.getElementById('rcpt-page-lbl').textContent = 'Halaman 1 / 2 — Info Project';
+  document.querySelector('#receipt-standalone-overlay .proj-modal-body').scrollTop = 0;
+}
+window.rcptGoPage1 = rcptGoPage1;
+
+function openEditReceiptStandalone(editIdx) {
+  openAddReceiptStandalone(editIdx);
+}
+window.openEditReceiptStandalone = openEditReceiptStandalone;
+
+// Import set point dari project selesai ke form receipt standalone
+function importCompletedProjectToReceipt() {
+  const sel = document.getElementById('rcpt-proj-import');
+  if (!sel || sel.value === '') return;
+  const proj = gPJ('completed').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0)[+sel.value];
+  if (!proj?.setPoint) return;
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById('rcpt-sp-' + f.id);
+    if (el && proj.setPoint[f.id] !== undefined) el.value = proj.setPoint[f.id];
+  });
+  // Auto-isi nama receipt dari nama project jika masih kosong
+  const nameEl = document.getElementById('rcpt-name');
+  if (nameEl && !nameEl.value.trim()) nameEl.value = proj.name + (proj.kategori ? ' — ' + proj.kategori : '');
+  showQuickToast('✅ Set Point dari "' + proj.name + '" berhasil di-import!');
+}
+window.importCompletedProjectToReceipt = importCompletedProjectToReceipt;
+
+// Build HTML form SP fields identik dengan Set Point modal (menggunakan SP_FIELDS)
+function buildReceiptSPForm(prefill = {}) {
+  const sections = [
+    { title: '🧪 Slurry',      fields: ['sp-slurry','sp-hopper','sp-density'] },
+    { title: '💧 Flow',        fields: ['sp-feed','sp-aroma','sp-steam','sp-cond1','sp-cond2'] },
+    { title: '📊 Strip Rate',  fields: ['sp-ext','sp-int','sp-cond-rate','sp-offset'] },
+    { title: '🌡️ Temperature', fields: ['sp-temp-feed','sp-temp-heater','sp-temp-top','sp-Condensate1','sp-Condensate2','sp-temp-bot','sp-prod-out'] },
+    { title: '⚙️ Pressure',    fields: ['sp-system-vacuum','sp-steam-flow'] },
+    { title: '📝 Parameter CT',fields: ['sp-add1','sp-add2','sp-add3','sp-add4','sp-add5','sp-add6','sp-add7','sp-add8'] },
+  ];
+  const fieldMap = {};
+  SP_FIELDS.forEach(f => { fieldMap[f.id] = f; });
+
+  return sections.map(sec => {
+    const fieldsHTML = sec.fields.map(id => {
+      const f = fieldMap[id]; if (!f) return '';
+      const val = prefill[id] || '';
+      return `
+        <div class="de-field">
+          <label class="de-label" style="color:#111;">${f.label}</label>
+          <div class="de-input-wrap">
+            <input class="de-input" id="rcpt-sp-${f.id}" type="${f.type}" step="0.1"
+              value="${val}" placeholder="—"
+              ${f.calculated ? 'readonly style="background:#ebf2fd;color:#0284c7;font-weight:700;border-color:#bae6fd;"' : ''}>
+            ${f.unit ? `<span class="de-input-unit">${f.unit}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+    return `
+      <div class="setpoint-section" style="margin-bottom:18px;">
+        <div class="setpoint-section-title">${sec.title}</div>
+        <div class="setpoint-grid">${fieldsHTML}</div>
+      </div>`;
+  }).join('');
+}
+
+function saveReceiptStandalone(editIdx = -1) {
+  const name = document.getElementById('rcpt-name')?.value.trim();
+  if (!name) {
+    const sb = document.getElementById('rcpt-sb'), sm = document.getElementById('rcpt-sm');
+    if (sb&&sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='❌ Nama receipt wajib diisi!'; }
+    return;
+  }
+  const dateVal = document.getElementById('rcpt-date')?.value || new Date().toISOString();
+
+  // Kumpulkan proj_info dari page 1
+  const proj_info = {
+    kategori:  document.getElementById('rcpt-kategori')?.value  || '',
+    materials: document.getElementById('rcpt-materials')?.value.trim() || '',
+    notes:     document.getElementById('rcpt-notes')?.value.trim()     || '',
+    tools: [...document.querySelectorAll('#receipt-standalone-overlay input[type=checkbox]:checked')]
+      .map(cb => cb.value).join(', '),
+  };
+
+  const sp_data = {};
+  SP_FIELDS.forEach(f => {
+    const el = document.getElementById('rcpt-sp-' + f.id);
+    if (el) sp_data[f.id] = el.value.trim();
+  });
+
+  const receipts = getReceipts();
+  const entry = {
+    name, proj_info, sp_data,
+    kategori:   proj_info.kategori,
+    created_at: editIdx >= 0 ? receipts[editIdx].created_at : (dateVal.includes('T') ? dateVal : dateVal + 'T00:00:00.000Z'),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (editIdx >= 0) receipts[editIdx] = entry;
+  else receipts.unshift(entry);
+  saveReceipts(receipts);
+
+  document.getElementById('receipt-standalone-overlay')?.remove();
+  showQuickToast(`✅ Receipt "${name}" ${editIdx >= 0 ? 'diupdate' : 'disimpan'}!`);
+  renderReceiptPage();
+}
+window.saveReceiptStandalone = saveReceiptStandalone;
+
 function resetFPForm(type) {
   if (_fpPJIdx < 0) return;
   
@@ -5649,6 +6817,12 @@ function addFPItem(type, data=null) {
       <label class="de-label">Berat <span style="font-weight:400;color:var(--txt3)">(kg)</span></label>
       <input class="de-input" id="fpr-berat-${uid}" type="number" step="0.1" value="${data?.berat||''}" placeholder="0.0">
     </div>
+    
+    <div class="de-field" style="grid-column: 1 / -1;">
+      <label class="de-label">Catatan</label>
+      <textarea class="de-input" id="fpr-notes-${uid}" placeholder="Catatan..." style="min-height:50px;">${data?.notes||''}</textarea>
+    </div>
+
     <div></div>
     <div style="display:flex;align-items:flex-end;justify-content:flex-end">
       <button class="fp-item-remove" onclick="document.getElementById('fp-row-${uid}').remove()" style="padding:8px 14px;font-size:12px">✕ Hapus</button>
@@ -5692,34 +6866,36 @@ function addFPItem2(type, data=null) {
 }
 
 async function saveFP(type) {
+  if (!confirm('Apakah Anda yakin ingin menyelesaikan Finish Production?')) return;
+  if (_fpPJIdx < 0) return;
+  _saveFPDrafts(type);
   const ps   = gPJ(type);
   const proj = ps[_fpPJIdx];
   if (!proj) return;
-  const entries = [];
-  document.querySelectorAll('.fp-item-row').forEach(row => {
-    const uid = row.dataset.uid;
-    entries.push({
-      product: document.getElementById('fp-prod-'+uid)?.value  || '',
-      lot:     document.getElementById('fp-lot-'+uid)?.value   || '',
-      qty:     document.getElementById('fp-qty-'+uid)?.value   || '',
-      unit:    document.getElementById('fp-unit-'+uid)?.value  || '',
-      notes:   document.getElementById('fp-note-'+uid)?.value  || '',
-    });
-  });
-  const allFilled = entries.length > 0 && entries.every(e => e.product && e.qty);
+  // Kumpulkan items dari kedua page
+  const items1 = window._fpDraft1?.[type+_fpPJIdx] || [];
+  const items2 = window._fpDraft2?.[type+_fpPJIdx] || [];
+  const allFilled = (items1.length > 0 || items2.length > 0);
   if (proj._id) {
     try {
-      await fetch('/api/projects/'+proj._id+'/fp', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fp_done: allFilled, fp_entries: entries }) });
+      await fetch('/api/projects/'+proj._id+'/fp', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ fp_done: allFilled, fp_entries: items2 }) });
       await loadPJ(type);
     } catch(e) { console.error('saveFP API error:', e); }
   } else {
+    // Fallback localStorage
     ps[_fpPJIdx].fpDone    = allFilled;
-    ps[_fpPJIdx].fp_entries = entries;
+    ps[_fpPJIdx].fpItems1  = items1;
+    ps[_fpPJIdx].fpItems2  = items2;
+    ps[_fpPJIdx].fpItems   = items2;
+    delete ps[_fpPJIdx].fpItems1Draft;
+    delete ps[_fpPJIdx].fpItems2Draft;
     sPJ(type, ps);
   }
-  closeFP(type);
-  renderPJ(type);
-  showQuickToast('✅ Final Product tersimpan!');
+  if (window._fpDraft1) delete window._fpDraft1[type+_fpPJIdx];
+  if (window._fpDraft2) delete window._fpDraft2[type+_fpPJIdx];
+  const b=document.getElementById('fp-sb-'+type),m=document.getElementById('fp-sm-'+type);
+  if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-success';m.textContent='✅ Finish Production disimpan! Tombol End sekarang aktif.';}
+  setTimeout(()=>{closeFP(type);renderPJ(type);},900);
 }
 
 window.fpGoPage1 = fpGoPage1;
@@ -5731,24 +6907,31 @@ window.openFP = openFP;
 window.closeFP = closeFP;
 
 // ── End Production ────────────────────────────────────────
-function endProd(type, idx) {
+async function endProd(type, idx) {
   const ps = gPJ(type);
   const p  = ps[idx];
   if (!p) return;
   const hasCIPProd = p.cipProdDone === true;
   const hasCIPLab  = p.cipLabDone  === true;
-  const hasCIP     = hasCIPProd && hasCIPLab;
   const hasFP      = p.fpDone === true;
   if (!hasCIPProd) { showQuickToast('❌ CIP Data Entry Production belum diisi!'); return; }
   if (!hasCIPLab)  { showQuickToast('❌ CIP Data Entry Laboratorium belum diisi!'); return; }
   if (!hasFP)      { showQuickToast('❌ Finish Production belum diisi!'); return; }
   if (!confirm(`Akhiri produksi untuk "${p.name}"?\nProyek akan dipindahkan ke Completed.`)) return;
-  p.completed_at = new Date().toISOString();
-  const comp = gPJ('completed');
-  comp.unshift(p);
-  sPJ('completed', comp);
-  ps.splice(idx, 1);
-  sPJ(type, ps);
+  if (p._id) {
+    try {
+      await fetch('/api/projects/'+p._id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ type:'completed', completed_at: new Date().toISOString() }) });
+      await loadPJ('ongoing');
+      await loadPJ('completed');
+    } catch(e) { console.error('endProd API error:', e); }
+  } else {
+    p.completed_at = new Date().toISOString();
+    const comp = gPJ('completed');
+    comp.unshift(p);
+    sPJ('completed', comp);
+    ps.splice(idx, 1);
+    sPJ(type, ps);
+  }
   renderPJ(type);
   showQuickToast('✅ Produksi selesai! Proyek dipindahkan ke Completed.');
 }
@@ -5850,6 +7033,9 @@ function openSumm(type, idx) {
       <tr><td style="${tdStyle}">Nama Project</td><td style="${tdMonoStyle}">${p.name||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Mulai</td><td style="${tdStyle}">${p.start||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Selesai</td><td style="${tdStyle}">${p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—'}</td></tr>
+      <tr><td style="${tdStyle}">Metode</td><td style="${tdStyle}">${p.method||'—'}</td></tr>
+      <tr><td style="${tdStyle}">Materials</td><td style="${tdStyle}">${p.materials||'—'}</td></tr>
+      <tr><td style="${tdStyle}">Tools</td><td style="${tdStyle}">${p.tools||'—'}</td></tr>
       <tr><td style="${tdStyle}">Notes</td><td style="${tdStyle}">${p.notes||'—'}</td></tr>
     </tbody>`);
 
@@ -5877,36 +7063,113 @@ function openSumm(type, idx) {
     </div>`;
 
   // ── 4. CIP Data ───────────────────────────────────────
-  if (p.cipDone && p.cipFields) {
-    const cipRows = Object.entries(p.cipFields).map(([k,v], i) =>
-      `<tr><td style="${tdStyle}">CIP Field ${i+1}</td><td style="${tdStyle}">${v||'—'}</td></tr>`
-    ).join('');
-    html += section('🧼', 'Data CIP', `
-      <thead><tr><th style="${thStyle}">Field</th><th style="${thStyle}">Value</th></tr></thead>
-      <tbody>${cipRows}</tbody>`);
+  if (p.cipDone && p.cipHistory && p.cipHistory.length) {
+    // Group CIP history by type (production vs laboratorium)
+    const cipTypes = {};
+    p.cipHistory.forEach(entry => {
+      const type = entry.type || 'production';
+      if (!cipTypes[type]) cipTypes[type] = [];
+      cipTypes[type].push(entry);
+    });
+
+    Object.entries(cipTypes).forEach(([cipType, entries]) => {
+      const typeLabel = cipType === 'laboratorium' ? '🧪 Lab CIP' : '🏭 Production CIP';
+      
+      // Build thead with update columns
+      let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>`;
+      entries.forEach((entry, i) => {
+        const dateObj = new Date(entry.saved_at);
+        const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+        thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+      });
+      thead += `</tr>`;
+
+      // Collect all unique parameters
+      const allParams = new Set();
+      entries.forEach(entry => {
+        if (entry.fields) {
+          Object.keys(entry.fields).forEach(key => allParams.add(key));
+        }
+      });
+
+      // Build tbody
+      let tbody = '';
+      let rowIdx = 0;
+      [...allParams].sort().forEach(param => {
+        const rowBg = rowIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+        let rowHtml = `<td style="${tdStyle}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${param}</td>`;
+        
+        entries.forEach(entry => {
+          const val = entry.fields?.[param];
+          if (val !== undefined && val !== '') {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${val}</td>`;
+          } else {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+          }
+        });
+        tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
+        rowIdx++;
+      });
+
+      html += `
+        <div class="summ-section">
+          <div class="summ-section-title">🧼 <span>${typeLabel}</span></div>
+          <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;margin-bottom:4px">
+            <table style="${tblStyle}">
+              <thead>${thead}</thead>
+              <tbody>${tbody}</tbody>
+            </table>
+          </div>
+        </div>`;
+    });
   }
 
   // ── 5. Finish Production ──────────────────────────────
-  if (p.fpDone && p.fpItems && p.fpItems.length) {
-    const fpRows = p.fpItems.map((item, i) => `
-      <tr>
-        <td style="${tdStyle}">${i+1}</td>
-        <td style="${tdStyle}">${item.date||'—'}</td>
-        <td style="${tdStyle}">${item.name||'—'}</td>
-        <td style="${tdStyle}">${item.code||'—'}</td>
-        <td style="${tdMonoStyle}">${item.brix||'—'} <span style="font-size:10px;color:var(--txt3);font-weight:400">°Bx</span></td>
-        <td style="${tdMonoStyle}">${item.berat||'—'} <span style="font-size:10px;color:var(--txt3);font-weight:400">kg</span></td>
-      </tr>`).join('');
-    html += section('🏭', 'Finish Production', `
-      <thead><tr>
-        <th style="${thStyle}">#</th>
-        <th style="${thStyle}">Tanggal</th>
-        <th style="${thStyle}">Nama Produk</th>
-        <th style="${thStyle}">Kode</th>
-        <th style="${thStyle}">Brix</th>
-        <th style="${thStyle}">Berat</th>
-      </tr></thead>
-      <tbody>${fpRows}</tbody>`);
+  if (p.fpDone) {
+    // Display Aroma data (fpItems1) if exists
+    if (p.fpItems1 && p.fpItems1.length) {
+      const aromaRows = p.fpItems1.map((item, i) => `
+        <tr>
+          <td style="${tdStyle}">${i+1}</td>
+          <td style="${tdStyle}">${item.date||'—'}</td>
+          <td style="${tdStyle}">${item.name||'—'}</td>
+          <td style="${tdStyle}">${item.code||'—'}</td>
+          <td style="${tdMonoStyle}">${item.berat||'—'} <span style="font-size:10px;color:var(--txt3);font-weight:400">kg</span></td>
+        </tr>`).join('');
+      html += section('🌸', 'Finish Production - Aroma', `
+        <thead><tr>
+          <th style="${thStyle}">#</th>
+          <th style="${thStyle}">Tanggal</th>
+          <th style="${thStyle}">Nama Produk</th>
+          <th style="${thStyle}">Kode</th>
+          <th style="${thStyle}">Berat</th>
+        </tr></thead>
+        <tbody>${aromaRows}</tbody>`);
+    }
+
+    // Display Product data (fpItems2 or fpItems for backward compatibility)
+    const productItems = p.fpItems2 || p.fpItems;
+    if (productItems && productItems.length) {
+      const fpRows = productItems.map((item, i) => `
+        <tr>
+          <td style="${tdStyle}">${i+1}</td>
+          <td style="${tdStyle}">${item.date||'—'}</td>
+          <td style="${tdStyle}">${item.name||'—'}</td>
+          <td style="${tdStyle}">${item.code||'—'}</td>
+          <td style="${tdMonoStyle}">${item.brix||'—'} <span style="font-size:10px;color:var(--txt3);font-weight:400">°Bx</span></td>
+          <td style="${tdMonoStyle}">${item.berat||'—'} <span style="font-size:10px;color:var(--txt3);font-weight:400">kg</span></td>
+        </tr>`).join('');
+      html += section('🏭', 'Finish Production - Product', `
+        <thead><tr>
+          <th style="${thStyle}">#</th>
+          <th style="${thStyle}">Tanggal</th>
+          <th style="${thStyle}">Nama Produk</th>
+          <th style="${thStyle}">Kode</th>
+          <th style="${thStyle}">Brix</th>
+          <th style="${thStyle}">Berat</th>
+        </tr></thead>
+        <tbody>${fpRows}</tbody>`);
+    }
   }
 
   body.innerHTML = html;
@@ -6149,83 +7412,118 @@ function renderSummTabContent(type, tabId, p) {
       return;
     }
 
-    const uniqueLabels = [];
+    // Separate boiler parameters from other utility parameters
+    const boilerKeywords = ['Steam', 'Flue', 'Feed water', 'Scale', 'Overheat', 'Blowdown', 'Conductivity', 'Air pressure', 'Ignition', 'Oil', 'Fuel', 'Efficiency', 'Surface blowdown', 'output'];
+    const boilerLabels = [];
+    const otherLabels = [];
+    
     utilHist.forEach(entry => {
       (entry.fields || []).forEach(f => {
-        if (!uniqueLabels.includes(f.label)) uniqueLabels.push(f.label);
+        const isBoiler = boilerKeywords.some(keyword => f.label.includes(keyword));
+        if (isBoiler) {
+          if (!boilerLabels.includes(f.label)) boilerLabels.push(f.label);
+        } else {
+          if (!otherLabels.includes(f.label)) otherLabels.push(f.label);
+        }
       });
     });
 
-    let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>`;
+    // Build header columns (same for all tables)
+    let theadCols = '';
     utilHist.forEach((entry, i) => {
       const dateObj = new Date(entry.saved_at);
       const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
-      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+      theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
     });
-    thead += `</tr>`;
+    const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
 
-    let tbody = '';
-    uniqueLabels.forEach((label, rIdx) => {
-      const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-      let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
-      
-      utilHist.forEach(entry => {
-        const field = (entry.fields || []).find(f => f.label === label);
-        if (field && field.newVal !== '') {
-          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
-        } else {
-          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
-        }
+    // Function to build table body
+    const buildTbody = (labelsArr) => {
+      let tbody = '';
+      labelsArr.forEach((label, rIdx) => {
+        const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+        let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
+        
+        utilHist.forEach(entry => {
+          const field = (entry.fields || []).find(f => f.label === label);
+          if (field && field.newVal !== '') {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
+          } else {
+            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+          }
+        });
+        tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
       });
-      tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
-    });
+      return tbody;
+    };
 
     wrap.innerHTML = `
       <div style="margin-bottom:16px">
         ${tableHeaderUI('⚡ Data & History Utility')}
-        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+        
+        ${boilerLabels.length > 0 ? `
+        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;margin-top:12px;">
+          <span style="font-size:14px;">🔥</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">PARAMETER BOILER</span>
+        </div>
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;margin-bottom:20px;">
           <table style="${tblStyle}">
             <thead>${thead}</thead>
-            <tbody>${tbody}</tbody>
+            <tbody>${buildTbody(boilerLabels)}</tbody>
           </table>
         </div>
+        ` : ''}
+
+        ${otherLabels.length > 0 ? `
+        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;">
+          <span style="font-size:14px;">⚙️</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">PARAMETER CHILLER</span>
+        </div>
+        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;">
+          <table style="${tblStyle}">
+            <thead>${thead}</thead>
+            <tbody>${buildTbody(otherLabels)}</tbody>
+          </table>
+        </div>
+        ` : ''}
+
       </div>`;
     return;
   }
 
   // ─── LIMBAH ──────────────────────────────────────────
   if (tabId === 'limbah') {
-    const limbahEntries = JSON.parse(localStorage.getItem('limbah_entries') || '[]');
-    // Diurutkan dari oldest ke newest agar scroll ke kanan adalah data terbaru
-    const projLimbah = limbahEntries.filter(e => e.projName === p.name).sort((a,b) => new Date(a.saved_at) - new Date(b.saved_at));
-    if (!projLimbah.length) {
-      wrap.innerHTML = emptyMsg('📭 Belum ada data Limbah yang tersimpan untuk project ini.');
+    const limbahHist = p.limbahHistory || [];
+    if (!limbahHist.length) {
+      wrap.innerHTML = emptyMsg('📭 Belum ada data entry Limbah untuk project ini.');
       return;
     }
-    
-    const limbahLabels = [
-      {key:'date', label:'Tanggal'}, {key:'vol', label:'Volume (L)'}, {key:'cod', label:'COD (mg/L)'}, 
-      {key:'bod', label:'BOD (mg/L)'}, {key:'tss', label:'TSS (mg/L)'}, {key:'ph', label:'pH'}, 
-      {key:'temp', label:'Temp Effluent (°C)'}, {key:'notes', label:'Catatan'}
-    ];
 
-    let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>`;
-    projLimbah.forEach((entry, i) => {
+    // Collect all unique labels from limbah history
+    const uniqueLabels = [];
+    limbahHist.forEach(entry => {
+      (entry.fields || []).forEach(f => {
+        if (!uniqueLabels.includes(f.label)) uniqueLabels.push(f.label);
+      });
+    });
+
+    // Build header columns
+    let theadCols = '';
+    limbahHist.forEach((entry, i) => {
       const dateObj = new Date(entry.saved_at);
       const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
-      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Entry #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
+      theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
     });
-    thead += `</tr>`;
+    const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
 
+    // Build table body
     let tbody = '';
-    limbahLabels.forEach((lblData, rIdx) => {
+    uniqueLabels.forEach((label, rIdx) => {
       const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-      let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${lblData.label}</td>`;
+      let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
       
-      projLimbah.forEach(entry => {
-        const val = entry[lblData.key];
-        if (val !== undefined && val !== '') {
-          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${val}</td>`;
+      limbahHist.forEach(entry => {
+        const field = (entry.fields || []).find(f => f.label === label);
+        if (field && field.newVal !== '' && field.newVal !== undefined) {
+          rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
         } else {
           rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
         }
@@ -6352,154 +7650,117 @@ function initReportingForm() {
   });
 }
 
-function renderHarianReports() {
+async function renderHarianReports() {
     const container = document.getElementById('harian-reports-container');
     const countLabel = document.getElementById('report-count-label');
     if (!container) return;
 
-    // Get all harian entries
-    const allEntries = JSON.parse(localStorage.getItem('harian_entries') || '[]');
-    
-    // Filter by active tab
-    let filtered = allEntries.filter(entry => {
-        const cat = (entry.cat || '').toLowerCase();
-        if (_activeReportTab === 'lab') return cat === 'laboratorium' || cat === 'lab';
-        if (_activeReportTab === 'utility') return cat === 'utility';
-        if (_activeReportTab === 'limbah') return cat === 'limbah';
-        return false;
-    });
-    
-    // Apply date filtering
-    const dateFrom = document.getElementById('report-date-from')?.value;
-    const dateTo = document.getElementById('report-date-to')?.value;
-    
-    if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        fromDate.setHours(0, 0, 0, 0);
-        filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.saved_at);
-            entryDate.setHours(0, 0, 0, 0);
-            return entryDate >= fromDate;
-        });
-    }
-    
-    if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(entry => {
-            const entryDate = new Date(entry.saved_at);
-            return entryDate <= toDate;
-        });
-    }
-    
-    // Sort entries
-    const sorted = [...filtered].sort((a, b) => {
-        const dateA = new Date(a.saved_at);
-        const dateB = new Date(b.saved_at);
-        
-        if (_reportSortBy === 'newest') return dateB - dateA;
-        if (_reportSortBy === 'oldest') return dateA - dateB;
-        return dateB - dateA;
-    });
-    
-    // Update count label
-    if (countLabel) {
-        countLabel.textContent = `${sorted.length} laporan`;
-    }
-    
-    // If no entries
-    if (!sorted.length) {
+    // Map tab ke endpoint API
+    const tabEndpoint = {
+      'lab':     '/api/dataentry/laboratorium',
+      'utility': '/api/dataentry/utility',
+      'limbah':  '/api/dataentry/limbah',
+    };
+    const tabColors = {
+      'lab':     { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8', label: 'Lab' },
+      'utility': { bg: '#fef08a', border: '#eab308', text: '#713f12', label: 'Utility' },
+      'limbah':  { bg: '#dcfce7', border: '#22c55e', text: '#15803d', label: 'Limbah' },
+    };
+
+    const endpoint = tabEndpoint[_activeReportTab];
+    if (!endpoint) return;
+
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--txt3)">⏳ Memuat data...</div>`;
+
+    try {
+      const dateFrom = document.getElementById('report-date-from')?.value;
+      const dateTo   = document.getElementById('report-date-to')?.value;
+      let url = endpoint + '?limit=200';
+      if (dateFrom) url += '&tanggal_dari=' + dateFrom;
+      if (dateTo)   url += '&tanggal_sampai=' + dateTo;
+
+      const res  = await fetch(url);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      let data = json.data || [];
+      data = [...data].sort((a, b) => {
+        const dA = new Date(a.created_at || a.tanggal);
+        const dB = new Date(b.created_at || b.tanggal);
+        return _reportSortBy === 'oldest' ? dA - dB : dB - dA;
+      });
+
+      if (countLabel) countLabel.textContent = `${data.length} laporan`;
+
+      if (!data.length) {
         container.innerHTML = `
-            <div class="de-card" style="text-align:center;padding:60px 20px;background:var(--bg);border:1px dashed var(--border);border-radius:12px">
-                <div style="font-size:48px;margin-bottom:16px;opacity:0.2">📭</div>
-                <div style="font-size:14px;color:var(--txt2);font-weight:600;margin-bottom:6px">Belum ada laporan untuk ${getTabLabel(_activeReportTab)}</div>
-                <div style="font-size:12px;color:var(--txt3)">Data laporan harian akan muncul di sini</div>
-            </div>`;
+          <div class="de-card" style="text-align:center;padding:60px 20px;background:var(--bg);border:1px dashed var(--border);border-radius:12px">
+            <div style="font-size:48px;margin-bottom:16px;opacity:0.2">📭</div>
+            <div style="font-size:14px;color:var(--txt2);font-weight:600;margin-bottom:6px">Belum ada laporan untuk ${getTabLabel(_activeReportTab)}</div>
+            <div style="font-size:12px;color:var(--txt3)">Data laporan harian akan muncul di sini</div>
+          </div>`;
         return;
-    }
-    
-    // Build grid HTML
-    let html = '<div class="report-grid">';
-    
-    sorted.forEach((entry, index) => {
-        const date = new Date(entry.saved_at);
-        const dateStr = date.toLocaleDateString('id-ID', { 
-            day: '2-digit', 
-            month: 'short', 
-            year: 'numeric' 
-        });
-        const timeStr = date.toLocaleTimeString('id-ID', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-        });
-        
-        // Category colors
-        const categoryColors = {
-            'produksi': { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
-            'teknis': { bg: '#fef3c7', border: '#f59e0b', text: '#92400e' },
-            'operasional': { bg: '#dbeafe', border: '#3b82f6', text: '#1e40af' },
-            'laboratorium': { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8' },
-            'lab': { bg: '#f3e8ff', border: '#a855f7', text: '#6b21a8' },
-            'utility': { bg: '#fef08a', border: '#eab308', text: '#713f12' },
-            'limbah': { bg: '#dcfce7', border: '#22c55e', text: '#15803d' },
-            'lainnya': { bg: '#f3f4f6', border: '#9ca3af', text: '#374151' }
-        };
-        const color = categoryColors[entry.cat] || categoryColors['lainnya'];
-        
-        // Build parameters rows (exclude Catatan/Notes)
-        let paramsHTML = '';
-        Object.entries(entry.data || {}).forEach(([key, value]) => {
-            if (value && value !== '—' && key !== 'Judul Laporan' && key !== 'Kategori' && key !== 'Catatan' && key !== 'Notes') {
-                paramsHTML += `
-                    <div class="report-param-row">
-                        <div class="report-param-label">${key}</div>
-                        <div class="report-param-value">${value}</div>
-                    </div>`;
-            }
-        });
-        
+      }
+
+      const color = tabColors[_activeReportTab] || { bg:'#f3f4f6', border:'#9ca3af', text:'#374151', label:'Data' };
+      let html = '<div class="report-grid">';
+      data.forEach(entry => {
+        const tgl      = entry.tanggal || (entry.created_at ? entry.created_at.substring(0,10) : '—');
+        const proj     = entry.project_name || '—';
+        const savedAt  = entry.created_at ? new Date(entry.created_at).toLocaleString('id-ID') : '—';
+        const notes    = entry.notes || '—';
         html += `
-            <div class="report-card">
-                <div class="report-card-header">
-                    <div>
-                        <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">
-                            ${entry.data['Judul Laporan'] || 'Laporan Harian'}
-                        </div>
-                        <div class="report-card-date">
-                            📅 ${dateStr} &nbsp;• &nbsp;🕐 ${timeStr}
-                        </div>
-                    </div>
-                    <div class="report-card-badge" style="background:${color.bg};color:${color.text};border:1px solid ${color.border}">
-                        ${entry.cat || 'lainnya'}
-                    </div>
-                </div>
-                <div class="report-params">
-                    ${paramsHTML}
-                </div>
-            </div>`;
-    });
-    
-    html += '</div>';
-    container.innerHTML = html;
+          <div class="report-card" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+              <div>
+                <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:4px">📅 ${tgl} — ${proj}</div>
+                <div style="font-size:11px;color:var(--txt3)">🕐 ${savedAt}</div>
+              </div>
+              <div style="background:${color.bg};color:${color.text};border:1px solid ${color.border};border-radius:6px;padding:3px 10px;font-size:11px;font-weight:600">${color.label}</div>
+            </div>
+            ${notes !== '—' ? `<div style="font-size:12px;color:var(--txt2);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">📝 ${notes}</div>` : ''}
+          </div>`;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+
+    } catch(err) {
+      console.error('renderHarianReports error:', err);
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">❌ Gagal memuat data: ${err.message}</div>`;
+    }
 }
 
 
 // ══ REPORTING HELPERS ═════════════════════════════════════════
-function submitReport() {
+async function submitReport() {
   const g = id => document.getElementById(id)?.value?.trim();
   const title = g('r-title'), nama = g('r-nama'), desc = g('r-deskripsi');
   if (!title || !nama || !desc) { showRpSt('error', '❌ Please fill in Title, Reporter Name, and Description!'); return; }
   showRpSt('loading', '⏳ Submitting report...');
-  setTimeout(() => {
-    const hist = JSON.parse(localStorage.getItem('report_history') || '[]');
-    hist.unshift({ id:Date.now(), title, nama,
-      shift:g('r-shift'), kategori:g('r-kategori'), prioritas:g('r-prioritas'),
-      lokasi:g('r-lokasi')||'—', deskripsi:desc, aksi:g('r-aksi')||'—',
-      submitted_at:new Date().toISOString() });
-    localStorage.setItem('report_history', JSON.stringify(hist.slice(0, 100)));
+  try {
+    const res = await fetch('/api/dataentry/laporan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        nama,
+        shift:     g('r-shift')     || null,
+        kategori:  g('r-kategori')  || null,
+        prioritas: g('r-prioritas') || null,
+        lokasi:    g('r-lokasi')    || null,
+        deskripsi: desc,
+        aksi:      g('r-aksi')      || null,
+      }),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Gagal simpan');
     showRpSt('success', '✅ Report submitted successfully!');
-    resetReport(); loadReportHistory();
-  }, 600);
+    resetReport();
+    loadReportHistory();
+  } catch(err) {
+    console.error('submitReport error:', err);
+    showRpSt('error', '❌ Gagal: ' + err.message);
+  }
 }
 function resetReport() {
   ['r-title','r-nama','r-lokasi','r-deskripsi','r-aksi'].forEach(id => {
@@ -6515,32 +7776,37 @@ function showRpSt(type, msg) {
   b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + type; m.textContent = msg;
   if (type === 'success') setTimeout(() => { if (b) b.style.display = 'none'; }, 4000);
 }
-function loadReportHistory() {
+async function loadReportHistory() {
   const c = document.getElementById('rp-history'); if (!c) return;
-  const hist = JSON.parse(localStorage.getItem('report_history') || '[]');
-  if (!hist.length) { c.innerHTML = '<div class="de-empty">No reports submitted yet</div>'; return; }
-  const priColor = {low:'var(--green)', medium:'var(--yellow)', high:'var(--red)'};
-  const priLabel = {low:'LOW', medium:'MEDIUM', high:'HIGH'};
-  const catLabel = {teknis:'Technical', operasional:'Operational', keamanan:'Security', lingkungan:'Environmental', lainnya:'Other'};
-  const shiftLabel = {pagi:'🌅 Morning', siang:'☀️ Afternoon', malam:'🌙 Night'};
-  c.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px">' +
-    hist.map(r => `
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:3px solid ${priColor[r.prioritas]||'var(--blue)'}">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-          <div>
-            <div style="font-size:13px;font-weight:600;color:var(--txt)">${r.title}</div>
-            <div style="font-size:11px;color:var(--txt3);margin-top:2px">👤 ${r.nama} • ${shiftLabel[r.shift]||r.shift||'—'} • 📍 ${r.lokasi}</div>
+  try {
+    const res  = await fetch('/api/dataentry/laporan?limit=50');
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error);
+    const hist = json.data || [];
+    if (!hist.length) { c.innerHTML = '<div class="de-empty">No reports submitted yet</div>'; return; }
+    const priColor = {low:'var(--green)', medium:'var(--yellow)', high:'var(--red)'};
+    const priLabel = {low:'LOW', medium:'MEDIUM', high:'HIGH'};
+    const catLabel = {teknis:'Technical', operasional:'Operational', keamanan:'Security', lingkungan:'Environmental', lainnya:'Other'};
+    const shiftLabel = {pagi:'🌅 Morning', siang:'☀️ Afternoon', malam:'🌙 Night'};
+    c.innerHTML = '<div style="display:flex;flex-direction:column;gap:10px">' +
+      hist.map(r => `
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-left:3px solid ${priColor[r.prioritas]||'var(--blue)'}">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+            <div style="font-weight:700;font-size:13px;color:var(--txt)">${r.title}</div>
+            ${r.prioritas ? `<div style="font-size:10px;font-weight:700;color:${priColor[r.prioritas]||'var(--blue)'};background:${priColor[r.prioritas]||'var(--blue)'}15;padding:2px 8px;border-radius:4px">${priLabel[r.prioritas]||r.prioritas}</div>` : ''}
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
-            <span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:100px;color:${priColor[r.prioritas]||'var(--blue)'};border:1px solid ${priColor[r.prioritas]||'var(--blue)'}44">${priLabel[r.prioritas]||r.prioritas}</span>
-            <span style="font-size:9px;color:var(--txt3);font-family:'DM Mono',monospace">${new Date(r.submitted_at).toLocaleString('en-GB')}</span>
+          <div style="font-size:11px;color:var(--txt3);margin-bottom:6px">
+            👤 ${r.nama} ${r.shift ? '• '+shiftLabel[r.shift] : ''} ${r.kategori ? '• '+catLabel[r.kategori] : ''} ${r.lokasi ? '• 📍 '+r.lokasi : ''}
           </div>
-        </div>
-        <div style="font-size:12px;color:var(--txt2);margin-bottom:6px;line-height:1.5">${r.deskripsi}</div>
-        ${r.aksi && r.aksi !== '—' ? `<div style="font-size:11px;color:var(--txt3);padding:6px 10px;background:var(--surface);border-radius:6px;border:1px solid var(--border)">✅ Action: ${r.aksi}</div>` : ''}
-        <div style="margin-top:6px"><span style="font-size:9px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:2px 8px;color:var(--txt3)">${catLabel[r.kategori]||r.kategori}</span></div>
-      </div>`).join('') + '</div>';
+          <div style="font-size:12px;color:var(--txt2)">${r.deskripsi}</div>
+          ${r.aksi ? `<div style="font-size:11px;color:var(--txt3);margin-top:6px;border-top:1px solid var(--border);padding-top:6px">⚡ ${r.aksi}</div>` : ''}
+          <div style="font-size:10px;color:var(--txt3);margin-top:6px">${new Date(r.created_at).toLocaleString('id-ID')}</div>
+        </div>`).join('') + '</div>';
+  } catch(err) {
+    c.innerHTML = `<div style="color:var(--red);font-size:12px">❌ Gagal memuat: ${err.message}</div>`;
+  }
 }
+
 
 
 // ═══════════════════════════════════════════════════════════
@@ -6905,7 +8171,7 @@ function renderSensorList() {
 }
 
 // ── Modal helpers ─────────────────────────────────────────
-var _editIdx = -1;
+let _editIdx = -1;
 
 function openAddSensor() {
   _editIdx = -1;
@@ -7182,21 +8448,15 @@ window.openSP      = openSP;
 window.closeSP     = closeSP;
 window.saveSP      = saveSP;
 
-// ── openCIP_enh / closeCIP_enh / saveCIP_enh ─────────────
+// ── openCIP_enh / closeCIP_enh / saveCIP_enh ─────────────────
 function openCIP_enh(type, idx) {
   _cipPJIdx = idx;
-  const selProd = document.getElementById('dep-proj-sel-' + type);
-  const selLab  = document.getElementById('lab-proj-sel-' + type);
-  if (selProd) selProd.value = idx;
-  if (selLab)  selLab.value  = idx;
+  const sel = document.getElementById('dep-proj-sel-' + type);
+  if (sel) sel.value = idx;
   openCIPModal(type);
 }
-function closeCIP_enh(type) {
-  closeCIPModal();
-}
-async function saveCIP_enh(type, isFinish) {
-  await saveCIPModal(type, isFinish);
-}
+function closeCIP_enh(type) { closeCIPModal(); }
+async function saveCIP_enh(type, isFinish) { await saveCIPModal(type, isFinish); }
 
 window.openCIP_enh = openCIP_enh;
 window.closeCIP_enh= closeCIP_enh;
@@ -7289,10 +8549,9 @@ function getKartuStokHTML() {
   return `<div class="de-wrap">
   <div class="de-header">
     <div><div class="de-title">Kartu Stok</div><div class="de-sub">SAIL / Gudang / Kartu Stok — Kelola stok barang masuk & keluar</div></div>
-    <button class="de-btn de-btn-primary" style="padding:8px 18px" onclick="openKartuStokForm()">＋ Tambah Entri</button>
+    <button type="button" class="de-btn de-btn-primary" style="padding:8px 18px; position:relative; z-index:10; cursor:pointer;" onclick="openKartuStokForm()">＋ Tambah Entri</button>
   </div>
 
-  <!-- Filter bar -->
   <div class="de-card" style="padding:14px 18px;margin-bottom:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
     <input class="de-input" id="ks-search" placeholder="🔍 Cari nama barang..." style="flex:1;min-width:180px" oninput="renderKartuStok()">
     <select class="de-input de-select" id="ks-filter-type" style="width:160px" onchange="renderKartuStok()">
@@ -7302,7 +8561,6 @@ function getKartuStokHTML() {
     </select>
   </div>
 
-  <!-- Table -->
   <div class="de-card" style="padding:0;overflow:hidden">
     <div style="overflow-x:auto">
       <table class="ks-table" id="ks-table">
@@ -7329,7 +8587,6 @@ function getKartuStokHTML() {
     </div>
   </div>
 
-  <!-- Summary cards -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:0">
     <div class="ks-sum-card" id="ks-sum-total" style="border-left:3px solid var(--blue)">
       <div class="ks-sum-label">Total Entri</div>
@@ -7345,12 +8602,11 @@ function getKartuStokHTML() {
     </div>
   </div>
 
-  <!-- Modal -->
-  <div class="proj-modal-overlay" id="ks-modal-overlay">
+  <div class="proj-modal-overlay" id="ks-modal-overlay" style="display:none;">
     <div class="proj-modal" style="max-width:500px">
       <div class="proj-modal-head">
         <div class="proj-modal-title" id="ks-modal-title">📦 Tambah Entri Stok</div>
-        <button class="proj-modal-close" onclick="closeKartuStokForm()">✕</button>
+        <button type="button" class="proj-modal-close" onclick="closeKartuStokForm()">✕</button>
       </div>
       <div class="proj-modal-body">
         <div class="de-grid">
@@ -7370,8 +8626,8 @@ function getKartuStokHTML() {
         </div>
         <div class="de-status-bar" id="ks-sb" style="display:none"><span id="ks-sm"></span></div>
         <div class="de-actions" style="margin-top:16px">
-          <button class="de-btn de-btn-ghost" onclick="closeKartuStokForm()">Batal</button>
-          <button class="de-btn de-btn-primary" onclick="submitKartuStok()">💾 Simpan</button>
+          <button type="button" class="de-btn de-btn-ghost" onclick="closeKartuStokForm()">Batal</button>
+          <button type="button" class="de-btn de-btn-primary" onclick="submitKartuStok()">💾 Simpan</button>
         </div>
       </div>
     </div>
@@ -7379,9 +8635,51 @@ function getKartuStokHTML() {
 </div>`;
 }
 
-const gKS  = () => JSON.parse(localStorage.getItem('kartu_stok') || '[]');
-const sKS  = (d) => localStorage.setItem('kartu_stok', JSON.stringify(d));
-let _ksEditIdx = -1;
+function openKartuStokForm(idx = -1) {
+  _ksEditIdx = idx;
+  const today = new Date().toISOString().split('T')[0];
+  if (idx >= 0) {
+    const d = gKS()[idx];
+    document.getElementById('ks-modal-title').textContent = '✏️ Edit Entri Stok';
+    document.getElementById('ks-f-name').value    = d.name || '';
+    document.getElementById('ks-f-type').value    = d.type || 'in';
+    document.getElementById('ks-f-date').value    = d.date || today;
+    document.getElementById('ks-f-date-in').value = d.dateIn || '';
+    document.getElementById('ks-f-date-out').value= d.dateOut || '';
+    document.getElementById('ks-f-qty').value     = d.qty || '';
+    document.getElementById('ks-f-unit').value    = d.unit || '';
+    document.getElementById('ks-f-notes').value   = d.notes || '';
+  } else {
+    document.getElementById('ks-modal-title').textContent = '📦 Tambah Entri Stok';
+    ['ks-f-name','ks-f-qty','ks-f-unit','ks-f-notes'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('ks-f-date').value = today;
+    document.getElementById('ks-f-date-in').value = '';
+    document.getElementById('ks-f-date-out').value = '';
+    document.getElementById('ks-f-type').value = 'in';
+  }
+  const sb = document.getElementById('ks-sb'); if(sb) sb.style.display='none';
+  
+  // 💡 FIX: Paksa muncul dengan gaya display inline
+  const modal = document.getElementById('ks-modal-overlay');
+  if(modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('show');
+  }
+}
+
+function closeKartuStokForm() {
+  // 💡 FIX: Paksa sembunyikan sepenuhnya
+  const modal = document.getElementById('ks-modal-overlay');
+  if(modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('show');
+  }
+  _ksEditIdx = -1;
+}
+
+// ── Kartu Stok localStorage helpers ──────────────────────────
+function gKS()       { try { return JSON.parse(localStorage.getItem('sail_kartu_stok') || '[]'); } catch { return []; } }
+function sKS(list)   { localStorage.setItem('sail_kartu_stok', JSON.stringify(list)); }
 
 function initKartuStok() {
   renderKartuStok();
@@ -7439,35 +8737,6 @@ function renderKartuStok() {
   }).join('');
 }
 
-function openKartuStokForm(idx = -1) {
-  _ksEditIdx = idx;
-  const today = new Date().toISOString().split('T')[0];
-  if (idx >= 0) {
-    const d = gKS()[idx];
-    document.getElementById('ks-modal-title').textContent = '✏️ Edit Entri Stok';
-    document.getElementById('ks-f-name').value    = d.name || '';
-    document.getElementById('ks-f-type').value    = d.type || 'in';
-    document.getElementById('ks-f-date').value    = d.date || today;
-    document.getElementById('ks-f-date-in').value = d.dateIn || '';
-    document.getElementById('ks-f-date-out').value= d.dateOut || '';
-    document.getElementById('ks-f-qty').value     = d.qty || '';
-    document.getElementById('ks-f-unit').value    = d.unit || '';
-    document.getElementById('ks-f-notes').value   = d.notes || '';
-  } else {
-    document.getElementById('ks-modal-title').textContent = '📦 Tambah Entri Stok';
-    ['ks-f-name','ks-f-qty','ks-f-unit','ks-f-notes'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-    document.getElementById('ks-f-date').value = today;
-    document.getElementById('ks-f-date-in').value = '';
-    document.getElementById('ks-f-date-out').value = '';
-    document.getElementById('ks-f-type').value = 'in';
-  }
-  const sb = document.getElementById('ks-sb'); if(sb) sb.style.display='none';
-  document.getElementById('ks-modal-overlay')?.classList.add('show');
-}
-function closeKartuStokForm() {
-  document.getElementById('ks-modal-overlay')?.classList.remove('show');
-  _ksEditIdx = -1;
-}
 function submitKartuStok() {
   const name = document.getElementById('ks-f-name')?.value.trim();
   if (!name) { showKsSt('error','❌ Nama barang wajib diisi!'); return; }
@@ -7511,14 +8780,18 @@ window.deleteKartuStok = deleteKartuStok;
 // ═══════════════════════════════════════════════════════════
 // SURAT JALAN
 // ═══════════════════════════════════════════════════════════
+function gSJ()       { try { return JSON.parse(localStorage.getItem('sail_surat_jalan') || '[]'); } catch { return []; } }
+function sSJ(list)   { localStorage.setItem('sail_surat_jalan', JSON.stringify(list)); }
+window.gSJ = gSJ;
+window.sSJ = sSJ;
+
 function getSuratJalanHTML() {
   return `<div class="de-wrap">
   <div class="de-header">
     <div><div class="de-title">Surat Jalan</div><div class="de-sub">SAIL / Reporting / Surat Jalan</div></div>
-    <button class="de-btn de-btn-primary" style="padding:8px 18px" onclick="openSuratJalanForm()">＋ Buat Surat Jalan</button>
+    <button type="button" class="de-btn de-btn-primary" onclick="openSuratJalanForm()">＋ Buat Surat Jalan</button>
   </div>
 
-  <!-- List -->
   <div id="sj-list" style="display:flex;flex-direction:column;gap:12px"></div>
   <div id="sj-empty" style="display:none">
     <div class="de-card" style="text-align:center;padding:48px">
@@ -7527,33 +8800,36 @@ function getSuratJalanHTML() {
     </div>
   </div>
 
-  <!-- Modal Form -->
-  <div class="proj-modal-overlay" id="sj-modal-overlay">
-    <div class="proj-modal" style="max-width:580px">
+  <div class="proj-modal-overlay" id="sj-modal-overlay" style="display:none;">
+    <div class="proj-modal" style="max-width:600px">
       <div class="proj-modal-head">
         <div class="proj-modal-title" id="sj-modal-title">📋 Buat Surat Jalan</div>
-        <button class="proj-modal-close" onclick="closeSuratJalanForm()">✕</button>
+        <button type="button" class="proj-modal-close" onclick="closeSuratJalanForm()">✕</button>
       </div>
       <div class="proj-modal-body">
         <div class="de-grid">
-          <div class="de-field"><label class="de-label">NO. SURAT JALAN</label><input class="de-input" id="sj-f-no" type="text" placeholder="Otomatis atau isi manual"></div>
           <div class="de-field"><label class="de-label">TANGGAL</label><input class="de-input" id="sj-f-date" type="date"></div>
-          <div class="de-field de-full"><label class="de-label">NAMA PENERIMA / TUJUAN *</label><input class="de-input" id="sj-f-penerima" type="text" placeholder="Nama perusahaan atau orang..."></div>
-          <div class="de-field de-full"><label class="de-label">ALAMAT TUJUAN</label><textarea class="de-input de-textarea" id="sj-f-alamat" style="min-height:56px" placeholder="Alamat pengiriman..."></textarea></div>
-          <div class="de-field"><label class="de-label">NAMA PENGIRIM</label><input class="de-input" id="sj-f-pengirim" type="text" placeholder="Nama pengirim..."></div>
-          <div class="de-field"><label class="de-label">KENDARAAN / EKSPEDISI</label><input class="de-input" id="sj-f-kendaraan" type="text" placeholder="Nopol / nama ekspedisi..."></div>
+          <div class="de-field"><label class="de-label">NO. SURAT JALAN</label><input class="de-input" id="sj-f-no" type="text" placeholder="Otomatis atau isi manual"></div>
+          <div class="de-field"><label class="de-label">NOPOL / KENDARAAN</label><input class="de-input" id="sj-f-kendaraan" type="text" placeholder="B 1234 XY / Nama ekspedisi..."></div>
+          <div class="de-field"><label class="de-label">DRIVER</label><input class="de-input" id="sj-f-driver" type="text" placeholder="Nama driver..."></div>
+          <div class="de-field de-full"><label class="de-label">TUJUAN *</label><input class="de-input" id="sj-f-penerima" type="text" placeholder="Nama perusahaan atau orang..."></div>
+          <div class="de-field de-full"><label class="de-label">PENGIRIM (Gudang)</label><input class="de-input" id="sj-f-pengirim" type="text" placeholder="Nama pengirim dari gudang..."></div>
         </div>
 
-        <!-- Barang items -->
         <div style="margin:14px 0 8px;font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:1px;text-transform:uppercase">Daftar Barang</div>
+        <div style="display:grid;grid-template-columns:2fr 80px 1fr;gap:6px;padding:6px 10px;background:var(--bg);border-radius:6px 6px 0 0;border:1px solid var(--border);border-bottom:none;">
+          <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;">NAMA BARANG</div>
+          <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;">QTY</div>
+          <div style="font-size:9px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.8px;">KETERANGAN</div>
+        </div>
         <div id="sj-items"></div>
-        <button class="de-btn de-btn-ghost" style="width:100%;margin-bottom:14px;font-size:12px" onclick="addSuratJalanItem()">＋ Tambah Barang</button>
+        <button type="button" class="de-btn de-btn-ghost" style="width:100%;margin-bottom:14px;font-size:12px;" onclick="addSuratJalanItem()">＋ Tambah Barang</button>
 
         <div class="de-field de-full"><label class="de-label">CATATAN</label><textarea class="de-input de-textarea" id="sj-f-notes" style="min-height:56px" placeholder="Catatan tambahan..."></textarea></div>
         <div class="de-status-bar" id="sj-sb" style="display:none"><span id="sj-sm"></span></div>
         <div class="de-actions" style="margin-top:16px">
-          <button class="de-btn de-btn-ghost" onclick="closeSuratJalanForm()">Batal</button>
-          <button class="de-btn de-btn-primary" onclick="submitSuratJalan()">💾 Simpan Surat Jalan</button>
+          <button type="button" class="de-btn de-btn-ghost" onclick="closeSuratJalanForm()">Batal</button>
+          <button type="button" class="de-btn de-btn-primary" onclick="submitSuratJalan()">💾 Simpan Surat Jalan</button>
         </div>
       </div>
     </div>
@@ -7561,10 +8837,44 @@ function getSuratJalanHTML() {
 </div>`;
 }
 
-let _sjItemCount = 0;
-let _sjEditIdx   = -1;
-const gSJ = () => JSON.parse(localStorage.getItem('surat_jalan') || '[]');
-const sSJ = (d) => localStorage.setItem('surat_jalan', JSON.stringify(d));
+function openSuratJalanForm(idx=-1) {
+  _sjEditIdx = idx; _sjItemCount = 0;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('sj-items').innerHTML = '';
+  const sb = document.getElementById('sj-sb'); if(sb) sb.style.display='none';
+  if (idx >= 0) {
+    const sj = gSJ()[idx];
+    document.getElementById('sj-modal-title').textContent = '✏️ Edit Surat Jalan';
+    document.getElementById('sj-f-no').value        = sj.no || '';
+    document.getElementById('sj-f-date').value      = sj.date || today;
+    document.getElementById('sj-f-penerima').value  = sj.penerima || '';
+    document.getElementById('sj-f-kendaraan').value = sj.kendaraan || '';
+    document.getElementById('sj-f-driver').value    = sj.driver || '';
+    document.getElementById('sj-f-pengirim').value  = sj.pengirim || '';
+    document.getElementById('sj-f-notes').value     = sj.notes || '';
+    (sj.items||[]).forEach(it => addSuratJalanItem(it));
+  } else {
+    document.getElementById('sj-modal-title').textContent = '📋 Buat Surat Jalan';
+    document.getElementById('sj-f-no').value = genSJNo();
+    document.getElementById('sj-f-date').value = today;
+    ['sj-f-penerima','sj-f-kendaraan','sj-f-driver','sj-f-pengirim','sj-f-notes'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value = '';
+    });
+    addSuratJalanItem();
+  }
+  const modal = document.getElementById('sj-modal-overlay');
+  if (modal) { modal.style.display = 'flex'; modal.classList.add('show'); }
+}
+
+function closeSuratJalanForm() {
+  // 💡 FIX: Sembunyikan total dengan display none
+  const modal = document.getElementById('sj-modal-overlay');
+  if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('show');
+  }
+  _sjEditIdx = -1;
+}
 
 function genSJNo() {
   const today = new Date();
@@ -7592,11 +8902,11 @@ function renderSuratJalan() {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
         <div>
           <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:var(--blue);margin-bottom:4px">${sj.no}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--txt)">${sj.penerima}</div>
-          <div style="font-size:11px;color:var(--txt3);margin-top:2px">📅 ${sj.date} &nbsp;•&nbsp; 🚚 ${sj.kendaraan||'—'} &nbsp;•&nbsp; 👤 ${sj.pengirim||'—'}</div>
-          ${sj.alamat ? `<div style="font-size:11px;color:var(--txt3);margin-top:2px">📍 ${sj.alamat}</div>` : ''}
+          <div style="font-size:14px;font-weight:700;color:var(--txt)">→ ${sj.penerima}</div>
+          <div style="font-size:11px;color:var(--txt3);margin-top:2px">📅 ${sj.date} &nbsp;•&nbsp; 🚚 ${sj.kendaraan||'—'} &nbsp;•&nbsp; 🧑 ${sj.driver||sj.pengirim||'—'}</div>
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="pj-btn" style="border-color:#dc2626;color:#dc2626;background:#fff5f5;" onclick="downloadSuratJalanPDF(${idx})">📄 PDF</button>
           <button class="pj-btn pj-btn-edit" onclick="editSuratJalan(${idx})">✏️ Edit</button>
           <button class="pj-btn pj-btn-end" onclick="deleteSuratJalan(${idx})">🗑️</button>
         </div>
@@ -7605,16 +8915,16 @@ function renderSuratJalan() {
       <div style="margin-top:12px;overflow-x:auto;border:1px solid var(--border);border-radius:8px">
         <table style="width:100%;border-collapse:collapse;font-size:11px">
           <thead><tr style="background:var(--bg)">
+            <th style="padding:7px 10px;text-align:left;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">No</th>
             <th style="padding:7px 10px;text-align:left;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">Nama Barang</th>
-            <th style="padding:7px 10px;text-align:center;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">Qty</th>
-            <th style="padding:7px 10px;text-align:left;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">Satuan</th>
+            <th style="padding:7px 10px;text-align:center;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">QTY</th>
             <th style="padding:7px 10px;text-align:left;color:var(--txt3);font-size:9px;text-transform:uppercase;letter-spacing:.8px">Keterangan</th>
           </tr></thead>
           <tbody>${sj.items.map((it,i) => `
-            <tr style="background:${i%2===0?'var(--surface)':'var(--bg)'}">
+            <tr style="background:${i%2===0?'white':'#f9fafb'}">
+              <td style="padding:7px 10px;color:var(--txt3)">${i+1}</td>
               <td style="padding:7px 10px;color:var(--txt);font-weight:600">${it.name||'—'}</td>
               <td style="padding:7px 10px;text-align:center;font-family:'DM Mono',monospace;font-weight:600;color:var(--blue)">${it.qty||'—'}</td>
-              <td style="padding:7px 10px;color:var(--txt3)">${it.unit||'—'}</td>
               <td style="padding:7px 10px;color:var(--txt2)">${it.desc||'—'}</td>
             </tr>`).join('')}</tbody>
         </table>
@@ -7622,75 +8932,216 @@ function renderSuratJalan() {
       ${sj.notes ? `<div style="margin-top:10px;font-size:11px;color:var(--txt3);padding:8px 12px;background:var(--bg);border-radius:6px;border:1px solid var(--border)">📝 ${sj.notes}</div>` : ''}
     </div>`).join('');
 }
+function downloadSuratJalanPDF(idx) {
+  const sj = gSJ()[idx];
+  if (!sj) return;
 
-function openSuratJalanForm(idx=-1) {
-  _sjEditIdx = idx; _sjItemCount = 0;
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('sj-items').innerHTML = '';
-  const sb = document.getElementById('sj-sb'); if(sb) sb.style.display='none';
-  if (idx >= 0) {
-    const sj = gSJ()[idx];
-    document.getElementById('sj-modal-title').textContent = '✏️ Edit Surat Jalan';
-    document.getElementById('sj-f-no').value        = sj.no || '';
-    document.getElementById('sj-f-date').value      = sj.date || today;
-    document.getElementById('sj-f-penerima').value  = sj.penerima || '';
-    document.getElementById('sj-f-alamat').value    = sj.alamat || '';
-    document.getElementById('sj-f-pengirim').value  = sj.pengirim || '';
-    document.getElementById('sj-f-kendaraan').value = sj.kendaraan || '';
-    document.getElementById('sj-f-notes').value     = sj.notes || '';
-    (sj.items||[]).forEach(it => addSuratJalanItem(it));
-  } else {
-    document.getElementById('sj-modal-title').textContent = '📋 Buat Surat Jalan';
-    document.getElementById('sj-f-no').value        = genSJNo();
-    document.getElementById('sj-f-date').value      = today;
-    ['sj-f-penerima','sj-f-alamat','sj-f-pengirim','sj-f-kendaraan','sj-f-notes'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.value='';
-    });
-    addSuratJalanItem();
+  // Format tanggal: dd MMMM yyyy (Indonesia)
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const dt = new Date(d);
+    return dt.toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
+  };
+
+  // Baris barang — minimal 8 baris agar tabel penuh seperti template
+  const MIN_ROWS = 8;
+  const items = sj.items || [];
+  let rowsHTML = items.map((it, i) => `
+    <tr>
+      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${i+1}</td>
+      <td style="border:1px solid #333;padding:5px 8px;">${it.name||''}</td>
+      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${it.qty||''}</td>
+      <td style="border:1px solid #333;padding:5px 8px;">${it.desc||''}</td>
+    </tr>`).join('');
+  // Tambah baris kosong
+  for (let i = items.length; i < MIN_ROWS; i++) {
+    rowsHTML += `<tr>
+      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${i+1}</td>
+      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
+      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
+      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
+    </tr>`;
   }
-  document.getElementById('sj-modal-overlay')?.classList.add('show');
+
+  const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Surat Jalan ${sj.no}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: Arial, sans-serif; font-size:12px; color:#000; background:#fff; padding:20px 28px; }
+    .page { max-width:740px; margin:0 auto; }
+
+    /* Header */
+    .header { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #333; padding-bottom:10px; margin-bottom:14px; }
+    .logo-area { display:flex; align-items:center; gap:10px; }
+    .logo-box { width:70px; height:60px; border:1px solid #aaa; display:flex; align-items:center; justify-content:center; font-size:9px; color:#666; text-align:center; border-radius:4px; }
+    .company-name { font-size:13px; font-weight:700; line-height:1.4; }
+    .company-sub { font-size:9px; color:#555; }
+    .doc-title { font-size:22px; font-weight:700; letter-spacing:2px; text-align:right; }
+
+    /* Info fields */
+    .info-table { width:100%; margin-bottom:14px; }
+    .info-table td { padding:3px 6px; vertical-align:top; font-size:12px; }
+    .info-table td.lbl { width:130px; font-weight:600; }
+    .info-table td.sep { width:14px; text-align:center; }
+    .info-table td.val { border-bottom:1px solid #aaa; min-width:180px; }
+    .info-right td.lbl { text-align:right; }
+
+    /* Items table */
+    .items-table { width:100%; border-collapse:collapse; margin-bottom:18px; }
+    .items-table thead tr { background:#3a4a5c; color:#fff; }
+    .items-table th { border:1px solid #333; padding:7px 8px; text-align:center; font-size:11px; }
+    .items-table td { border:1px solid #333; padding:5px 8px; font-size:11px; }
+
+    /* Signatures */
+    .sig-row { display:flex; gap:0; border:1px solid #333; }
+    .sig-box { flex:1; padding:10px 14px; min-height:80px; border-right:1px solid #333; }
+    .sig-box:last-child { border-right:none; }
+    .sig-title { font-size:11px; font-weight:700; margin-bottom:6px; }
+    .sig-name { font-size:11px; margin-top:4px; min-height:50px; }
+
+    .note-area { font-size:11px; margin-bottom:10px; }
+
+    @media print {
+      body { padding:10px 16px; }
+      @page { size: A4; margin: 10mm; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <div class="logo-area">
+      <div class="logo-box">PT SILIWANGI<br>AGRO<br>INDO LESTARI</div>
+    </div>
+    <div class="doc-title">SURAT JALAN</div>
+  </div>
+
+  <!-- ── INFO ── -->
+  <table class="info-table" style="margin-bottom:6px;">
+    <tr>
+      <td class="lbl">Tanggal</td>
+      <td class="sep">:</td>
+      <td class="val">${fmtDate(sj.date)}</td>
+      <td style="width:40px"></td>
+      <td class="lbl" style="text-align:right">Tujuan</td>
+      <td class="sep">:</td>
+      <td class="val" style="min-width:200px;">${sj.penerima||''}</td>
+    </tr>
+    <tr>
+      <td class="lbl">No. SJ</td>
+      <td class="sep">:</td>
+      <td class="val">${sj.no||''}</td>
+      <td></td>
+      <td></td><td></td><td></td>
+    </tr>
+    <tr>
+      <td class="lbl">Nopol / Kendaraan</td>
+      <td class="sep">:</td>
+      <td class="val">${sj.kendaraan||''}</td>
+      <td></td>
+      <td></td><td></td><td></td>
+    </tr>
+    <tr>
+      <td class="lbl">Driver</td>
+      <td class="sep">:</td>
+      <td class="val">${sj.driver||''}</td>
+      <td></td>
+      <td></td><td></td><td></td>
+    </tr>
+  </table>
+
+  <div style="font-size:12px;margin-bottom:8px;">Dikirimkan barang-barang sebagai berikut :</div>
+
+  <!-- ── ITEMS TABLE ── -->
+  <table class="items-table">
+    <thead>
+      <tr>
+        <th style="width:40px;">No</th>
+        <th>Nama Barang</th>
+        <th style="width:80px;">QTY</th>
+        <th style="width:220px;">Keterangan</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHTML}</tbody>
+  </table>
+
+  ${sj.notes ? `<div class="note-area">Catatan: ${sj.notes}</div>` : ''}
+
+  <!-- ── SIGNATURES ── -->
+  <div class="sig-row">
+    <div class="sig-box">
+      <div class="sig-title">Gudang</div>
+      <div class="sig-name">${sj.pengirim||''}</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-title">Driver</div>
+      <div class="sig-name">${sj.driver||''}</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-title">Diterima Oleh</div>
+      <div class="sig-name"></div>
+    </div>
+  </div>
+
+</div>
+<script>window.onload = () => { window.print(); }<\/script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type:'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) {
+    // Fallback: download langsung sebagai file
+    const a = document.createElement('a');
+    a.href = url; a.download = `Surat_Jalan_${sj.no.replace(/\//g,'-')}.html`;
+    a.click();
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-function closeSuratJalanForm() {
-  document.getElementById('sj-modal-overlay')?.classList.remove('show');
-  _sjEditIdx = -1;
-}
+window.downloadSuratJalanPDF = downloadSuratJalanPDF;
+
 function addSuratJalanItem(data=null) {
   const uid = ++_sjItemCount;
   const container = document.getElementById('sj-items');
   if (!container) return;
   const row = document.createElement('div');
   row.id = 'sj-item-'+uid;
-  row.style.cssText = 'display:grid;grid-template-columns:2fr 80px 80px 1fr auto;gap:6px;align-items:end;margin-bottom:6px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--border)';
+  row.style.cssText = 'display:grid;grid-template-columns:2fr 80px 1fr auto;gap:6px;align-items:center;margin-bottom:4px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-top:none;';
   row.innerHTML = `
-    <div><label class="de-label" style="font-size:9px">NAMA BARANG</label><input class="de-input" id="sj-i-name-${uid}" value="${data?.name||''}" placeholder="Nama barang..."></div>
-    <div><label class="de-label" style="font-size:9px">QTY</label><input class="de-input" id="sj-i-qty-${uid}" type="number" value="${data?.qty||''}" placeholder="0" min="0"></div>
-    <div><label class="de-label" style="font-size:9px">SATUAN</label><input class="de-input" id="sj-i-unit-${uid}" value="${data?.unit||''}" placeholder="kg / pcs"></div>
-    <div><label class="de-label" style="font-size:9px">KETERANGAN</label><input class="de-input" id="sj-i-desc-${uid}" value="${data?.desc||''}" placeholder="Opsional..."></div>
-    <div style="padding-bottom:2px"><button class="fp-item-remove" onclick="document.getElementById('sj-item-${uid}').remove()" title="Hapus">✕</button></div>`;
+    <input class="de-input" id="sj-i-name-${uid}" value="${data?.name||''}" placeholder="Nama barang..." style="margin:0">
+    <input class="de-input" id="sj-i-qty-${uid}" type="number" value="${data?.qty||''}" placeholder="0" min="0" style="margin:0;text-align:center">
+    <input class="de-input" id="sj-i-desc-${uid}" value="${data?.desc||''}" placeholder="Keterangan..." style="margin:0">
+    <button class="fp-item-remove" onclick="document.getElementById('sj-item-${uid}').remove()" title="Hapus" style="margin:0">✕</button>`;
   container.appendChild(row);
 }
+
 function submitSuratJalan() {
   const penerima = document.getElementById('sj-f-penerima')?.value.trim();
-  if (!penerima) { showSjSt('error','❌ Nama penerima wajib diisi!'); return; }
+  if (!penerima) { showSjSt('error','❌ Tujuan wajib diisi!'); return; }
   const items = [];
   document.querySelectorAll('#sj-items > div[id^="sj-item-"]').forEach(row => {
     const uid = row.id.replace('sj-item-','');
     items.push({
       name: document.getElementById('sj-i-name-'+uid)?.value.trim() || '',
       qty:  document.getElementById('sj-i-qty-'+uid)?.value || '',
-      unit: document.getElementById('sj-i-unit-'+uid)?.value.trim() || '',
       desc: document.getElementById('sj-i-desc-'+uid)?.value.trim() || '',
     });
   });
   const entry = {
-    id:        _sjEditIdx>=0 ? gSJ()[_sjEditIdx].id : Date.now(),
-    no:        document.getElementById('sj-f-no')?.value.trim() || genSJNo(),
-    date:      document.getElementById('sj-f-date')?.value || '',
+    id:         _sjEditIdx>=0 ? gSJ()[_sjEditIdx].id : Date.now(),
+    no:         document.getElementById('sj-f-no')?.value.trim() || genSJNo(),
+    date:       document.getElementById('sj-f-date')?.value || '',
     penerima,
-    alamat:    document.getElementById('sj-f-alamat')?.value.trim() || '',
-    pengirim:  document.getElementById('sj-f-pengirim')?.value.trim() || '',
-    kendaraan: document.getElementById('sj-f-kendaraan')?.value.trim() || '',
-    notes:     document.getElementById('sj-f-notes')?.value.trim() || '',
+    kendaraan:  document.getElementById('sj-f-kendaraan')?.value.trim() || '',
+    driver:     document.getElementById('sj-f-driver')?.value.trim() || '',
+    pengirim:   document.getElementById('sj-f-pengirim')?.value.trim() || '',
+    notes:      document.getElementById('sj-f-notes')?.value.trim() || '',
     items,
     created_at: new Date().toISOString(),
   };
@@ -7700,6 +9151,7 @@ function submitSuratJalan() {
   showSjSt('success','✅ Surat jalan tersimpan!');
   setTimeout(()=>{ closeSuratJalanForm(); renderSuratJalan(); }, 800);
 }
+
 function editSuratJalan(idx) {
   openSuratJalanForm(idx);
 }
@@ -7752,56 +9204,3 @@ window.handlePhotoUpload = handlePhotoUpload;
 window.switchReportTab = switchReportTab;
 window.changeReportSort = changeReportSort;
 window.clearDateFilters = clearDateFilters;
-
-// ── Status bar helpers ──────────────────────────────────────
-function _depStatus(key, type, msg) {
-  const sb = document.getElementById('dep-sb-' + key);
-  const sm = document.getElementById('dep-sm-' + key);
-  if (!sb || !sm) return;
-  sb.style.display = 'flex';
-  sb.className     = 'de-status-bar de-status-' + type;
-  sm.textContent   = msg;
-}
-
-// ── submitDE — Limbah save ke database ────────────────────────
-async function submitDE(key) {
-  const sb = document.getElementById(key + '-sb');
-  const sm = document.getElementById(key + '-sm');
-
-  if (key === 'limbah') {
-    const sel      = document.getElementById('limbah-proj-sel');
-    const projName = sel && sel.value ? (gPJ('ongoing')[+sel.value]?.name || '') : '';
-    const payload  = {
-      tanggal:   document.getElementById(key + '-date')?.value  || new Date().toISOString().split('T')[0],
-      vol:       document.getElementById(key + '-vol')?.value   || '',
-      cod:       document.getElementById(key + '-cod')?.value   || '',
-      bod:       document.getElementById(key + '-bod')?.value   || '',
-      tss:       document.getElementById(key + '-tss')?.value   || '',
-      ph:        document.getElementById(key + '-ph')?.value    || '',
-      temp:      document.getElementById(key + '-temp')?.value  || '',
-      notes:     document.getElementById(key + '-notes')?.value || '',
-      foto_urls: window._photoData?.[key] || [],
-    };
-    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-loading'; sm.textContent='⏳ Menyimpan ke database...'; }
-    try {
-      const res  = await fetch('/api/dataentry/limbah', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Gagal simpan');
-      const entry = { ...payload, saved_at: new Date().toISOString(), projName, db_id: json.id };
-      const all   = JSON.parse(localStorage.getItem('limbah_entries') || '[]');
-      all.push(entry);
-      localStorage.setItem('limbah_entries', JSON.stringify(all));
-      if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data Limbah tersimpan ke database!'; setTimeout(()=>{if(sb)sb.style.display='none';},3000); }
-    } catch (err) {
-      console.error('submitDE limbah error:', err);
-      if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-error'; sm.textContent='❌ Gagal simpan: ' + err.message; }
-    }
-    return;
-  }
-  if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data berhasil disimpan!'; setTimeout(()=>{if(sb)sb.style.display='none';},3000); }
-}
-window.submitDE = submitDE;

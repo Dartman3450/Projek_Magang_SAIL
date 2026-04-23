@@ -40,6 +40,7 @@
     <div class="nav-group" data-section="project">
       <div class="nav-group-head" onclick="toggleNav(this)"><span class="ico">📋</span><span>Project Activity</span><span class="arr">▾</span></div>
       <div class="nav-sub">
+        <div class="nav-sub-item" onclick="loadPage('receipt')" data-page="receipt">Receipt</div>
         <div class="nav-sub-item" onclick="loadPage('ongoing')"   data-page="ongoing">On Going Project</div>
         <div class="nav-sub-item" onclick="loadPage('completed')" data-page="completed">Completed Project</div>
       </div>
@@ -97,7 +98,7 @@
     <div class="topbar-right">
       <div class="esp-badge waiting" id="esp-badge">
         <div class="esp-dot"></div>
-        <span id="esp-label">Waiting for ESP<span class="dots"></span></span>
+        <span id="esp-label">ESP STATUS</span>
       </div>
       <div class="clock-txt" id="clock">--:--:--</div>
     </div>

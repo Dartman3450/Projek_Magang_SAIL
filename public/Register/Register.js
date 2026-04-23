@@ -4,10 +4,10 @@
 
 // Role descriptions shown below the dropdown
 const ROLE_HINTS = {
-  utility:    'Akses: Dashboard IoT, Data Entry Utility, Reporting, Settings',
+  utility:    'Akses: Dashboard IoT, ProData Entry Utility, Reporting, Settings',
   scientist:  'Akses: Dashboard IoT, Data Entry Laboratorium, Reporting, Settings',
   Produksi:   'Akses: Dashboard IoT, Data Entry Production, Reporting, Settings',
-  PPIC:       'Akses: Dashboard IoT, Data Entry Production, Data Entry Utility , Data Entry Laboratorium, Data Entry LimbahReporting, Settings',
+  PPIC:       'Akses: Dashboard IoT,On going project , Completed Projects, Data Entry Production, Data Entry Utility , Data Entry Laboratorium, Data Entry LimbahReporting, Settings',
   limbah:     'Akses: Dashboard IoT, Data Entry Limbah, Reporting, Settings',
   superadmin: 'Akses: Semua halaman dan fitur (level tertinggi)',
 };

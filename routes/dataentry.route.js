@@ -52,6 +52,10 @@
 
 // routes/dataentry.route.js
 
+// routes/dataentry.route.js
+
+// routes/dataentry.route.js
+
 const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/dataentry.controller');
@@ -59,6 +63,7 @@ const ctrl    = require('../controllers/dataentry.controller');
 // ── Production ──────────────────────────────────────────
 router.post('/production',    ctrl.saveProduction);
 router.get ('/production',    ctrl.getProduction);
+router.get ('/production/history', ctrl.getProductionHistory);
 
 // ── Utility ─────────────────────────────────────────────
 router.post('/utility',       ctrl.saveUtility);
@@ -71,5 +76,9 @@ router.get ('/laboratorium',  ctrl.getLaboratorium);
 // ── Limbah ───────────────────────────────────────────────
 router.post('/limbah',        ctrl.saveLimbah);
 router.get ('/limbah',        ctrl.getLimbah);
+
+// ── Laporan Harian ───────────────────────────────────────
+router.post('/laporan',       ctrl.saveLaporan);
+router.get ('/laporan',       ctrl.getLaporan);
 
 module.exports = router;

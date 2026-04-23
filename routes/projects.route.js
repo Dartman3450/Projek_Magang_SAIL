@@ -42,8 +42,8 @@ router.post('/', async (req, res) => {
       INSERT INTO projects (
         type, name, kategori, batch,
         start_date, end_date, materials, tools, notes,
-        progress, allowed_roles
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        progress
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       RETURNING *
     `, [
       d.type        || 'ongoing',
@@ -56,7 +56,6 @@ router.post('/', async (req, res) => {
       d.tools       || '',
       d.notes       || '',
       d.progress    || 0,
-      d.allowed_roles ? d.allowed_roles : null,
     ]);
 
     res.json({ success: true, data: rows[0] });
@@ -97,7 +96,6 @@ router.put('/:id', async (req, res) => {
     if (d.notes         !== undefined) add('notes',           d.notes);
     if (d.progress      !== undefined) add('progress',        d.progress);
     if (d.type          !== undefined) add('type',            d.type);
-    if (d.allowed_roles !== undefined) add('allowed_roles',   d.allowed_roles);
     if (d.set_point     !== undefined) add('set_point',       JSON.stringify(d.set_point));
     if (d.cip_prod_done !== undefined) add('cip_prod_done',   d.cip_prod_done);
     if (d.cip_prod_checks !== undefined) add('cip_prod_checks', JSON.stringify(d.cip_prod_checks));

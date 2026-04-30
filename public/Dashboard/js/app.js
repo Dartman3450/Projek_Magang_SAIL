@@ -152,13 +152,17 @@ const SP_FIELDS_PAGE1 = [
   {id:'sp-feed',       label:'Feed',                 type:'number', unit:'L/h'},
   {id:'sp-aroma',      label:'Aroma Flowrate',       type:'number', unit:'L/h',      calculated:true, formula:'External strip rate % * Feed'},
   {id:'sp-steam',      label:'Stripping Steam',      type:'number', unit:'kg/h',     calculated:true, formula:'Aroma + 0.0933 * Top of Column - 2.3333 + Math.abs(Offset) * Feed * 0.0018'},
-  {id:'sp-prod-out',   label:'Product Out',          type:'number', unit:'L/h'},
+  {id:'sp-prod-out',   label:'Product Out',          type:'number', unit:'°C'},
   {id:'sp-cond1',      label:'Condensate #1',        type:'number', unit:'L/h',      calculated:true, formula:'Condenser #1 % * Feed'},
   {id:'sp-cond2',      label:'Condensate #2',        type:'number', unit:'L/h',      calculated:true, formula:'(External strip rate % - Condenser #1 %) * Feed'},
   {id:'sp-ext',        label:'External Strip Rate ',  type:'number', unit:'%'},
-  {id:'sp-int',        label:'Internal Strip Rate ',  type:'text',   unit:'',         calculated:true, formula:'100 * Stripping Steam / Feed'},
+  {id:'sp-int',        label:'Internal Strip Rate ',  type:'text',   unit:'%',         calculated:true, formula:'100 * Stripping Steam / Feed'},
   {id:'sp-cond-rate',  label:'Condenser #1',         type:'number', unit:'%'},
   {id:'sp-offset',     label:'Offset',               type:'number', unit:'°C'},
+  {id:'sp-chilled',    label:'Chilled Water',                       type:'text',   unit:'°C'},
+  {id:'sp-condenser-water', label:'Condenser Water',                type:'text',   unit:'°C'},
+  {id:'sp-system-vacuum',   label:'System Vacuum',                  type:'text',   unit:'KPa'},
+  {id:'sp-steam-flow',      label:'Steam Flow',                     type:'text',   unit:'Kg/h'},
 ];
 // Set Point field definitions (pagination)
 const SP_FIELDS_PAGE2 = [
@@ -168,18 +172,14 @@ const SP_FIELDS_PAGE2 = [
   {id:'sp-Condensate1', label:'Condensate #1',         type:'number', unit:'°C'},
   {id:'sp-Condensate2', label:'Condensate #2',         type:'number', unit:'°C'},
   {id:'sp-temp-bot',   label:'Bottom of Column',     type:'number', unit:'°C'},
-  {id:'sp-add1',       label:'Product Flowrate',                    type:'text',   unit:''},
-  {id:'sp-add2',       label:'Product Flow Control Valve Position', type:'text',   unit:''},
-  {id:'sp-add3',       label:'CT Steam Pressure',                   type:'text',   unit:''},
-  {id:'sp-add4',       label:'Concentrate Recirculation Flow',      type:'text',   unit:''},
-  {id:'sp-add5',       label:'Product Cooler Temperature',          type:'text',   unit:''},
-  {id:'sp-add6',       label:'CT Discharge Level',                  type:'text',   unit:''},
-  {id:'sp-add7',       label:'Brix Input',                          type:'text',   unit:''},
-  {id:'sp-add8',       label:'Brix Output',                         type:'text',   unit:''},
-  {id:'sp-chilled',    label:'Chilled Water',                       type:'text',   unit:''},
-  {id:'sp-condenser-water', label:'Condenser Water',                type:'text',   unit:''},
-  {id:'sp-system-vacuum',   label:'System Vacuum',                  type:'text',   unit:''},
-  {id:'sp-steam-flow',      label:'Steam Flow',                     type:'text',   unit:'KG/h'},
+  {id:'sp-add1',       label:'Product Flowrate',                    type:'text',   unit:'L/H'},
+  {id:'sp-add2',       label:'Product Flow Control Valve Position', type:'text',   unit:'%'},
+  {id:'sp-add3',       label:'CT Steam Pressure',                   type:'text',   unit:'KPa'},
+  {id:'sp-add4',       label:'Concentrate Recirculation Flow',      type:'text',   unit:'L/H'},
+  {id:'sp-add5',       label:'Product Cooler Temperature',          type:'text',   unit:'°C'},
+  {id:'sp-add6',       label:'CT Discharge Level',                  type:'text',   unit:'%'},
+  {id:'sp-add7',       label:'Brix Input',                          type:'text',   unit:'%'},
+  {id:'sp-add8',       label:'Brix Output',                         type:'text',   unit:'%'},
 ];
 const SP_FIELDS = [...SP_FIELDS_PAGE1, ...SP_FIELDS_PAGE2];
 
@@ -345,7 +345,7 @@ function loadPage(page) {
     'change-email':['Change Email','SAIL / Setting / Email'],
     'change-password':['Change Password','SAIL / Setting / Password'],
     'tank-dimension-setting':['Change Containers Volume','SAIL / Setting / Sensor Manager'],
-    'kartu-stok':['Kartu Stok','SAIL / Gudang / Kartu Stok'],
+    'kartu-stok':['Stock Card','SAIL / Gudang / Stock Card'],
     'surat-jalan':['Surat Jalan','SAIL / Reporting / Surat Jalan'],
   };
   const [title, crumb] = map[page] || [page,'SAIL'];
@@ -1245,8 +1245,8 @@ function renderTankCards() {
 
     // ── HORIZONTAL TANK CARD (Improved Design) ─────────────────────────────────
     if (isHoriz) {
-      const tankW  = 100;  // Increased width for better proportion
-      const tankH  = shape === 'silinder' ? 48 : 40;
+      const tankW  = 78;  // Compact width
+      const tankH  = shape === 'silinder' ? 36 : 30;
       const ellW   = 16;   // Slightly wider ellipse
       const tinggiTankiCm = tinggiM * 100;
 
@@ -1340,7 +1340,7 @@ function renderTankCards() {
             ${bodyHTML}
           </div>
           <div style="display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:6px">
-            <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${col.label};line-height:1.3">—%</div>
+            <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:800;color:${col.label};line-height:1.1">—%</div>
             <div id="tank-vol-${s.id}" style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:${col.label}">— L</div>
           </div>
           <div id="tank-cm-${s.id}" style="font-size:8px;color:var(--txt3);width:100%">— cm terisi</div>
@@ -1353,7 +1353,7 @@ function renderTankCards() {
     // Tangki vertikal: tampil portrait, air mengisi dari bawah (tinggi berkurang saat air turun)
     const isTall = tinggiM >= 1.5;
     const isWide = shape !== 'silinder' && ((+(s.panjang||1)) >= 2 || (+(s.lebar||1)) >= 2);
-    let tankW = isWide ? 60 : 48, tankH = isTall ? 110 : 90;
+    let tankW = isWide ? 46 : 36, tankH = isTall ? 85 : 68;
     let borderRadius = '4px 4px 6px 6px';
     let topSvg = '';
 
@@ -1393,9 +1393,9 @@ function renderTankCards() {
             <span style="font-family:'DM Mono',monospace;font-size:6px;color:var(--txt3)">0%</span>
           </div>
         </div>
-        <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:${col.label}">—%</div>
+        <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:800;color:${col.label};line-height:1.1;margin-top:4px">—%</div>
         <div id="tank-cm-${s.id}" style="font-size:8px;color:var(--txt3)">— cm air</div>
-        <div id="tank-vol-${s.id}" style="font-family:'DM Mono',monospace;font-size:9px;font-weight:600;color:${col.label}">— L</div>
+        <div id="tank-vol-${s.id}" style="font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:${col.label}">— L</div>
         <div style="font-size:7px;color:var(--txt3)">max ${maxVol.toLocaleString('id-ID')} L</div>
       </div>
     `;
@@ -1438,7 +1438,7 @@ function applyWL(wl) {
       const clr = pct <= critAt ? 'var(--red)' : pct <= warnAt ? 'var(--orange)' : SENSOR_COLORS[i % SENSOR_COLORS.length].label;
       if (isNonLinear) {
         // Silinder horizontal: tampilkan % volume + keterangan tinggi linear
-        tp.innerHTML = `<span style="font-size:12px;font-weight:700;color:${clr}">${pct}%</span><span style="font-size:7px;color:var(--txt3);display:block;line-height:1.2">vol · ${pctLinear}% tinggi</span>`;
+        tp.innerHTML = `<span style="font-size:22px;font-weight:800;color:${clr}">${pct}%</span><span style="font-size:7px;color:var(--txt3);display:block;line-height:1.2">vol · ${pctLinear}% tinggi</span>`;
       } else {
         tp.textContent = pct + '%';
         tp.style.color = clr;
@@ -1893,13 +1893,13 @@ function getDataEntryLimbah(key,title,sub,icon){
       <div class="de-field"><label class="de-label" style="color:#111;">DATE</label><input class="de-input" type="date" id="${key}-date"></div>
       
       <div class="de-field" id="${key}-awal-wrap" style="display:none;"><label class="de-label" style="color:#111;">Awal</label>
-        <div class="input-group"><input class="de-input" type="number" id="${key}-awal" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">L</span></div>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-awal" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">m³</span></div>
       </div>
       <div class="de-field" id="${key}-akhir-wrap" style="display:none;"><label class="de-label" style="color:#111;">Akhir</label>
-        <div class="input-group"><input class="de-input" type="number" id="${key}-akhir" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">L</span></div>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-akhir" placeholder="0" oninput="calcLimbahTotal('${key}')"><span class="group-unit">m³</span></div>
       </div>
       <div class="de-field"><label class="de-label" style="color:#111;">Total Volume</label>
-        <div class="input-group"><input class="de-input" type="number" id="${key}-vol" placeholder="Input manual..." style="background:#fff; color:var(--blue); font-weight:700;"><span class="group-unit">L</span></div>
+        <div class="input-group"><input class="de-input" type="number" id="${key}-vol" placeholder="Input manual..." style="background:#fff; color:var(--blue); font-weight:700;"><span class="group-unit">m³</span></div>
       </div>
       
       <div class="de-field"><label class="de-label" style="color:#111;">COD</label><div class="input-group"><input class="de-input" type="number" id="${key}-cod" placeholder="0"><span class="group-unit">mg/L</span></div></div>
@@ -2026,9 +2026,9 @@ function openJarTestModal() {
 
           <div style="display:grid; grid-template-columns:80px 1fr 1fr 1fr 1fr 40px; gap:10px; padding:0 10px 8px; border-bottom:2px solid #eee; margin-bottom:10px; font-size:11px; font-weight:700; color:var(--txt2); text-align:center;">
             <div>pH</div>
-            <div>PAC (mg)</div>
+            <div>PAC</div>
             <div>Dozing PAC</div>
-            <div>Polimer (mg)</div>
+            <div>Polimer</div>
             <div>Dozing Polimer</div>
             <div></div>
           </div>
@@ -2073,24 +2073,24 @@ function addJarTestRow() {
     
     <div class="input-group">
       <input class="de-input jar-pac" id="pac-input-${uid}" type="number" placeholder="0" oninput="calcJarRowDosing('${uid}', 'pac')">
-      <span class="group-unit">mg</span>
+      <span class="group-unit">ml</span>
     </div>
 
     <div class="input-group" style="position:relative">
       <input class="de-input jar-doz-pac" id="doz-pac-${uid}" readonly style="padding-right:45px;" placeholder="0">
       <button onclick="toggleJarRowMode('${uid}', 'pac')" id="btn-pac-${uid}" data-mode="auto" style="position:absolute; right:46px; top:50%; transform:translateY(-50%); font-size:8px; padding:3px 6px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:4px; cursor:pointer; font-weight:700;">AUTO</button>
-      <span class="group-unit">ppm</span>
+      <span class="group-unit">L/h</span>
     </div>
     
     <div class="input-group">
       <input class="de-input jar-pol" id="pol-input-${uid}" type="number" placeholder="0" oninput="calcJarRowDosing('${uid}', 'pol')">
-      <span class="group-unit">mg</span>
+      <span class="group-unit">ml</span>
     </div>
 
     <div class="input-group" style="position:relative">
       <input class="de-input jar-doz-pol" id="doz-pol-${uid}" readonly style="padding-right:45px;" placeholder="0">
       <button onclick="toggleJarRowMode('${uid}', 'pol')" id="btn-pol-${uid}" data-mode="auto" style="position:absolute; right:46px; top:50%; transform:translateY(-50%); font-size:8px; padding:3px 6px; border:1px solid var(--blue); background:#ebf2fd; color:var(--blue); border-radius:4px; cursor:pointer; font-weight:700;">AUTO</button>
-      <span class="group-unit">ppm</span>
+      <span class="group-unit">L/h</span>
     </div>
     
     <button onclick="document.getElementById('jar-row-${uid}').remove()" style="background:none; border:none; color:var(--red); cursor:pointer; font-size:16px;">✕</button>
@@ -2336,27 +2336,37 @@ function utilSwitchType(key, type) {
   } else {
     harianSub.style.display = 'none';
     projectSub.style.display = 'block';
-    
-    // Muat daftar project Ongoing ke dropdown Project
+
+    // Fetch dari API dulu supaya project list selalu fresh
     const projSel = document.getElementById('util-project-cat-' + key);
     if (projSel) {
-      const currentRole = localStorage.getItem('role') || 'utility';
-      const isAdmin     = ['admin','superadmin'].includes(currentRole);
-      const allProjs    = gPJ('ongoing');
-      const projs       = isAdmin ? allProjs : allProjs.filter(p => {
-        if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
-        return p.allowed_roles.includes(currentRole);
+      projSel.innerHTML = '<option value="">⏳ Memuat project...</option>';
+      projSel.disabled = true;
+
+      loadPJ('ongoing').then(allProjs => {
+        const currentRole = localStorage.getItem('role') || 'utility';
+        const isAdmin     = ['admin','superadmin'].includes(currentRole);
+        const projs = isAdmin ? allProjs : allProjs.filter(p => {
+          if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+          return p.allowed_roles.includes(currentRole);
+        });
+        projSel.innerHTML = '<option value="">-- Pilih project --</option>';
+        projs.forEach(p => {
+          const realIdx = allProjs.indexOf(p);
+          const opt = document.createElement('option');
+          opt.value = realIdx; opt.textContent = p.name;
+          projSel.appendChild(opt);
+        });
+        projSel.disabled = false;
+        if (projs.length === 0) {
+          projSel.innerHTML = '<option value="">-- Belum ada project tersedia --</option>';
+        }
+        // Render jika sebelumnya sudah ada project yang dipilih
+        if (projSel.value !== '') utilRenderProject(key, projSel.value);
+      }).catch(() => {
+        projSel.innerHTML = '<option value="">-- Gagal memuat project --</option>';
+        projSel.disabled = false;
       });
-      projSel.innerHTML = '<option value="">-- Pilih project --</option>';
-      projs.forEach(p => {
-        const realIdx = allProjs.indexOf(p);
-        const opt = document.createElement('option');
-        opt.value = realIdx; opt.textContent = p.name;
-        projSel.appendChild(opt);
-      });
-      
-      // Render jika sebelumnya sudah ada project yang dipilih
-      if (projSel.value !== '') utilRenderProject(key, projSel.value);
     }
   }
 }
@@ -2492,32 +2502,52 @@ function utilResetHarian(uid) {
 }
 window.utilResetHarian = utilResetHarian;
 
-function utilSaveHarian(uid, cat) {
+async function utilSaveHarian(uid, cat) {
   if (!confirm('Apakah Anda yakin ingin menyimpan data Utility Harian ini?')) return;
-  // ── Collect all harian form fields and save to localStorage ──
-  const formArea = document.getElementById('util-form-area-utility');
-  const data = {};
-  if (formArea) {
-    formArea.querySelectorAll('[id^="util-'+uid+'"]').forEach(el => {
-      const key = el.id.replace('util-'+uid+'-','');
-      if (el.value) data[key] = el.value;
-    });
-  }
-  const projName = (()=>{
-    const s = document.getElementById('util-project-cat-utility');
-    return s && s.value ? (gPJ('ongoing')[+s.value]?.name||'') : '';
-  })();
-  const entry = { saved_at: new Date().toISOString(), cat, uid, projName, data };
-  const all = JSON.parse(localStorage.getItem('harian_entries')||'[]');
-  all.push(entry);
-  localStorage.setItem('harian_entries', JSON.stringify(all));
 
   const b = document.getElementById('util-'+uid+'-sb');
   const m = document.getElementById('util-'+uid+'-sm');
-  if (b && m) {
-    b.style.display = 'flex'; b.className = 'de-status-bar de-status-success';
-    m.textContent = '✅ Data ' + cat + ' tersimpan!';
-    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000);
+  const showSt = (type, msg) => {
+    if(b&&m){ b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg; }
+  };
+
+  showSt('loading','⏳ Menyimpan...');
+
+  // Kumpulkan semua nilai dari form
+  const tanggal = document.getElementById('util-'+uid+'-date')?.value || new Date().toISOString().split('T')[0];
+  const awal    = document.getElementById('util-'+uid+'-awal')?.value  || '';
+  const akhir   = document.getElementById('util-'+uid+'-akhir')?.value || '';
+  const total   = document.getElementById('util-'+uid+'-total')?.value || '';
+  const notes   = document.getElementById('util-'+uid+'-notes')?.value || '';
+
+  // Tentukan jenis kategori dari uid (air_baku, air_proses, solar, listrik, dll)
+  const catKey = uid.replace('utility_', '');
+
+  const payload = {
+    tanggal,
+    kategori:  catKey,
+    label:     cat,
+    awal:      parseFloat(awal)  || null,
+    akhir:     parseFloat(akhir) || null,
+    total:     parseFloat(total) || null,
+    notes:     notes || null,
+    tipe:      'harian',
+  };
+
+  try {
+    const res  = await fetch('/api/dataentry/utility', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || json.message || 'Gagal simpan');
+
+    showSt('success', '✅ Data ' + cat + ' tersimpan ke database!');
+    setTimeout(() => { if(b) b.style.display='none'; }, 3000);
+  } catch(err) {
+    console.error('utilSaveHarian error:', err);
+    showSt('error', '❌ Gagal: ' + err.message);
   }
 }
 window.utilSaveHarian = utilSaveHarian;
@@ -2564,16 +2594,44 @@ function utilSwitchTab(uid, tab) {
 window.utilSwitchTab = utilSwitchTab;
 
 // 2. Render Project Form (Tampilan Tab Terpisah)
-function utilRenderProject(key, idx) {
+async function utilRenderProject(key, idx) {
   const area = document.getElementById('util-form-area-'+key);
   if (!area) return;
   if (idx === '') { area.innerHTML = ''; return; }
   const proj = gPJ('ongoing')[+idx];
   if (!proj) { area.innerHTML = ''; return; }
   const uid = key + '_proj_' + idx;
-  
-  // Load previous entry data if exists
-  const prevData = proj.utilityData?.[uid] || {};
+
+  // Tampilkan loading dulu
+  area.innerHTML = `<div style="padding:40px;text-align:center;color:var(--txt3)">⏳ Memuat data utility...</div>`;
+
+  // Fetch data terbaru dari DB
+  let prevData = {};
+  try {
+    const res  = await fetch('/api/dataentry/utility?project_name=' + encodeURIComponent(proj.name) + '&limit=1');
+    const json = await res.json();
+    if (json.success && json.data?.length) {
+      const row = json.data[0];
+      // Map DB columns ke prevData format yang dipakai form
+      prevData = {
+        b1: row.b1_steam_press, b2: row.b2_fg_temp, b3: row.b3_fw_temp,
+        b4: row.b4_scale_temp, b5: row.b5_overheat_temp, b6: row.b6_next_blowdown,
+        b7: row.b7_conductivity, b8: row.b8_air_press, b9: row.b9_ignition_count,
+        b10: row.b10_oil_lfire_time, b11: row.b11_oil_hfire_time,
+        b12: row.b12_flue_lfire_temp, b13: row.b13_flue_hfire_temp,
+        b14: row.b14_fw_avg_temp, b15: row.b15_oil_efficiency,
+        b16: row.b16_oil_fuel_cons, b17: row.b17_steam_output, b18: row.b18_surface_bd,
+        c1: row.c1_set_point, c2: row.c2_water_in_temp, c3: row.c3_water_out_temp,
+        c4: row.c4_cap, c5: row.c5_discharge_a, c6: row.c6_suction_a,
+        c7: row.c7_discharge_b, c8: row.c8_suction_b, c9: row.c9_unit_capacity,
+        c10: row.c10_cir_a_capacity, c11: row.c11_cir_b_capacity,
+        notes: row.notes, cnotes: row.chiller_notes,
+      };
+    }
+  } catch(e) {
+    // Fallback ke cache lokal
+    prevData = proj.utilityData?.[uid] || {};
+  }
 
   area.innerHTML = `
     <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;">
@@ -2593,23 +2651,23 @@ function utilRenderProject(key, idx) {
 
       <div id="util-${uid}-form-boiler" style="display:block;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <div class="de-field"><label class="de-label" style="color:#111;">Steam Press</label>${makeNumberInputWithUnit('util-'+uid+'-b1', prevData.b1, 'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Steam Press</label>${makeNumberInputWithUnit('util-'+uid+'-b1', prevData.b1, 'MPa')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Flue gass temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b2', prevData.b2, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Feed water temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b3', prevData.b3, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Scale monitor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b4', prevData.b4, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Overheat sensor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b5', prevData.b5, '°C')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">To Next Blowdown</label>${makeInputField('util-'+uid+'-b6', prevData.b6, 'text')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Conductivity</label>${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'µS/cm')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Air pressure</label>${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'bar')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Ignition count</label>${makeNumberInput('util-'+uid+'-b9', prevData.b9)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">To Next Blowdown</label>${makeInputFieldWithUnit('util-'+uid+'-b6', prevData.b6, 'H')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Conductivity</label>${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'mS/m')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Air pressure</label>${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'pa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Ignition count</label>${makeNumberInputWithUnit('util-'+uid+'-b9', prevData.b9)}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Oil L-fire time</label>${makeInputField('util-'+uid+'-b10', prevData.b10, 'text')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Oil H-fire time</label>${makeInputField('util-'+uid+'-b11', prevData.b11, 'text')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Fuel Gas Temp (L-fire)</label>${makeNumberInputWithUnit('util-'+uid+'-b12', prevData.b12, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Fuel Gas Temp (H-fire)</label>${makeNumberInputWithUnit('util-'+uid+'-b13', prevData.b13, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Feed Water Avg Temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b14', prevData.b14, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Oil B-Efficiency</label>${makeNumberInputWithUnit('util-'+uid+'-b15', prevData.b15, '%')}</div>
-          <div class="de-field"><label class="de-label" style="color:#7e1818;background:#FFD1D1;padding:8px 12px;border-radius:6px;font-weight:600;display:inline-block;">O Fuel Consumption</label>${makeNumberInputWithUnit('util-'+uid+'-b16', prevData.b16, 'KG/h')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Steam output</label>${makeNumberInputWithUnit('util-'+uid+'-b17', prevData.b17, 'kg/h')}</div>
+          <div class="de-field"><label class="de-label" style="color:#7e1818;background:#FFD1D1;padding:8px 12px;border-radius:6px;font-weight:600;display:inline-block;">O Fuel Consumption</label>${makeNumberInputWithUnit('util-'+uid+'-b16', prevData.b16, 'KL')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Steam output</label>${makeNumberInputWithUnit('util-'+uid+'-b17', prevData.b17, 't')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Surface blowdown</label>${makeNumberInputWithUnit('util-'+uid+'-b18', prevData.b18, 'L')}</div>
           <div class="de-field" style="grid-column: 1 / -1;"><label class="de-label" style="color:#111;">Catatan Boiler</label>${makeTextareaField('util-'+uid+'-notes', prevData.notes)}</div>
         </div>
@@ -2617,17 +2675,17 @@ function utilRenderProject(key, idx) {
 
       <div id="util-${uid}-form-chiller" style="display:none;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-          <div class="de-field"><label class="de-label" style="color:#111;">Set Point</label>${makeNumberInput('util-'+uid+'-c1', prevData.c1)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Set Point</label>${makeNumberInputWithUnit('util-'+uid+'-c1', prevData.c1 ,'°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Water in temperature</label>${makeNumberInputWithUnit('util-'+uid+'-c2', prevData.c2, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Water out temperature</label>${makeNumberInputWithUnit('util-'+uid+'-c3', prevData.c3, '°C')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">CAP</label>${makeNumberInput('util-'+uid+'-c4', prevData.c4)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure A</label>${makeNumberInput('util-'+uid+'-c5', prevData.c5)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction A</label>${makeNumberInput('util-'+uid+'-c6', prevData.c6)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure B</label>${makeNumberInput('util-'+uid+'-c7', prevData.c7)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction B</label>${makeNumberInput('util-'+uid+'-c8', prevData.c8)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Unit Total Capacity</label>${makeNumberInput('util-'+uid+'-c9', prevData.c9)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Cir A Capacity</label>${makeNumberInput('util-'+uid+'-c10', prevData.c10)}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Cir B Capacity</label>${makeNumberInput('util-'+uid+'-c11', prevData.c11)}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">CAP</label>${makeNumberInputWithUnit('util-'+uid+'-c4', prevData.c4, '%')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure A</label>${makeNumberInputWithUnit('util-'+uid+'-c5', prevData.c5,'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction A</label>${makeNumberInputWithUnit('util-'+uid+'-c6', prevData.c6,'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Discharge Pressure B</label>${makeNumberInputWithUnit('util-'+uid+'-c7', prevData.c7,'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Main Suction B</label>${makeNumberInputWithUnit('util-'+uid+'-c8', prevData.c8,'kPa')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Unit Total Capacity</label>${makeNumberInputWithUnit('util-'+uid+'-c9', prevData.c9,'%')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Cir A Capacity</label>${makeNumberInputWithUnit('util-'+uid+'-c10', prevData.c10,'%')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Cir B Capacity</label>${makeNumberInputWithUnit('util-'+uid+'-c11', prevData.c11,'%')}</div>
           <div class="de-field" style="grid-column: 1 / -1;"><label class="de-label" style="color:#111;">Catatan Chiller</label>${makeTextareaField('util-'+uid+'-cnotes', prevData.cnotes)}</div>
         </div>
       </div>
@@ -2664,60 +2722,118 @@ function utilResetProj(uid, count) {
 }
 window.utilResetProj = utilResetProj;
 
-function utilSaveProject(uid, projName) {
+async function utilSaveProject(uid, projName) {
   if (!confirm('Apakah Anda yakin ingin menyimpan data Utility Project ini?')) return;
+
   const projIdx = +uid.split('_').pop();
-  const projs = gPJ('ongoing');
-  const proj = projs[projIdx];
+  const projs   = gPJ('ongoing');
+  const proj    = projs[projIdx];
   if (!proj) return;
-  
-  const prevData = proj.utilityData?.[uid] || {};
-  const formData = {};
-  
-  // Tangkap nilai Boiler (b1-b18) sesuai ketikan user (termasuk nol)
-  for (let i = 1; i <= 18; i++) {
-    const el = document.getElementById('util-'+uid+'-b'+i);
-    formData['b' + i] = el ? el.value : '';
-  }
-  
-  // Tangkap nilai Chiller (c1-c11)
-  for (let i = 1; i <= 11; i++) {
-    const el = document.getElementById('util-'+uid+'-c'+i);
-    formData['c' + i] = el ? el.value : '';
-  }
-  
-  // Tangkap Catatan
-  formData.notes = document.getElementById('util-'+uid+'-notes')?.value || '';
-  formData.cnotes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
-  
-  if (!proj.utilityData) proj.utilityData = {};
 
-  // Record history
-  const utilHistFields = [];
-  const boilerLabels = {b1:'Steam Press (kPa)',b2:'Flue Gass Temperature (°C)',b3:'Feed Water Temperature (°C)',b4:'Scale Monitor Temperature (°C)',b5:'Overheat Sensor Temperature (°C)',b6:'To Next Blowdown',b7:'Conductivity (µS/cm)',b8:'Air Pressure (bar)',b9:'Ignition Count',b10:'Oil L-fire Time',b11:'Oil H-fire Time',b12:'Fuel Gas Temp (L-fire) (°C)',b13:'Fuel Gas Temp (H-fire) (°C)',b14:'Feed Water Avg Temperature (°C)',b15:'Oil B-Efficiency (%)',b16:'Oil Fuel Consumption',b17:'Steam Output (kg/h)',b18:'Surface Blowdown (L)'};
-  const chillerLabels = {c1:'Set Point',c2:'Water In Temperature (°C)',c3:'Water Out Temperature (°C)',c4:'CAP',c5:'Discharge A',c6:'Suction A',c7:'Discharge B',c8:'Suction B',c9:'Unit Capacity',c10:'Cir A Capacity',c11:'Cir B Capacity'};
-  
-  [...Object.entries(boilerLabels), ...Object.entries(chillerLabels)].forEach(([k, lbl]) => {
-    const oldVal = prevData[k] || '';
-    const newVal = formData[k] || '';
-    if (newVal || oldVal) utilHistFields.push({ label: lbl, oldVal, newVal });
-  });
-
-  if (formData.notes || prevData.notes) utilHistFields.push({ label: 'Catatan Boiler', oldVal: prevData.notes||'', newVal: formData.notes });
-  if (formData.cnotes || prevData.cnotes) utilHistFields.push({ label: 'Catatan Chiller', oldVal: prevData.cnotes||'', newVal: formData.cnotes });
-
-  if (!proj.utilityHistory) proj.utilityHistory = [];
-  proj.utilityHistory.push({ saved_at: new Date().toISOString(), uid, fields: utilHistFields });
-
-  proj.utilityData[uid] = formData;
-  sPJ('ongoing', projs);
-  
   const b = document.getElementById('util-'+uid+'-sb');
   const m = document.getElementById('util-'+uid+'-sm');
-  if (b && m) {
-    b.style.display = 'flex'; b.className = 'de-status-bar de-status-success';
-    m.textContent = '✅ Utility untuk "' + projName + '" tersimpan!';
-    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000);
+  const showSt = (type, msg) => {
+    if(b&&m){ b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg; }
+  };
+  showSt('loading','⏳ Menyimpan ke database...');
+
+  // Kumpulkan nilai Boiler (b1-b18)
+  const boilerData = {};
+  for (let i = 1; i <= 18; i++) {
+    const el = document.getElementById('util-'+uid+'-b'+i);
+    boilerData['b' + i] = el ? (el.value || '') : '';
+  }
+  // Kumpulkan nilai Chiller (c1-c11)
+  const chillerData = {};
+  for (let i = 1; i <= 11; i++) {
+    const el = document.getElementById('util-'+uid+'-c'+i);
+    chillerData['c' + i] = el ? (el.value || '') : '';
+  }
+  boilerData.notes  = document.getElementById('util-'+uid+'-notes')?.value  || '';
+  chillerData.notes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
+
+  const payload = {
+    project_name: proj.name,
+    tanggal:      new Date().toISOString().split('T')[0],
+    tipe:         'project',
+    boiler:       boilerData,
+    chiller:      chillerData,
+    kategori:     'boiler_chiller',
+  };
+
+  try {
+    const res  = await fetch('/api/dataentry/utility', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || json.message || 'Gagal simpan');
+
+    // Update cache lokal agar summary di completed project bisa baca
+    const allProjs = gPJ('ongoing');
+    const proj = allProjs[projIdx];
+    if (!proj) { showSt('error', '❌ Project tidak ditemukan di cache'); return; }
+
+    // Merge dengan data lama (jangan timpa field yang kosong di form)
+    const prevStored = proj.utilityData?.[uid] || {};
+    const mergedBoiler = { ...prevStored };
+    const mergedChiller = { ...prevStored };
+    for (let i = 1; i <= 18; i++) {
+      if (boilerData['b'+i] !== '') mergedBoiler['b'+i] = boilerData['b'+i];
+    }
+    for (let i = 1; i <= 11; i++) {
+      if (chillerData['c'+i] !== '') mergedChiller['c'+i] = chillerData['c'+i];
+    }
+    if (boilerData.notes  !== '') mergedBoiler.notes  = boilerData.notes;
+    if (chillerData.notes !== '') mergedChiller.cnotes = chillerData.notes;
+
+    if (!proj.utilityData) proj.utilityData = {};
+    proj.utilityData[uid] = { ...prevStored, ...mergedBoiler, ...mergedChiller };
+
+    // Build fields[] yang dibutuhkan renderSummTabContent('utility')
+    const boilerLabels = {
+      b1:'Steam Press (MPa)',   b2:'Flue Gas Temp (°C)',      b3:'Feed Water Temp (°C)',
+      b4:'Scale Monitor (°C)',  b5:'Overheat Sensor (°C)',     b6:'To Next Blowdown (H)',
+      b7:'Conductivity (mS/m)', b8:'Air Pressure (pa)',         b9:'Ignition Count',
+      b10:'Oil L-fire Time',    b11:'Oil H-fire Time',          b12:'Fuel Gas Temp L-fire (°C)',
+      b13:'Fuel Gas Temp H-fire (°C)', b14:'Feed Water Avg Temp (°C)', b15:'Oil B-Efficiency (%)',
+      b16:'Oil Fuel Consumption (KL)', b17:'Steam Output (t)',  b18:'Surface Blowdown (L)',
+    };
+    const chillerLabels = {
+      c1:'Chiller Set Point (°C)',  c2:'Water In Temp (°C)',    c3:'Water Out Temp (°C)',
+      c4:'CAP (%)',                  c5:'Discharge Pressure A (kPa)', c6:'Main Suction A (kPa)',
+      c7:'Discharge Pressure B (kPa)', c8:'Main Suction B (kPa)', c9:'Unit Total Capacity (%)',
+      c10:'Cir A Capacity (%)',      c11:'Cir B Capacity (%)',
+    };
+
+    const histFields = [];
+    Object.entries(boilerLabels).forEach(([k, lbl]) => {
+      const newVal = boilerData[k] || '';
+      const oldVal = prevStored[k] || '';
+      if (newVal || oldVal) histFields.push({ label: lbl, oldVal, newVal: newVal || oldVal });
+    });
+    Object.entries(chillerLabels).forEach(([k, lbl]) => {
+      const newVal = chillerData[k] || '';
+      const oldVal = prevStored[k] || '';
+      if (newVal || oldVal) histFields.push({ label: lbl, oldVal, newVal: newVal || oldVal });
+    });
+    // Catatan boiler & chiller
+    if (boilerData.notes || prevStored.notes)
+      histFields.push({ label: 'Catatan Boiler', oldVal: prevStored.notes||'', newVal: boilerData.notes || prevStored.notes || '' });
+    if (chillerData.notes || prevStored.cnotes)
+      histFields.push({ label: 'Catatan Chiller', oldVal: prevStored.cnotes||'', newVal: chillerData.notes || prevStored.cnotes || '' });
+
+    if (!proj.utilityHistory) proj.utilityHistory = [];
+    proj.utilityHistory.push({ saved_at: new Date().toISOString(), uid, db_id: json.id, fields: histFields });
+
+    sPJ('ongoing', allProjs);
+
+    showSt('success', '✅ Utility untuk "' + projName + '" tersimpan ke database!');
+    setTimeout(() => { if(b) b.style.display='none'; }, 3000);
+  } catch(err) {
+    console.error('utilSaveProject error:', err);
+    showSt('error', '❌ Gagal: ' + err.message);
   }
 }
 window.utilSaveProject = utilSaveProject;
@@ -2889,6 +3005,22 @@ function makeNumberInputWithUnit(id, val, unit) {
 }
 window.makeNumberInputWithUnit = makeNumberInputWithUnit;
 
+// Helper untuk membuat text input dengan unit (misal: To Next Blowdown + "H")
+// Sama seperti makeNumberInputWithUnit tapi type="text"
+function makeInputFieldWithUnit(id, value, unit='') {
+  const hasValue = value && value !== '';
+  const v = hasValue ? value : '';
+  const prevValue = v;
+  const style = hasValue ? 'color:#999;' : '';
+  const inputHtml = `<input class="de-input" type="text" id="${id}" placeholder="—" value="${v}" data-prev-value="${prevValue}" style="${style}"
+    onfocus="if(this.value===this.dataset.prevValue&&this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onblur="if(!this.value&&this.dataset.prevValue){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value){this.style.color='#111';}"
+  >`;
+  if (!unit) return inputHtml;
+  return `<div class="input-group">${inputHtml}<span class="group-unit">${unit}</span></div>`;
+}
+window.makeInputFieldWithUnit = makeInputFieldWithUnit;
+
 // Helper untuk membuat input text field dengan styling dari nilai sebelumnya
 function makeNumberInput(id, value, placeholder='—') {
   const hasValue = value && value !== '';
@@ -2966,13 +3098,92 @@ function labRenderProject(key) {
   if (!proj) { area.innerHTML=''; return; }
 
   const uid = key+'_proj_'+sel.value;
-  _labCIPItems[uid] = 0; // reset counter
+  _labCIPItems[uid] = 0;
 
   // Load existing CIP entries kalau ada
   const existing = proj.cipLabEntries || [];
-  
-  // Load previous entry data if exists
-  const prevData = proj.laboratoriumData?.[uid] || {};
+
+  // Tampilkan loading dulu
+  area.innerHTML = `<div style="padding:40px;text-align:center;color:var(--txt3)">⏳ Memuat data lab...</div>`;
+
+  // Fetch data terbaru dari DB
+  fetch('/api/dataentry/laboratorium?project_name=' + encodeURIComponent(proj.name) + '&limit=1')
+    .then(r => r.json())
+    .then(json => {
+      // Ambil data terbaru dari DB kalau ada, fallback ke localStorage
+      const dbRow   = json.success && json.data?.length ? json.data[0] : null;
+      const prevBrix = dbRow?.brix_entries || [];
+      const prevMoist = dbRow?.moisture_entries || [];
+
+      // Build form dengan data dari DB
+      _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist);
+    })
+    .catch(() => {
+      // Fallback ke localStorage kalau API gagal
+      const prevData = proj.laboratoriumData?.[uid] || {};
+      _renderLabForm(area, uid, proj, key, existing, [], []);
+    });
+}
+
+function _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist) {
+  // Helper untuk pre-fill brix entries
+  const brixEntryHTML = (entries) => {
+    if (!entries.length) {
+      return `<div id="lab-${uid}-brix-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+          <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-brix-entry-0').remove()" style="display:none;" id="lab-${uid}-brix-remove-0" title="Hapus entry">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${makeInputField('lab-'+uid+'-tlv', '')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Kode Pile</label>${makeInputField('lab-'+uid+'-lab-code', '')}</div>
+        </div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Brix</label>${makeInputField('lab-'+uid+'-air-test', '')}</div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-brix', '')}</div>
+      </div>`;
+    }
+    return entries.map((e, i) => `
+      <div id="lab-${uid}-brix-entry-${i}" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:#666;">Entry #${i+1}</div>
+          <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-brix-entry-${i}').remove()" style="${i===0?'display:none;':''}" title="Hapus entry">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${makeInputField('lab-'+uid+'-tlv-'+i, e.sample||'')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Kode Pile</label>${makeInputField('lab-'+uid+'-lab-code-'+i, e.kode||'')}</div>
+        </div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Brix</label>${makeInputField('lab-'+uid+'-air-test-'+i, e.brix||'')}</div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-brix-'+i, e.notes||'')}</div>
+      </div>`).join('');
+  };
+
+  const moistEntryHTML = (entries) => {
+    if (!entries.length) {
+      return `<div id="lab-${uid}-moisture-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+          <button class="fp-item-remove" style="display:none;" title="Hapus entry">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${makeInputField('lab-'+uid+'-header-retaking', '')}</div>
+        </div>
+        <div class="de-field"><label class="de-label" style="color:#111;">MC%</label>${makeInputField('lab-'+uid+'-sampling-point', '')}</div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-moisture', '')}</div>
+      </div>`;
+    }
+    return entries.map((e, i) => `
+      <div id="lab-${uid}-moisture-entry-${i}" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <div style="font-size:12px;font-weight:600;color:#666;">Entry #${i+1}</div>
+          <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-moisture-entry-${i}').remove()" style="${i===0?'display:none;':''}" title="Hapus entry">✕</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+          <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${makeInputField('lab-'+uid+'-header-retaking-'+i, e.sample||'')}</div>
+        </div>
+        <div class="de-field"><label class="de-label" style="color:#111;">MC%</label>${makeInputField('lab-'+uid+'-sampling-point-'+i, e.mc||'')}</div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-moisture-'+i, e.notes||'')}</div>
+      </div>`).join('');
+  };
 
   area.innerHTML = `
     <!-- Lab Form Panel with Toggle CIP -->
@@ -2998,30 +3209,7 @@ function labRenderProject(key) {
       <div id="lab-${uid}-form-brix" style="display:block;margin-bottom:20px;">
         <!-- Container untuk multiple BRIX entries -->
         <div id="lab-${uid}-brix-form-entries">
-          <div id="lab-${uid}-brix-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
-              <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-brix-entry-0').remove()" style="display:none;" id="lab-${uid}-brix-remove-0" title="Hapus entry">✕</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
-              <div class="de-field">
-                <label class="de-label" style="color:#111;">Nama Sample</label>
-                ${makeInputField('lab-'+uid+'-tlv', prevData.tlv)}
-              </div>
-              <div class="de-field">
-                <label class="de-label" style="color:#111;">Kode Pile</label>
-                ${makeInputField('lab-'+uid+'-lab-code', prevData.labCode)}
-              </div>
-            </div>
-            <div class="de-field">
-              <label class="de-label" style="color:#111;">Brix</label>
-              ${makeInputField('lab-'+uid+'-air-test', prevData.airTest)}
-            </div>
-            <div class="de-field">
-              <label class="de-label" style="color:#111;">Catatan</label>
-              ${makeTextareaField('lab-'+uid+'-notes-brix', prevData.notes)}
-            </div>
-          </div>
+          ${brixEntryHTML(prevBrix)}
         </div>
         <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px;margin-top:10px;" onclick="labAddBrixFormEntry('${uid}')">＋ Add Entry</button>
       </div>
@@ -3030,26 +3218,7 @@ function labRenderProject(key) {
       <div id="lab-${uid}-form-moisture" style="display:none;margin-bottom:20px;">
         <!-- Container untuk multiple MOISTURE entries -->
         <div id="lab-${uid}-moisture-form-entries">
-          <div id="lab-${uid}-moisture-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-              <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
-              <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-moisture-entry-0').remove()" style="display:none;" id="lab-${uid}-moisture-remove-0" title="Hapus entry">✕</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
-              <div class="de-field">
-                <label class="de-label" style="color:#111;">Nama Sample</label>
-                ${makeInputField('lab-'+uid+'-header-retaking', prevData.headerRetaking)}
-              </div>
-            </div>
-            <div class="de-field">
-              <label class="de-label" style="color:#111;">MC%</label>
-              ${makeInputField('lab-'+uid+'-sampling-point', prevData.samplingPoint)}
-            </div>
-            <div class="de-field">
-              <label class="de-label" style="color:#111;">Catatan</label>
-              ${makeTextareaField('lab-'+uid+'-notes-moisture', prevData.notes)}
-            </div>
-          </div>
+          ${moistEntryHTML(prevMoist)}
         </div>
         <button class="de-btn de-btn-primary" style="padding:8px 16px;font-size:12px;margin-top:10px;" onclick="labAddMoistureFormEntry('${uid}')">＋ Add Entry</button>
       </div>
@@ -3336,15 +3505,33 @@ function labSaveProject(uid, projName) {
 
   proj.laboratoriumData[uid] = formData;
   sPJ('ongoing', projs);
-  
+
   const b = document.getElementById('lab-'+uid+'-sb');
   const m = document.getElementById('lab-'+uid+'-sm');
-  if (b && m) {
-    b.style.display = 'flex';
-    b.className = 'de-status-bar de-status-success';
-    m.textContent = '✅ Lab untuk "' + projName + '" tersimpan!';
-    setTimeout(() => { if(b) b.style.display = 'none'; }, 3000);
-  }
+  const showSt = (type, msg) => { if(b&&m){b.style.display='flex';b.className='de-status-bar de-status-'+type;m.textContent=msg;} };
+  showSt('loading', '⏳ Menyimpan ke database...');
+
+  (async () => {
+    try {
+      const payload = {
+        project_name:     projName,
+        cip_lab_done:     proj.cipLabDone    || false,
+        cip_lab_checks:   proj.cipLabChecks  || {},
+        cip_lab_entries:  proj.cipLabEntries || [],
+        brix_entries:     brixEntries,
+        moisture_entries: moistEntries,
+        foto_urls:        window._photoData?.['lab_'+uid] || [],
+      };
+      const res  = await fetch('/api/dataentry/laboratorium', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal simpan');
+      showSt('success', '✅ Lab untuk "' + projName + '" tersimpan ke database!');
+    } catch(err) {
+      console.error('labSaveProject API error:', err);
+      showSt('success', '✅ Lab tersimpan (lokal). DB: ' + err.message);
+    }
+    setTimeout(() => { if(b) b.style.display='none'; }, 3000);
+  })();
 }
 window.labSaveProject = labSaveProject;
 
@@ -3424,15 +3611,48 @@ function labSaveCIPEntries(uid, key) {
   allProjs[projIdx].cipLabDone    = true;
   sPJ('ongoing', allProjs);
 
-  showLabCIPSt(uid, 'success', '✅ CIP Lab tersimpan! ' + entries.length + ' entry.');
-  setTimeout(() => {
-    const sb = document.getElementById(uid+'-cip-sb');
-    if (sb) sb.style.display = 'none';
-    // Close modal after 1.5 seconds
+  showLabCIPSt(uid, 'loading', '⏳ Menyimpan CIP ke database...');
+
+  (async () => {
+    try {
+      const proj = allProjs[projIdx];
+      const payload = {
+        project_name:     proj.name,
+        cip_lab_done:     true,
+        cip_lab_checks:   proj.cipLabChecks || proj.cip_lab_checks || {},
+        cip_lab_entries:  entries,
+        brix_entries:     [],
+        moisture_entries: [],
+        foto_urls:        window._photoData?.['lab_'+uid] || [],
+      };
+      const res  = await fetch('/api/dataentry/laboratorium', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Gagal simpan');
+
+      // ✅ Update cip_lab_done di tabel projects supaya tombol End aktif
+      if (proj._id) {
+        await fetch('/api/projects/'+proj._id+'/cip', {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ cip_lab_done: true, cip_lab_checks: { entries } }),
+        });
+      }
+
+      // Reload cache dari DB
+      await loadPJ('ongoing');
+      renderPJ('ongoing');
+
+      showLabCIPSt(uid, 'success', '✅ CIP Lab tersimpan ke database! ' + entries.length + ' entry.');
+    } catch(err) {
+      console.error('labSaveCIPEntries API error:', err);
+      showLabCIPSt(uid, 'error', '❌ Gagal simpan: ' + err.message);
+    }
     setTimeout(() => {
-      labToggleCIPForm(uid);
-    }, 1500);
-  }, 500);
+      const sb = document.getElementById(uid+'-cip-sb');
+      if (sb) sb.style.display = 'none';
+      setTimeout(() => labToggleCIPForm(uid), 1500);
+    }, 500);
+  })();
 }
 window.labSaveCIPEntries = labSaveCIPEntries;
 
@@ -4228,10 +4448,10 @@ function updateCIPStatus(key, proj) {
     statusEl.style.background = '#15803d';
     statusEl.style.borderColor = '#15803d';
     statusEl.style.color = 'white';
-    statusEl.disabled = true;
-    statusEl.style.cursor = 'not-allowed';
-    statusEl.style.opacity = '0.6';
-    statusEl.onclick = null;
+    statusEl.disabled = false;
+    statusEl.style.cursor = 'pointer';
+    statusEl.style.opacity = '1';
+    statusEl.title = 'Klik untuk melihat detail CIP';
   } else if (cipData) {
     statusEl.textContent = '💾 CIP Tersimpan';
     statusEl.style.background = '#1e40af';
@@ -4265,10 +4485,8 @@ function resetDEP(key){
 // (CIP_CHECKLISTS definition moved to top of file for proper initialization)
 // ═══════════════════════════════════════════════════════════
 
-function buildCIPChecklist(key, cipData) {
+function buildCIPChecklist(key, cipData, readOnly = false) {
   const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
-
-  // Support format baru (checks dengan key unik) dan lama
   const checks = cipData?.checks || cipData?.cip_prod_checks || cipData?.cip_lab_checks || {};
 
   let checklistHTML = '';
@@ -4282,26 +4500,46 @@ function buildCIPChecklist(key, cipData) {
     `;
 
     section.items.forEach((item, iIdx) => {
-      const checkId  = `cip-check-${sIdx}-${iIdx}`;
-      const timeId   = `cip-time-${sIdx}-${iIdx}`;
-      // Key unik per section supaya "Rinsing Prod" di section berbeda tidak saling overwrite
+      const checkId   = `cip-check-${sIdx}-${iIdx}`;
+      const timeId    = `cip-time-${sIdx}-${iIdx}`;
       const uniqueKey = `${sIdx}__${item}`;
       const isChecked = checks[uniqueKey] || checks[item] || false;
       const timestamp = cipData?.timestamps?.[uniqueKey] || '';
 
-      checklistHTML += `
-        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
-          <input type="checkbox" id="${checkId}" data-key="${uniqueKey}" ${isChecked ? 'checked' : ''}
-                 onchange="handleCIPCheckbox('${checkId}', '${timeId}')"
-                 style="width:16px;height:16px;cursor:pointer;">
-          <label for="${checkId}" style="font-size:13px;color:var(--txt2);cursor:pointer;user-select:none;">
-            ${item}
-          </label>
-          <span id="${timeId}" style="font-size:10px;color:var(--txt3);font-family:monospace;min-width:120px;text-align:right;">
-            ${timestamp || '—'}
-          </span>
-        </div>
-      `;
+      const rowBg  = readOnly && isChecked ? '#f0fdf4' : 'var(--bg)';
+      const rowBdr = readOnly && isChecked ? '#86efac' : 'var(--border)';
+      const lblClr = readOnly && isChecked ? '#15803d' : 'var(--txt2)';
+      const tsClr  = readOnly && isChecked ? '#15803d' : 'var(--txt3)';
+
+      if (readOnly) {
+        checklistHTML += `
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:${rowBg};border:1px solid ${rowBdr};border-radius:6px;">
+            <div style="width:16px;height:16px;border-radius:3px;border:2px solid ${isChecked ? '#15803d' : '#d1d5db'};background:${isChecked ? '#15803d' : '#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              ${isChecked ? '<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+            </div>
+            <span style="font-size:13px;color:${lblClr};font-weight:${isChecked ? '600' : '400'};">
+              ${item}
+            </span>
+            <span style="font-size:10px;color:${tsClr};font-family:monospace;min-width:120px;text-align:right;font-weight:${isChecked ? '600' : '400'};">
+              ${timestamp || '—'}
+            </span>
+          </div>
+        `;
+      } else {
+        checklistHTML += `
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+            <input type="checkbox" id="${checkId}" data-key="${uniqueKey}" ${isChecked ? 'checked' : ''}
+                   onchange="handleCIPCheckbox('${checkId}', '${timeId}')"
+                   style="width:16px;height:16px;cursor:pointer;">
+            <label for="${checkId}" style="font-size:13px;color:var(--txt2);cursor:pointer;user-select:none;">
+              ${item}
+            </label>
+            <span id="${timeId}" style="font-size:10px;color:var(--txt3);font-family:monospace;min-width:120px;text-align:right;">
+              ${timestamp || '—'}
+            </span>
+          </div>
+        `;
+      }
     });
 
     checklistHTML += `</div></div>`;
@@ -4365,9 +4603,7 @@ function openCIPModal(key) {
   try {
     let sel = document.getElementById('dep-proj-sel-'+key);
     if (!sel) sel = document.getElementById('lab-proj-sel-'+key);
-    
-    console.log('🔍 Project selector element:', sel, 'value:', sel?.value);
-    
+
     if (!sel || sel.value === '') {
       showQuickToast('❌ Pilih project dulu!');
       return;
@@ -4375,44 +4611,61 @@ function openCIPModal(key) {
 
     const allProjs = gPJ('ongoing');
     const proj = allProjs[+sel.value];
-    
     if (!proj) { showQuickToast('❌ Project tidak ditemukan!'); return; }
 
     const cipDone = key === 'production' ? proj.cipProdDone : proj.cipLabDone;
-    if (cipDone) {
-      showQuickToast('❌ CIP sudah selesai dan tidak dapat diubah lagi!');
-      return;
-    }
 
     // Load cipData dari field DB yang benar
-    const cipData = key === 'production'
-      ? { checks: proj.cip_prod_checks || proj.cipProdChecks || {} }
-      : { checks: proj.cip_lab_checks  || proj.cipLabChecks  || {} };
+    // Load cipData dari field DB yang benar
+const cipData = key === 'production'
+  ? { 
+      checks: proj.cip_prod_checks || proj.cipProdChecks || {}, 
+      timestamps: proj.cip_prod_timestamps || {}, // ← TAMBAHAN BARU
+      savedAt: proj.cipProdSavedAt 
+    }
+  : { 
+      checks: proj.cip_lab_checks  || proj.cipLabChecks  || {}, 
+      timestamps: proj.cip_lab_timestamps || {}, // ← TAMBAHAN BARU
+      savedAt: proj.cipLabSavedAt  
+    };
     const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
 
     const now = new Date();
     const nowStr = now.toLocaleString('id-ID', {weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
     const savedAtStr = cipData?.savedAt ? new Date(cipData.savedAt).toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : null;
 
+    // Hitung berapa item yang sudah dicentang
+    const checks    = cipData?.checks || {};
+    const totalItems = config.sections.reduce((acc, s) => acc + s.items.length, 0);
+    const doneItems  = Object.values(checks).filter(Boolean).length;
+
     const modalHTML = `
       <div id="cip-modal-overlay" onclick="closeCIPModal()" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;display:flex;align-items:center;justify-content:center;"></div>
       <div id="cip-modal" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:0;width:min(700px,92vw);max-height:88vh;overflow:hidden;z-index:9999;box-shadow:0 25px 70px rgba(0,0,0,.3);">
-        
-        <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:#1f2937;display:flex;align-items:center;justify-content:space-between;">
+
+        <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:${cipDone ? '#14532d' : '#1f2937'};display:flex;align-items:center;justify-content:space-between;">
           <div>
             <div style="font-size:17px;font-weight:700;color:white;display:flex;align-items:center;gap:8px;">
-              🧼 ${config.title}
+              ${cipDone ? '✅' : '🧼'} ${config.title}
+              ${cipDone ? '<span style="font-size:11px;font-weight:600;background:#15803d;color:#bbf7d0;padding:2px 10px;border-radius:100px;margin-left:4px;">SELESAI — View Only</span>' : ''}
             </div>
             <div style="font-size:12px;color:#9ca3af;margin-top:3px;">${proj.name} — ${key === 'production' ? 'Production' : 'Laboratorium'}</div>
           </div>
           <button onclick="closeCIPModal()" style="width:32px;height:32px;border-radius:8px;border:1px solid #374151;background:#111827;color:#9ca3af;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;">✕</button>
         </div>
-        
+
         <div style="padding:24px;max-height:calc(88vh - 180px);overflow-y:auto;">
-          
-          <div style="background:#fffbeb;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#854d0e;line-height:1.5;">
-            ℹ️ <strong>CIP Checklist:</strong> Centang setiap step yang sudah selesai. Timestamp otomatis tercatat.
-          </div>
+
+          ${cipDone
+            ? `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#14532d;line-height:1.5;display:flex;align-items:center;gap:10px;">
+                <span style="font-size:20px;">🔒</span>
+                <div><strong>CIP Sudah Selesai.</strong> Data ini hanya bisa dilihat dan tidak dapat diubah lagi.<br>
+                <span style="color:#15803d;font-weight:600;">${doneItems} dari ${totalItems} step selesai.</span></div>
+               </div>`
+            : `<div style="background:#fffbeb;border:1px solid #fde047;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#854d0e;line-height:1.5;">
+                ℹ️ <strong>CIP Checklist:</strong> Centang setiap step yang sudah selesai. Timestamp otomatis tercatat.
+               </div>`
+          }
 
           <div style="background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <div>
@@ -4426,18 +4679,21 @@ function openCIPModal(key) {
           </div>
 
           <div id="cip-checklist-container">
-            ${buildCIPChecklist(key, cipData)}
+            ${buildCIPChecklist(key, cipData, cipDone)}
           </div>
 
           <div id="cip-modal-msg" style="margin-top:16px;font-size:12px;text-align:center;"></div>
         </div>
-        
-        <div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px;justify-content:space-between;">
-          <button class="de-btn de-btn-ghost" onclick="closeCIPModal()">Cancel</button>
-          <div style="display:flex;gap:10px;">
-            <button class="de-btn de-btn-ghost" onclick="saveCIPModal('${key}', false)" style="background:white;border-color:var(--border2);">💾 Save</button>
-            <button class="de-btn de-btn-primary" onclick="saveCIPModal('${key}', true)" style="background:#15803d;border-color:#15803d;">✅ Save & Finish</button>
-          </div>
+
+        <div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px;justify-content:${cipDone ? 'flex-end' : 'space-between'};">
+          ${cipDone
+            ? `<button class="de-btn de-btn-primary" onclick="closeCIPModal()" style="background:#15803d;border-color:#15803d;">✕ Tutup</button>`
+            : `<button class="de-btn de-btn-ghost" onclick="closeCIPModal()">Cancel</button>
+               <div style="display:flex;gap:10px;">
+                 <button class="de-btn de-btn-ghost" onclick="saveCIPModal('${key}', false)" style="background:white;border-color:var(--border2);">💾 Save</button>
+                 <button class="de-btn de-btn-primary" onclick="saveCIPModal('${key}', true)" style="background:#15803d;border-color:#15803d;">✅ Save & Finish</button>
+               </div>`
+          }
         </div>
       </div>
     `;
@@ -4446,8 +4702,8 @@ function openCIPModal(key) {
     container.id = 'cip-modal-container';
     container.innerHTML = modalHTML;
     document.body.appendChild(container);
-    document.body.style.overflow = 'hidden'; 
-    
+    document.body.style.overflow = 'hidden';
+
     window._cipClockTimer = setInterval(() => {
       const el = document.getElementById('cip-realtime-clock');
       if (!el) { clearInterval(window._cipClockTimer); return; }
@@ -4467,17 +4723,27 @@ async function saveCIPModal(key, isFinish) {
 
   const config  = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
   const checks  = {};
+  const timestamps = {}; // ← TAMBAHAN BARU
   let   allDone = true;
 
-  // Kumpulkan semua checkbox berdasarkan data-item attribute
-  // supaya tidak bergantung pada format ID yang berubah-ubah
+  // Kumpulkan checkbox DAN timestamp
   config.sections.forEach((sec, sIdx) => {
     sec.items.forEach((item, iIdx) => {
       const checkId   = `cip-check-${sIdx}-${iIdx}`;
+      const timeId    = `cip-time-${sIdx}-${iIdx}`; // ← TAMBAHAN BARU
       const uniqueKey = `${sIdx}__${item}`;
+      
       const el  = document.getElementById(checkId);
       const val = el ? el.checked : false;
       checks[uniqueKey] = val;
+      
+      // ═══ SIMPAN TIMESTAMP ═══
+      const timeEl = document.getElementById(timeId);
+      if (timeEl && val) {
+        timestamps[uniqueKey] = timeEl.textContent;
+      }
+      // ═══ AKHIR TAMBAHAN ═══
+      
       if (!val) allDone = false;
     });
   });
@@ -4491,8 +4757,18 @@ async function saveCIPModal(key, isFinish) {
     try {
       const isProd = key === 'production';
       const body   = isProd
-        ? { cip_prod_done: isFinish || allDone, cip_prod_checks: checks }
-        : { cip_lab_done:  isFinish || allDone, cip_lab_checks:  checks };
+        ? { 
+            cip_prod_done: isFinish || allDone, 
+            cip_prod_checks: checks,
+            cip_prod_timestamps: timestamps, // ← TAMBAHAN BARU
+            cipProdSavedAt: new Date().toISOString() // ← TAMBAHAN BARU
+          }
+        : { 
+            cip_lab_done:  isFinish || allDone, 
+            cip_lab_checks:  checks,
+            cip_lab_timestamps: timestamps, // ← TAMBAHAN BARU
+            cipLabSavedAt: new Date().toISOString() // ← TAMBAHAN BARU
+          };
       const res  = await fetch('/api/projects/'+proj._id+'/cip', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -4514,10 +4790,14 @@ async function saveCIPModal(key, isFinish) {
       allProjs[realIdx].cipProdDone   = isFinish || allDone;
       allProjs[realIdx].cipProdChecks = checks;
       allProjs[realIdx].cip_prod_checks = checks;
+      allProjs[realIdx].cip_prod_timestamps = timestamps; // ← TAMBAHAN BARU
+      allProjs[realIdx].cipProdSavedAt = new Date().toISOString(); // ← TAMBAHAN BARU
     } else {
       allProjs[realIdx].cipLabDone   = isFinish || allDone;
       allProjs[realIdx].cipLabChecks = checks;
       allProjs[realIdx].cip_lab_checks = checks;
+      allProjs[realIdx].cip_lab_timestamps = timestamps; // ← TAMBAHAN BARU
+      allProjs[realIdx].cipLabSavedAt = new Date().toISOString(); // ← TAMBAHAN BARU
     }
     sPJ('ongoing', allProjs);
   }
@@ -4525,10 +4805,6 @@ async function saveCIPModal(key, isFinish) {
   closeCIPModal(key);
   showQuickToast((isFinish || allDone) ? '✅ CIP selesai!' : '💾 CIP progress tersimpan.');
 }
-
-window.openCIPModal = openCIPModal;
-window.closeCIPModal = closeCIPModal;
-window.saveCIPModal = saveCIPModal;
 
 // ── LEGACY: Keep old saveCIPFromDE for backwards compatibility ──
 function saveCIPFromDE(key) {
@@ -5130,14 +5406,69 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
         <div class="setpoint-section">
           <div class="setpoint-section-title">📝 Parameter CT</div>
           <div class="setpoint-grid">
-            <div class="de-field"><label class="de-label">Product Flowrate</label><input class="de-input sp-field-${type}" id="sp-add1-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">Product Flow Control Valve Position</label><input class="de-input sp-field-${type}" id="sp-add2-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">CT Steam Pressure</label><input class="de-input sp-field-${type}" id="sp-add3-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">Concentrate Recirculation Flow</label><input class="de-input sp-field-${type}" id="sp-add4-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">Product Cooler Temperature</label><input class="de-input sp-field-${type}" id="sp-add5-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">CT Discharge Level</label><input class="de-input sp-field-${type}" id="sp-add6-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">Brix Input</label><input class="de-input sp-field-${type}" id="sp-add7-${type}" type="text" placeholder="—"></div>
-            <div class="de-field"><label class="de-label">Brix Output</label><input class="de-input sp-field-${type}" id="sp-add8-${type}" type="text" placeholder="—"></div>
+            <div class="de-field">
+            <label class="de-label">Product Flowrate</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add1-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">L/H</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">Product Flow Control Valve Position</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add2-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">%</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">CT Steam Pressure</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add3-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">KPa</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">Concentrate Recirculation Flow</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add4-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">L/H</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">Product Cooler Temperature</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add5-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">°C</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">CT Discharge Level</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add6-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">%</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">Brix Input</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add7-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">%</span>
+            </div>
+          </div>
+
+          <div class="de-field">
+            <label class="de-label">Brix Output</label>
+            <div class="de-input-wrap">
+              <input class="de-input sp-field-${type}" id="sp-add8-${type}" type="text" placeholder="—">
+              <span class="de-input-unit">%</span>
+            </div>
+          </div>
           </div>
         </div>
         <div class="de-status-bar" id="sp-sb-${type}" style="display:none"><span id="sp-sm-${type}"></span></div>
@@ -5324,13 +5655,14 @@ function renderPJ(type) {
   const currentRole = localStorage.getItem('role') || 'utility';
   const isAdmin = ['admin','superadmin'].includes(currentRole);
 
-  let ps = gPJ(type);
+  const allPs = gPJ(type); // array asli — index ini yang dipakai semua fungsi (endProd, openEditPJ, dll)
+  let ps = [...allPs];
 
   // Filter berdasarkan role: admin lihat semua, role lain hanya lihat
   // project yang allowed_roles-nya null (semua) atau mengandung role mereka
   if (!isAdmin) {
     ps = ps.filter(p => {
-      if (!p.allowed_roles || p.allowed_roles.length === 0) return true; // null = semua boleh
+      if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
       return p.allowed_roles.includes(currentRole);
     });
   }
@@ -5342,13 +5674,15 @@ function renderPJ(type) {
   const isOngoing = type === 'ongoing';
   const isCompleted = type === 'completed';
 
-  list.innerHTML=ps.map((p,i)=>{
+  list.innerHTML=ps.map((p)=>{
+    // Pakai index dari array ASLI agar endProd/openEditPJ/openSP tidak salah project
+    const i = allPs.indexOf(p);
     const updCount = (p.updates||[]).length;
     const hasSetPoint = p.setPoint && Object.keys(p.setPoint).length > 0;
-    const hasCIPProd = p.cipProdDone === true;
-    const hasCIPLab  = p.cipLabDone  === true;
+    const hasCIPProd = p.cipProdDone === true || p.cip_prod_done === true;
+    const hasCIPLab  = p.cipLabDone  === true || p.cip_lab_done  === true;
     const hasCIP     = hasCIPProd && hasCIPLab;
-    const hasFP      = p.fpDone === true;
+    const hasFP      = p.fpDone === true || p.fp_done === true;
     const isReady    = hasSetPoint && hasCIP && hasFP;
 
     // CIP status helper
@@ -6852,7 +7186,7 @@ function addFPItem2(type, data=null) {
       <input class="de-input" id="fpr2-code-${uid}" type="text" value="${data?.code||''}" placeholder="Kode kemasan...">
     </div>
     <div class="de-field">
-      <label class="de-label">Brix <span style="font-weight:400;color:var(--txt3)">(°Bx)</span></label>
+      <label class="de-label">Brix <span style="font-weight:400;color:var(--txt3)"></span></label>
       <input class="de-input" id="fpr2-brix-${uid}" type="number" step="0.1" value="${data?.brix||''}" placeholder="0.0">
     </div>
     <div class="de-field">
@@ -6910,13 +7244,16 @@ window.closeFP = closeFP;
 async function endProd(type, idx) {
   const ps = gPJ(type);
   const p  = ps[idx];
-  if (!p) return;
-  const hasCIPProd = p.cipProdDone === true;
-  const hasCIPLab  = p.cipLabDone  === true;
-  const hasFP      = p.fpDone === true;
-  if (!hasCIPProd) { showQuickToast('❌ CIP Data Entry Production belum diisi!'); return; }
-  if (!hasCIPLab)  { showQuickToast('❌ CIP Data Entry Laboratorium belum diisi!'); return; }
-  if (!hasFP)      { showQuickToast('❌ Finish Production belum diisi!'); return; }
+  if (!p) { showQuickToast('❌ Project tidak ditemukan (idx=' + idx + ')'); return; }
+
+  // Cek dari semua kemungkinan field — cache bisa pakai nama berbeda
+  const hasCIPProd = p.cipProdDone === true || p.cip_prod_done === true;
+  const hasCIPLab  = p.cipLabDone  === true || p.cip_lab_done  === true;
+  const hasFP      = p.fpDone      === true || p.fp_done       === true;
+
+  if (!hasCIPProd) { showQuickToast('❌ CIP Production belum selesai! Buka Data Entry Production → CIP.'); return; }
+  if (!hasCIPLab)  { showQuickToast('❌ CIP Laboratorium belum selesai! Buka Data Entry Laboratorium → CIP.'); return; }
+  if (!hasFP)      { showQuickToast('❌ Finish Production belum diisi! Klik tombol Finish Prod dulu.'); return; }
   if (!confirm(`Akhiri produksi untuk "${p.name}"?\nProyek akan dipindahkan ke Completed.`)) return;
   if (p._id) {
     try {
@@ -7033,7 +7370,6 @@ function openSumm(type, idx) {
       <tr><td style="${tdStyle}">Nama Project</td><td style="${tdMonoStyle}">${p.name||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Mulai</td><td style="${tdStyle}">${p.start||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tanggal Selesai</td><td style="${tdStyle}">${p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Metode</td><td style="${tdStyle}">${p.method||'—'}</td></tr>
       <tr><td style="${tdStyle}">Materials</td><td style="${tdStyle}">${p.materials||'—'}</td></tr>
       <tr><td style="${tdStyle}">Tools</td><td style="${tdStyle}">${p.tools||'—'}</td></tr>
       <tr><td style="${tdStyle}">Notes</td><td style="${tdStyle}">${p.notes||'—'}</td></tr>
@@ -7227,184 +7563,489 @@ function renderSummTabContent(type, tabId, p) {
 
   // ─── PRODUKSI (includes Set Point) ────────────────────
   if (tabId === 'produksi') {
-    const hist = p.productionHistory || [];
-    const hasSetPoint = p.setPoint && Object.keys(p.setPoint).length > 0;
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px">⏳ Memuat data produksi...</div>';
 
-    if (!hasSetPoint && !hist.length) {
-      wrap.innerHTML = emptyMsg('📭 Belum ada data Set Point atau Produksi untuk project ini.');
-      return;
-    }
+    (async () => {
+      try {
+        // Mapping SP_FIELDS id → kolom di de_production_history
+        // (SP_FIELDS pakai dash, DB pakai underscore dengan nama berbeda)
+        const SP_TO_DB = {
+          // PAGE 1
+          'sp-slurry':          'sp_slurry',
+          'sp-hopper':          'sp_hopper',
+          'sp-density':         'sp_density',
+          'sp-feed':            'sp_feed',
+          'sp-aroma':           'sp_aroma',
+          'sp-steam':           'sp_steam',
+          'sp-prod-out':        'sp_prod_out',
+          'sp-cond1':           'sp_cond1',
+          'sp-cond2':           'sp_cond2',
+          'sp-ext':             'sp_ext',
+          'sp-int':             'sp_int',
+          'sp-cond-rate':       'sp_cond_rate',
+          'sp-offset':          'sp_offset',
+          'sp-chilled':         'sp_chill',
+          'sp-condenser-water': 'sp_cond_water',
+          'sp-system-vacuum':   'sp_vacuum',
+          'sp-steam-flow':      'sp_press_steam',
+          // PAGE 2
+          'sp-temp-feed':       'sp_temp_feed',
+          'sp-temp-heater':     'sp_temp_heater',
+          'sp-temp-top':        'sp_temp_top',
+          'sp-Condensate1':     'sp_cond1',
+          'sp-Condensate2':     'sp_cond2',
+          'sp-temp-bot':        'sp_temp_bot',
+          // sp-add1~8: belum ada kolom DB → null (hanya tampil di SP Awal)
+          'sp-add1': null, 'sp-add2': null, 'sp-add3': null, 'sp-add4': null,
+          'sp-add5': null, 'sp-add6': null, 'sp-add7': null, 'sp-add8': null,
+        };
+        // Mapping SP Awal dari set_point project (keys bisa pakai dash atau underscore)
+        const SP_AWAL_MAP = {
+          'sp-slurry':          ['sp-slurry','sp_slurry'],
+          'sp-hopper':          ['sp-hopper','sp_hopper'],
+          'sp-density':         ['sp-density','sp_density'],
+          'sp-feed':            ['sp-feed','sp_feed'],
+          'sp-aroma':           ['sp-aroma','sp_aroma'],
+          'sp-steam':           ['sp-steam','sp_steam'],
+          'sp-prod-out':        ['sp-prod-out','sp_prod_out'],
+          'sp-cond1':           ['sp-cond1','sp_cond1'],
+          'sp-cond2':           ['sp-cond2','sp_cond2'],
+          'sp-ext':             ['sp-ext','sp_ext'],
+          'sp-int':             ['sp-int','sp_int'],
+          'sp-cond-rate':       ['sp-cond-rate','sp_cond_rate'],
+          'sp-offset':          ['sp-offset','sp_offset'],
+          'sp-chilled':         ['sp-chilled','sp_chill'],
+          'sp-condenser-water': ['sp-condenser-water','sp_cond_water'],
+          'sp-system-vacuum':   ['sp-system-vacuum','sp_vacuum'],
+          'sp-steam-flow':      ['sp-steam-flow','sp_press_steam'],
+          'sp-temp-feed':       ['sp-temp-feed','sp_temp_feed'],
+          'sp-temp-heater':     ['sp-temp-heater','sp_temp_heater'],
+          'sp-temp-top':        ['sp-temp-top','sp_temp_top'],
+          'sp-Condensate1':     ['sp-Condensate1','sp_cond1'],
+          'sp-Condensate2':     ['sp-Condensate2','sp_cond2'],
+          'sp-temp-bot':        ['sp-temp-bot','sp_temp_bot'],
+          'sp-add1':            ['sp-add1','sp_add1'],
+          'sp-add2':            ['sp-add2','sp_add2'],
+          'sp-add3':            ['sp-add3','sp_add3'],
+          'sp-add4':            ['sp-add4','sp_add4'],
+          'sp-add5':            ['sp-add5','sp_add5'],
+          'sp-add6':            ['sp-add6','sp_add6'],
+          'sp-add7':            ['sp-add7','sp_add7'],
+          'sp-add8':            ['sp-add8','sp_add8'],
+        };
 
-    let thead = `<tr>
-      <th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>
-      <th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">SP Awal</th>`;
+        // Fetch history dari de_production_history (tiap save = 1 row berbeda)
+        const resHist = await fetch('/api/dataentry/production/history?project_name='
+          + encodeURIComponent(p.name) + '&limit=20');
+        const jsonHist = await resHist.json();
+        // Urutkan dari paling lama → paling baru (Update #1 = pertama save)
+        const dbRows = (jsonHist.success && jsonHist.data?.length)
+          ? [...jsonHist.data].reverse()
+          : [];
 
-    hist.forEach((entry, i) => {
-      const dateObj = new Date(entry.saved_at);
-      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
-      thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">
-        Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span>
-      </th>`;
-    });
-    thead += `</tr>`;
+        // SP Awal dari set_point project
+        const sp = p.set_point || p.setPoint || {};
 
-    let tbody = '';
-    let visibleRows = 0;
-    
-    SP_FIELDS.forEach(f => {
-      const baseVal = p.setPoint ? (p.setPoint[f.id] || '') : '';
-      let rowHasData = baseVal !== '';
-      
-      const historyCells = hist.map(entry => {
-        const fieldData = entry.fields.find(hf => hf.id === f.id || hf.label === f.label);
-        if (fieldData && fieldData.newVal !== '' && fieldData.newVal !== fieldData.oldVal) {
-          rowHasData = true;
-          return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${fieldData.newVal}</td>`;
-        } else {
-          return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+        // Cek apakah ada data sama sekali
+        const hasAnySP = Object.keys(sp).some(k => sp[k] !== '' && sp[k] != null);
+        if (!hasAnySP && !dbRows.length) {
+          wrap.innerHTML = emptyMsg('📭 Belum ada data Set Point atau Produksi untuk project ini.');
+          return;
         }
-      });
 
-      if (rowHasData) {
-        const unitHtml = f.unit ? ` <span style="font-size:8px;color:var(--txt3);font-weight:400">${f.unit}</span>` : '';
-        const baseDisplay = baseVal ? `${baseVal}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
-        const rowBg = visibleRows % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-        visibleRows++;
+        // Build header
+        let thead = `<tr>
+          <th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>
+          <th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">SP Awal</th>`;
+        dbRows.forEach((row, i) => {
+          const tgl = row.tanggal
+            ? new Date(row.tanggal + 'T00:00:00').toLocaleDateString('id-ID', {day:'2-digit',month:'short'})
+            : (row.recorded_at ? new Date(row.recorded_at).toLocaleDateString('id-ID', {day:'2-digit',month:'short'}) : '—');
+          const time = row.recorded_at
+            ? new Date(row.recorded_at).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'})
+            : '';
+          thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">
+            Update #${i+1}<br>
+            <span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl} ${time}</span>
+          </th>`;
+        });
+        thead += `</tr>`;
 
-        tbody += `<tr style="background:${rowBg};">
-          <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${f.label}</td>
-          <td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;background:inherit;">${baseDisplay}</td>
-          ${historyCells.join('')}
-        </tr>`;
+        let tbody = ''; let visibleRows = 0;
+        SP_FIELDS.forEach(f => {
+          // Ambil SP Awal dari set_point project
+          const awalKeys = SP_AWAL_MAP[f.id] || [f.id];
+          const baseVal  = awalKeys.reduce((v, k) => v || sp[k] || '', '') || '';
+
+          // Ambil nilai dari history rows pakai kolom DB yang tepat
+          const dbCol   = SP_TO_DB[f.id];
+          const dbCells = dbRows.map(row => {
+            if (!dbCol) return null;
+            const v = row[dbCol];
+            return (v !== null && v !== undefined && String(v).trim() !== '') ? v : null;
+          });
+
+          const rowHasData = baseVal !== '' || dbCells.some(v => v !== null);
+          if (!rowHasData) return;
+
+          const unitHtml    = f.unit ? ` <span style="font-size:8px;color:var(--txt3);font-weight:400">${f.unit}</span>` : '';
+          const baseDisplay = baseVal ? `${baseVal}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
+          const rowBg       = visibleRows % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+          visibleRows++;
+
+          // ═══ PERBAIKAN: Carry-forward nilai terakhir & warna konsisten jika tidak ada update ═══
+          let lastValue = baseVal; // Nilai terakhir dimulai dari SP Awal
+          const cells = dbCells.map((v, ci) => {
+            // Jika ada nilai baru, update lastValue
+            if (v !== null) {
+              lastValue = v;
+              // Ada update → warna orange
+              return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--orange);white-space:nowrap;background:inherit;">${v}${unitHtml}</td>`;
+            } else {
+              // Tidak ada update → tampilkan nilai terakhir dengan warna biru (konsisten)
+              const displayVal = lastValue ? `${lastValue}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
+              return `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--blue);white-space:nowrap;background:inherit;">${displayVal}</td>`;
+            }
+          });
+
+          tbody += `<tr style="background:${rowBg};">
+            <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${f.label}</td>
+            <td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;background:inherit;">${baseDisplay}</td>
+            ${cells.join('')}
+          </tr>`;
+        });
+
+        // -- Finish Production --
+        // -- Finish Production --
+        let fpHtml = '';
+        const fpDoneFlag = p.fpDone === true || p.fp_done === true;
+        if (fpDoneFlag) {
+          const fpEntries = p.fp_entries || p.fpEntries || [];
+          const aromaList   = fpEntries.filter(e => e.type === 'aroma').length
+            ? fpEntries.filter(e => e.type === 'aroma') : (p.fpItems1 || []);
+          const productList = fpEntries.filter(e => e.type !== 'aroma').length
+            ? fpEntries.filter(e => e.type !== 'aroma') : (p.fpItems2 || p.fpItems || []);
+
+          // === PRODUCT TABLE (HORIZONTAL) ===
+          if (productList.length) {
+            // Build header dengan nomor entry
+            let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;background:var(--bg);">Parameter</th>`;
+            productList.forEach((item, i) => {
+              thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;">Entry #${i+1}</th>`;
+            });
+            thead += `</tr>`;
+
+            // Build rows untuk setiap parameter
+            const params = [
+              { label: 'Tanggal', key: 'date', unit: '' },
+              { label: 'Nama Produk', key: 'name', unit: '' },
+              { label: 'Kode', key: 'code', unit: '' },
+              { label: 'Brix', key: 'brix', unit: '°Bx' },
+              { label: 'Berat', key: 'berat', unit: 'kg' }
+            ];
+
+            let tbody = '';
+            params.forEach((param, idx) => {
+              const rowBg = idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+              tbody += `<tr style="background:${rowBg};">
+                <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;font-weight:600;">${param.label}</td>`;
+              
+              productList.forEach(item => {
+                const value = item[param.key] || '—';
+                const unitHtml = param.unit && value !== '—' ? ` <span style="font-size:9px;color:var(--txt3);">${param.unit}</span>` : '';
+                const isNumeric = param.key === 'brix' || param.key === 'berat';
+                const cellStyle = isNumeric 
+                  ? `${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);`
+                  : `${tdLabel}text-align:center;`;
+                tbody += `<td style="${cellStyle}">${value}${unitHtml}</td>`;
+              });
+              tbody += `</tr>`;
+            });
+
+            fpHtml += `<div style="margin-bottom:16px">
+              ${tableHeaderUI('🏭 Finish Production — Product')}
+              <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+                <table style="${tblStyle}">
+                  <thead>${thead}</thead>
+                  <tbody>${tbody}</tbody>
+                </table>
+              </div>
+            </div>`;
+          }
+
+          // === AROMA TABLE (HORIZONTAL) - DI BAWAH PRODUCT ===
+          if (aromaList.length) {
+            // Build header dengan nomor entry
+            let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;background:var(--bg);">Parameter</th>`;
+            aromaList.forEach((item, i) => {
+              thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;">Entry #${i+1}</th>`;
+            });
+            thead += `</tr>`;
+
+            // Build rows untuk setiap parameter
+            const params = [
+              { label: 'Tanggal', key: 'date', unit: '' },
+              { label: 'Nama Aroma', key: 'name', unit: '' },
+              { label: 'Kode', key: 'code', unit: '' },
+              { label: 'Berat', key: 'berat', unit: 'kg' }
+            ];
+
+            let tbody = '';
+            params.forEach((param, idx) => {
+              const rowBg = idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+              tbody += `<tr style="background:${rowBg};">
+                <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;font-weight:600;">${param.label}</td>`;
+              
+              aromaList.forEach(item => {
+                const value = item[param.key] || '—';
+                const unitHtml = param.unit && value !== '—' ? ` <span style="font-size:9px;color:var(--txt3);">${param.unit}</span>` : '';
+                const isNumeric = param.key === 'berat';
+                const cellStyle = isNumeric 
+                  ? `${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);`
+                  : `${tdLabel}text-align:center;`;
+                tbody += `<td style="${cellStyle}">${value}${unitHtml}</td>`;
+              });
+              tbody += `</tr>`;
+            });
+
+            fpHtml += `<div style="margin-bottom:16px">
+              ${tableHeaderUI('🌸 Finish Production — Aroma')}
+              <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+                <table style="${tblStyle}">
+                  <thead>${thead}</thead>
+                  <tbody>${tbody}</tbody>
+                </table>
+              </div>
+            </div>`;
+          }
+        }
+
+        // -- CIP Production checklist --
+        let cipProdHtml = '';
+        if (p.cipProdDone === true || p.cip_prod_done === true) {
+          const checks = p.cip_prod_checks || p.cipProdChecks || {};
+          const cl = CIP_CHECKLISTS.production;
+          let checkRows = ''; let itemIdx = 0;
+          cl.sections.forEach((sec, sIdx) => {
+            if (sec.name) checkRows += `<tr><td colspan="3" style="padding:6px 10px;background:var(--bg);font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)">${sec.name}</td></tr>`;
+            sec.items.forEach(item => {
+              const uniqueKey = `${sIdx}__${item}`;
+              const checked = checks[uniqueKey] === true || checks[item] === true;
+              checkRows += `<tr style="background:${itemIdx%2===0?'var(--surface)':'var(--bg)'}"><td style="${tdLabel};width:32px;text-align:center">${checked?'✅':'❌'}</td><td style="${tdLabel}">${item}</td><td style="${tdLabel};color:${checked?'var(--green)':'var(--txt3)'};font-weight:600">${checked?'Selesai':'Belum'}</td></tr>`;
+              itemIdx++;
+            });
+          });
+          const fieldRows = (cl.fields||[]).map(f => `<tr><td style="${tdLabel};font-weight:600">${f.label}</td><td colspan="2" style="${tdLabel};font-family:'DM Mono',monospace;color:var(--blue);font-weight:700">${checks[f.id]||'—'}</td></tr>`).join('');
+          cipProdHtml = `<div style="margin-bottom:16px">${tableHeaderUI('🧼 CIP Production — Checklist')}<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden"><table style="${tblStyle}"><thead><tr><th style="${thStyle};width:32px">✓</th><th style="${thStyle}">Item</th><th style="${thStyle}">Status</th></tr></thead><tbody>${checkRows}${fieldRows}</tbody></table></div></div>`;
+        }
+
+        wrap.innerHTML = `
+          <div style="margin-bottom:16px" id="summ-section-prod-data">
+            <div onclick="toggleSummSection('prod-data')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;padding:8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+              <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">⚙️ Data & History Produksi</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font-size:9px;color:var(--blue);background:#ebf2fd;padding:3px 8px;border-radius:4px;font-weight:600">↔ Geser kanan untuk melihat update</div>
+                <svg id="summ-toggle-prod-data" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;transform:rotate(0deg)"><path d="M3 5 L7 9 L11 5" stroke="var(--txt3)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div id="summ-content-prod-data" style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+              <table style="${tblStyle}">
+                <thead>${thead}</thead>
+                <tbody>${tbody}</tbody>
+              </table>
+            </div>
+          </div>
+          ${fpHtml ? `<div style="margin-bottom:16px" id="summ-section-fp">
+            <div onclick="toggleSummSection('fp')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;padding:8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+              <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">🏭 Finish Production</div>
+              <svg id="summ-toggle-fp" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;transform:rotate(0deg)"><path d="M3 5 L7 9 L11 5" stroke="var(--txt3)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div id="summ-content-fp">${fpHtml}</div>
+          </div>` : ''}
+          ${cipProdHtml ? `<div style="margin-bottom:16px" id="summ-section-cip">
+            <div onclick="toggleSummSection('cip')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;padding:8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+              <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">🧼 CIP Production</div>
+              <svg id="summ-toggle-cip" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;transform:rotate(0deg)"><path d="M3 5 L7 9 L11 5" stroke="var(--txt3)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div id="summ-content-cip">${cipProdHtml}</div>
+          </div>` : ''}`;
+      } catch(err) {
+        console.error('Produksi summary error:', err);
+        wrap.innerHTML = emptyMsg('❌ Gagal memuat data produksi: ' + err.message);
       }
-    });
-
-    wrap.innerHTML = `
-      <div style="margin-bottom:16px">
-        ${tableHeaderUI('⚙️ Data & History Produksi')}
-        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
-          <table style="${tblStyle}">
-            <thead>${thead}</thead>
-            <tbody>${tbody}</tbody>
-          </table>
-        </div>
-      </div>`;
+    })();
     return;
   }
 
   // ─── LAB ─────────────────────────────────────────────
   if (tabId === 'lab') {
-    const labHist = p.labHistory || [];
-    if (!labHist.length) {
-      wrap.innerHTML = emptyMsg('📭 Belum ada data entry Lab untuk project ini.');
-      return;
-    }
+    // Tampilkan loading sementara data di-fetch dari API
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px">\u23f3 Memuat data Lab...</div>';
 
-    // Auto mapping / Translate dari data nama Inggris lama ke nama Form Baru
-    const mapLabel = (l) => {
-        const map = {
-            'TLV': 'Nama Sample (Brix)',
-            'Lab Code': 'Kode Pile',
-            'Air Test': 'Brix',
-            'Header Retaking': 'Nama Sample (Moisture)',
-            'Sampling Point': 'MC%'
-        };
-        return map[l] || l;
-    };
+    // Fetch data lab dari database berdasarkan project_name
+    (async () => {
+      try {
+        const res  = await fetch('/api/dataentry/laboratorium?project_name=' + encodeURIComponent(p.name));
+        const json = await res.json();
+        const rows = (json.success && json.data?.length) ? json.data : [];
 
-    const normalizedHist = labHist.map(entry => ({
-        ...entry,
-        fields: (entry.fields || []).map(f => ({
-            ...f,
-            label: mapLabel(f.label)
-        }))
-    }));
+        // Gabungkan juga labHistory dari localStorage jika ada (legacy)
+        const localHist = p.labHistory || [];
 
-    // Pisahkan Label Brix dan Moisture ke dua array berbeda
-    const uniqueBrixLabels = [];
-    const uniqueMoistLabels = [];
-
-    normalizedHist.forEach(entry => {
-      (entry.fields || []).forEach(f => {
-        const lbl = f.label;
-        // Deteksi apakah ini parameter Brix atau Moisture
-        if (lbl.includes('Brix') || lbl.includes('Kode Pile')) {
-            if (!uniqueBrixLabels.includes(lbl)) uniqueBrixLabels.push(lbl);
-        } else if (lbl.includes('Moisture') || lbl.includes('MC%')) {
-            if (!uniqueMoistLabels.includes(lbl)) uniqueMoistLabels.push(lbl);
-        } else {
-            // Jaga-jaga jika ada label tak terduga, masukkan ke Brix
-            if (!uniqueBrixLabels.includes(lbl) && !uniqueMoistLabels.includes(lbl)) uniqueBrixLabels.push(lbl);
+        if (!rows.length && !localHist.length) {
+          wrap.innerHTML = emptyMsg('📭 Belum ada data entry Lab untuk project ini.');
+          return;
         }
-      });
-    });
 
-    // Buat template Header Kolom (Sama untuk kedua tabel)
-    let theadCols = ``;
-    normalizedHist.forEach((entry, i) => {
-      const dateObj = new Date(entry.saved_at);
-      const dateStr = dateObj.toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'}) + ', ' + dateObj.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
-      theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}</span></th>`;
-    });
-    const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
+        // Bangun tabel dari data database (brix_entries & moisture_entries)
+        let brixHtml = '', moistHtml = '';
 
-    // Fungsi pembuat baris tabel (tbody)
-    const buildTbody = (labelsArr) => {
-      let tbody = '';
-      labelsArr.forEach((label, rIdx) => {
-        const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-        let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
-        
-        normalizedHist.forEach(entry => {
-          const field = (entry.fields || []).find(f => f.label === label);
-          if (field && field.newVal !== '') {
-            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);white-space:nowrap;background:inherit;">${field.newVal}</td>`;
-          } else {
-            rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+        if (rows.length) {
+          // Kumpulkan semua brix entries dari semua record (per tanggal)
+          const allBrix = [];
+          const allMoist = [];
+          rows.forEach(row => {
+            const tanggal = new Date(row.tanggal).toLocaleDateString('id-ID', {day:'2-digit',month:'2-digit',year:'2-digit'});
+            (row.brix_entries || []).forEach(e => allBrix.push({...e, tanggal}));
+            (row.moisture_entries || []).forEach(e => allMoist.push({...e, tanggal}));
+          });
+
+          if (allBrix.length) {
+            const brixRows = allBrix.map((e, i) => `<tr style="background:${i%2===0?'var(--surface)':'var(--bg)'}">
+              <td style="${tdLabel}">${e.tanggal||'—'}</td>
+              <td style="${tdLabel}">${e.sample||'—'}</td>
+              <td style="${tdLabel}">${e.kode||'—'}</td>
+              <td style="${tdLabel};font-family:'DM Mono',monospace;font-weight:700;color:var(--blue)">${e.brix||'—'}</td>
+              <td style="${tdLabel};color:var(--txt3)">${e.notes||'—'}</td>
+            </tr>`).join('');
+            brixHtml = `
+              <div style="margin-bottom:16px">
+                ${tableHeaderUI('Data Brix')}
+                <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+                  <table style="${tblStyle}">
+                    <thead><tr>
+                      <th style="${thStyle}">Tanggal</th>
+                      <th style="${thStyle}">Nama Sample</th>
+                      <th style="${thStyle}">Kode Pile</th>
+                      <th style="${thStyle}">Brix</th>
+                      <th style="${thStyle}">Catatan</th>
+                    </tr></thead>
+                    <tbody>${brixRows}</tbody>
+                  </table>
+                </div>
+              </div>`;
           }
-        });
-        tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
-      });
-      return tbody;
-    };
 
-    const brixTbody = buildTbody(uniqueBrixLabels);
-    const moistTbody = buildTbody(uniqueMoistLabels);
+          if (allMoist.length) {
+            const moistRows = allMoist.map((e, i) => `<tr style="background:${i%2===0?'var(--surface)':'var(--bg)'}">
+              <td style="${tdLabel}">${e.tanggal||'—'}</td>
+              <td style="${tdLabel}">${e.sample||'—'}</td>
+              <td style="${tdLabel};font-family:'DM Mono',monospace;font-weight:700;color:var(--blue)">${e.mc||'—'}</td>
+              <td style="${tdLabel};color:var(--txt3)">${e.notes||'—'}</td>
+            </tr>`).join('');
+            moistHtml = `
+              <div style="margin-bottom:16px">
+                ${tableHeaderUI('💧 Data Moisture')}
+                <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
+                  <table style="${tblStyle}">
+                    <thead><tr>
+                      <th style="${thStyle}">Tanggal</th>
+                      <th style="${thStyle}">Nama Sample</th>
+                      <th style="${thStyle}">MC%</th>
+                      <th style="${thStyle}">Catatan</th>
+                    </tr></thead>
+                    <tbody>${moistRows}</tbody>
+                  </table>
+                </div>
+              </div>`;
+          }
+        }
 
-    // Gabungkan menjadi dua tabel terpisah di dalam Summary
-    wrap.innerHTML = `
-      <div style="margin-bottom:16px">
-        ${tableHeaderUI('🧪 Data & History Lab')}
-        
-        ${uniqueBrixLabels.length > 0 ? `
-        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;margin-top:12px;">
-          <span style="font-size:14px;">📊</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">DATA BRIX</span>
-        </div>
-        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;margin-bottom:20px;">
-          <table style="${tblStyle}">
-            <thead>${thead}</thead>
-            <tbody>${brixTbody}</tbody>
-          </table>
-        </div>
-        ` : ''}
+        // Jika tidak ada data dari DB, coba fallback ke labHistory localStorage
+        if (!brixHtml && !moistHtml && localHist.length) {
+          // Render dengan cara lama (labHistory) sebagai fallback
+          const labHist = localHist;
+          const mapLabel = (l) => { const map={'TLV':'Nama Sample (Brix)','Lab Code':'Kode Pile','Air Test':'Brix','Header Retaking':'Nama Sample (Moisture)','Sampling Point':'MC%'}; return map[l]||l; };
+          const normalizedHist = labHist.map(entry => ({...entry, fields:(entry.fields||[]).map(f=>({...f,label:mapLabel(f.label)}))}));
+          const uniqueBrix = [], uniqueMoist = [];
+          normalizedHist.forEach(entry => (entry.fields||[]).forEach(f => {
+            if (f.label.includes('Brix')||f.label.includes('Kode Pile')) { if (!uniqueBrix.includes(f.label)) uniqueBrix.push(f.label); }
+            else if (f.label.includes('Moisture')||f.label.includes('MC%')) { if (!uniqueMoist.includes(f.label)) uniqueMoist.push(f.label); }
+            else { if (!uniqueBrix.includes(f.label)&&!uniqueMoist.includes(f.label)) uniqueBrix.push(f.label); }
+          }));
+          let theadCols='';
+          normalizedHist.forEach((entry,i) => {
+            const d = new Date(entry.saved_at);
+            const ds = d.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'2-digit'})+', '+d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+            theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${ds}</span></th>`;
+          });
+          const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
+          const buildTbody = (labelsArr) => { let tb=''; labelsArr.forEach((label,rIdx) => { const bg=rIdx%2===0?'var(--surface)':'var(--bg)'; let row=`<td style="${tdLabel}position:sticky;left:0;background:${bg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`; normalizedHist.forEach(entry => { const f=(entry.fields||[]).find(f=>f.label===label); row += f&&f.newVal!=='' ? `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--blue);background:inherit;">${f.newVal}</td>` : `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`; }); tb+=`<tr style="background:${bg}">${row}</tr>`; }); return tb; };
+          if (uniqueBrix.length) brixHtml=`<div style="margin-bottom:16px">${tableHeaderUI('�5 Data Brix')}<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;max-height:50vh"><table style="${tblStyle}"><thead>${thead}</thead><tbody>${buildTbody(uniqueBrix)}</tbody></table></div></div>`;
+          if (uniqueMoist.length) moistHtml=`<div style="margin-bottom:16px">${tableHeaderUI('💧 Data Moisture')}<div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;max-height:50vh"><table style="${tblStyle}"><thead>${thead}</thead><tbody>${buildTbody(uniqueMoist)}</tbody></table></div></div>`;
+        }
 
-        ${uniqueMoistLabels.length > 0 ? `
-        <div style="margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;">
-          <span style="font-size:14px;">💯</span> <span style="font-size:12px;font-weight:700;color:var(--txt);">DATA MOISTURE</span>
-        </div>
-        <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;">
-          <table style="${tblStyle}">
-            <thead>${thead}</thead>
-            <tbody>${moistTbody}</tbody>
-          </table>
-        </div>
-        ` : ''}
+        // -- CIP Lab — hanya tampilkan PH + keterangan (tanpa checklist rinse) --
+        let cipLabHtml = '';
+        const hasCIPLab  = p.cipLabDone === true || p.cip_lab_done === true;
+        // Ambil entries dari berbagai sumber
+        const cipEntries = (rows?.find(r => r.cip_lab_entries?.length)?.cip_lab_entries)
+          || p.cipLabEntries || p.cip_lab_entries || [];
 
-      </div>`;
+        if (hasCIPLab || cipEntries.length) {
+          let entryRows = '';
+          if (cipEntries.length) {
+            entryRows = cipEntries.map((e, i) => `
+              <tr style="background:${i%2===0?'var(--surface)':'var(--bg)'}">
+                <td style="${tdLabel};text-align:center;width:40px;font-weight:700;color:var(--txt3)">${i+1}</td>
+                <td style="${tdLabel};font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--blue)">${e.ph||'—'}</td>
+                <td style="${tdLabel};color:var(--txt2)">${e.keterangan||'—'}</td>
+              </tr>`).join('');
+          } else {
+            entryRows = `<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--txt3);font-size:12px">Belum ada data PH CIP</td></tr>`;
+          }
+
+          const badgeColor = hasCIPLab ? 'var(--green)' : 'var(--orange)';
+          const badgeBg    = hasCIPLab ? 'var(--green-bg)' : 'var(--orange-bg)';
+          const badgeLabel = hasCIPLab ? '✅ Selesai' : '⏳ Progress';
+
+          cipLabHtml = `
+            <div style="margin-bottom:16px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:16px">🧼</span>
+                  <span style="font-size:12px;font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:.8px">CIP Lab — Data PH</span>
+                </div>
+                <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor}33">${badgeLabel}</span>
+              </div>
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+                <table style="${tblStyle}">
+                  <thead>
+                    <tr>
+                      <th style="${thStyle};width:40px;text-align:center">#</th>
+                      <th style="${thStyle}">PH</th>
+                      <th style="${thStyle}">Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody>${entryRows}</tbody>
+                </table>
+              </div>
+            </div>`;
+        } // end if (hasCIPLab || cipEntries.length)
+
+        if (!brixHtml && !moistHtml && !cipLabHtml) {
+          wrap.innerHTML = emptyMsg('📭 Belum ada data entry Lab untuk project ini.');
+        } else {
+          wrap.innerHTML = brixHtml + moistHtml + cipLabHtml;
+        }
+      } catch(err) {
+        console.error('Lab summary fetch error:', err);
+        wrap.innerHTML = emptyMsg('❌ Gagal memuat data Lab: ' + err.message);
+      }
+    })();
     return;
   }
 
-  // ─── UTILITY ─────────────────────────────────────────
   if (tabId === 'utility') {
     const utilHist = p.utilityHistory || [];
     if (!utilHist.length) {
@@ -7546,6 +8187,24 @@ function renderSummTabContent(type, tabId, p) {
 
   wrap.innerHTML = '';
 }
+
+function toggleSummSection(sectionId) {
+  const content = document.getElementById('summ-content-' + sectionId);
+  const toggle = document.getElementById('summ-toggle-' + sectionId);
+  
+  if (!content || !toggle) return;
+  
+  const isHidden = content.style.display === 'none';
+  
+  if (isHidden) {
+    content.style.display = '';
+    toggle.style.transform = 'rotate(0deg)';
+  } else {
+    content.style.display = 'none';
+    toggle.style.transform = 'rotate(-90deg)';
+  }
+}
+window.toggleSummSection = toggleSummSection;
 
 function closeSumm(type) {
   document.getElementById('summ-overlay-'+type)?.classList.remove('show');
@@ -8546,236 +9205,435 @@ function handlePhotoUpload(key, input) {
 // KARTU STOK
 // ═══════════════════════════════════════════════════════════
 function getKartuStokHTML() {
-  return `<div class="de-wrap">
-  <div class="de-header">
-    <div><div class="de-title">Kartu Stok</div><div class="de-sub">SAIL / Gudang / Kartu Stok — Kelola stok barang masuk & keluar</div></div>
-    <button type="button" class="de-btn de-btn-primary" style="padding:8px 18px; position:relative; z-index:10; cursor:pointer;" onclick="openKartuStokForm()">＋ Tambah Entri</button>
-  </div>
-
-  <div class="de-card" style="padding:14px 18px;margin-bottom:0;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-    <input class="de-input" id="ks-search" placeholder="🔍 Cari nama barang..." style="flex:1;min-width:180px" oninput="renderKartuStok()">
-    <select class="de-input de-select" id="ks-filter-type" style="width:160px" onchange="renderKartuStok()">
-      <option value="">Semua Tipe</option>
-      <option value="in">📥 Masuk</option>
-      <option value="out">📤 Keluar</option>
-    </select>
-  </div>
-
-  <div class="de-card" style="padding:0;overflow:hidden">
-    <div style="overflow-x:auto">
-      <table class="ks-table" id="ks-table">
-        <thead>
-          <tr>
-            <th>No.</th>
-            <th>Tanggal Entri</th>
-            <th>Nama Barang</th>
-            <th>Tipe</th>
-            <th>Tgl Masuk</th>
-            <th>Tgl Keluar</th>
-            <th>Jumlah</th>
-            <th>Satuan</th>
-            <th>Keterangan</th>
-            <th>Aksi</th>
-          </tr>
-        </thead>
-        <tbody id="ks-tbody"></tbody>
-      </table>
-    </div>
-    <div id="ks-empty" style="display:none;padding:48px;text-align:center;color:var(--txt3)">
-      <div style="font-size:32px;margin-bottom:8px">📦</div>
-      <div style="font-size:13px">Belum ada entri stok — klik <strong>＋ Tambah Entri</strong> untuk mulai.</div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:0">
-    <div class="ks-sum-card" id="ks-sum-total" style="border-left:3px solid var(--blue)">
-      <div class="ks-sum-label">Total Entri</div>
-      <div class="ks-sum-val" id="ks-total-count">0</div>
-    </div>
-    <div class="ks-sum-card" id="ks-sum-in" style="border-left:3px solid var(--green)">
-      <div class="ks-sum-label">📥 Total Masuk</div>
-      <div class="ks-sum-val" style="color:var(--green)" id="ks-in-count">0</div>
-    </div>
-    <div class="ks-sum-card" id="ks-sum-out" style="border-left:3px solid var(--red)">
-      <div class="ks-sum-label">📤 Total Keluar</div>
-      <div class="ks-sum-val" style="color:var(--red)" id="ks-out-count">0</div>
-    </div>
-  </div>
-
-  <div class="proj-modal-overlay" id="ks-modal-overlay" style="display:none;">
-    <div class="proj-modal" style="max-width:500px">
-      <div class="proj-modal-head">
-        <div class="proj-modal-title" id="ks-modal-title">📦 Tambah Entri Stok</div>
-        <button type="button" class="proj-modal-close" onclick="closeKartuStokForm()">✕</button>
+  return `
+  <div class="de-wrap">
+    <div class="de-header">
+      <div>
+        <div class="de-title">Stock Card</div>
+        <div class="de-sub">SAIL / Gudang / Stock Card — 1 Produk = 1 Kartu Stok</div>
       </div>
-      <div class="proj-modal-body">
-        <div class="de-grid">
-          <div class="de-field de-full"><label class="de-label">NAMA BARANG *</label><input class="de-input" id="ks-f-name" type="text" placeholder="Contoh: Teh Hijau, Filter Paper..."></div>
-          <div class="de-field"><label class="de-label">TIPE *</label>
-            <select class="de-input de-select" id="ks-f-type">
-              <option value="in">📥 Masuk</option>
-              <option value="out">📤 Keluar</option>
-            </select>
+      <button type="button" class="de-btn de-btn-primary" style="padding:8px 18px;cursor:pointer;" onclick="openSCProductForm()">＋ Tambah Produk</button>
+    </div>
+
+    <div class="de-card" style="padding:12px 16px;margin-bottom:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input class="de-input" id="sc-search" placeholder="🔍 Cari nama atau kode produk..." style="flex:1;min-width:200px" oninput="renderStockCards()">
+    </div>
+
+    <div id="sc-cards-container" style="display:flex;flex-direction:column;gap:16px;margin-top:4px"></div>
+    <div id="sc-empty" style="display:none;padding:56px;text-align:center;color:var(--txt3)">
+      <div style="font-size:44px;margin-bottom:10px">📦</div>
+      <div style="font-size:13px;font-weight:600">Belum ada produk — klik <strong>＋ Tambah Produk</strong> untuk memulai.</div>
+    </div>
+
+    <!-- PRODUCT FORM MODAL -->
+    <div class="proj-modal-overlay" id="sc-prod-modal" style="display:none;">
+      <div class="proj-modal" style="max-width:540px">
+        <div class="proj-modal-head">
+          <div class="proj-modal-title" id="sc-prod-modal-title">📦 Tambah Produk</div>
+          <button type="button" class="proj-modal-close" onclick="closeSCProductForm()">✕</button>
+        </div>
+        <div class="proj-modal-body">
+          <div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase;">Informasi Produk (Header Kartu Stok)</div>
+          <div class="de-grid">
+            <div class="de-field de-full">
+              <label class="de-label">NAMA BARANG *</label>
+              <input class="de-input" id="sc-p-name" placeholder="Contoh: Teh Hijau, Filter Paper, Caustic Soda...">
+            </div>
+            <div class="de-field">
+              <label class="de-label">KODE BARANG</label>
+              <input class="de-input" id="sc-p-code" placeholder="Contoh: GTE-001">
+            </div>
+            <div class="de-field">
+              <label class="de-label">SATUAN BARANG</label>
+              <input class="de-input" id="sc-p-unit" placeholder="kg, L, pcs, box, drum...">
+            </div>
+            <div class="de-field">
+              <label class="de-label">MINIMUM STOK</label>
+              <input class="de-input" id="sc-p-min" type="number" min="0" step="0.001" placeholder="0">
+            </div>
+            <div class="de-field">
+              <label class="de-label">MAXIMUM STOK</label>
+              <input class="de-input" id="sc-p-max" type="number" min="0" step="0.001" placeholder="0">
+            </div>
+            <div class="de-field">
+              <label class="de-label">LOKASI / GUDANG</label>
+              <input class="de-input" id="sc-p-loc" placeholder="Contoh: Gudang A, Rak 3...">
+            </div>
+            <div class="de-field">
+              <label class="de-label">PENANGGUNG JAWAB (PIC)</label>
+              <input class="de-input" id="sc-p-pic" placeholder="Nama PIC produk ini...">
+            </div>
           </div>
-          <div class="de-field"><label class="de-label">TANGGAL ENTRI</label><input class="de-input" id="ks-f-date" type="date"></div>
-          <div class="de-field"><label class="de-label">TANGGAL MASUK</label><input class="de-input" id="ks-f-date-in" type="date"></div>
-          <div class="de-field"><label class="de-label">TANGGAL KELUAR</label><input class="de-input" id="ks-f-date-out" type="date"></div>
-          <div class="de-field"><label class="de-label">JUMLAH *</label><input class="de-input" id="ks-f-qty" type="number" min="0" step="0.01" placeholder="0"></div>
-          <div class="de-field"><label class="de-label">SATUAN</label><input class="de-input" id="ks-f-unit" type="text" placeholder="kg, L, pcs, box..."></div>
-          <div class="de-field de-full"><label class="de-label">KETERANGAN</label><textarea class="de-input de-textarea" id="ks-f-notes" placeholder="Keterangan tambahan..." style="min-height:60px"></textarea></div>
-        </div>
-        <div class="de-status-bar" id="ks-sb" style="display:none"><span id="ks-sm"></span></div>
-        <div class="de-actions" style="margin-top:16px">
-          <button type="button" class="de-btn de-btn-ghost" onclick="closeKartuStokForm()">Batal</button>
-          <button type="button" class="de-btn de-btn-primary" onclick="submitKartuStok()">💾 Simpan</button>
+          <div class="de-status-bar" id="sc-p-sb" style="display:none"><span id="sc-p-sm"></span></div>
+          <div class="de-actions" style="margin-top:16px">
+            <button type="button" class="de-btn de-btn-ghost" onclick="closeSCProductForm()">Batal</button>
+            <button type="button" class="de-btn de-btn-primary" onclick="submitSCProduct()">💾 Simpan Produk</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-</div>`;
+
+    <!-- TRANSACTION FORM MODAL -->
+    <div class="proj-modal-overlay" id="sc-txn-modal" style="display:none;">
+      <div class="proj-modal" style="max-width:520px">
+        <div class="proj-modal-head">
+          <div class="proj-modal-title" id="sc-txn-modal-title">➕ Tambah Transaksi</div>
+          <button type="button" class="proj-modal-close" onclick="closeSCTxnForm()">✕</button>
+        </div>
+        <div class="proj-modal-body">
+          <div style="font-size:11px;font-weight:700;color:var(--blue);margin-bottom:12px;padding:8px 12px;background:#eff6ff;border-radius:6px;border:1px solid #bfdbfe" id="sc-txn-prod-label">📦 Produk: —</div>
+          <div class="de-grid">
+            <div class="de-field">
+              <label class="de-label">TANGGAL *</label>
+              <input class="de-input" id="sc-t-date" type="date">
+            </div>
+            <div class="de-field">
+              <label class="de-label">NO. SEAL / BATCH</label>
+              <input class="de-input" id="sc-t-seal" placeholder="No. seal, kode batch...">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#15803d">DEBIT — Barang Masuk (IN)</label>
+              <input class="de-input" id="sc-t-debit" type="number" min="0" step="0.001" placeholder="0  (kosongkan jika Keluar)">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#b91c1c">CREDIT — Barang Keluar (OUT)</label>
+              <input class="de-input" id="sc-t-credit" type="number" min="0" step="0.001" placeholder="0  (kosongkan jika Masuk)">
+            </div>
+            <div class="de-field">
+              <label class="de-label">PENANGGUNG JAWAB</label>
+              <input class="de-input" id="sc-t-pic" placeholder="Nama PIC transaksi ini...">
+            </div>
+            <div class="de-field de-full">
+              <label class="de-label">DESKRIPSI</label>
+              <input class="de-input" id="sc-t-desc" placeholder="Contoh: Pembelian Supplier, Penjualan ke Gudang B...">
+            </div>
+            <div class="de-field de-full">
+              <label class="de-label">KETERANGAN / CATATAN</label>
+              <textarea class="de-input de-textarea" id="sc-t-notes" placeholder="Catatan tambahan jika ada..." style="min-height:52px"></textarea>
+            </div>
+          </div>
+          <div class="de-status-bar" id="sc-t-sb" style="display:none"><span id="sc-t-sm"></span></div>
+          <div class="de-actions" style="margin-top:16px">
+            <button type="button" class="de-btn de-btn-ghost" onclick="closeSCTxnForm()">Batal</button>
+            <button type="button" class="de-btn de-btn-primary" onclick="submitSCTxn()">💾 Simpan Transaksi</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
 }
 
-function openKartuStokForm(idx = -1) {
-  _ksEditIdx = idx;
-  const today = new Date().toISOString().split('T')[0];
-  if (idx >= 0) {
-    const d = gKS()[idx];
-    document.getElementById('ks-modal-title').textContent = '✏️ Edit Entri Stok';
-    document.getElementById('ks-f-name').value    = d.name || '';
-    document.getElementById('ks-f-type').value    = d.type || 'in';
-    document.getElementById('ks-f-date').value    = d.date || today;
-    document.getElementById('ks-f-date-in').value = d.dateIn || '';
-    document.getElementById('ks-f-date-out').value= d.dateOut || '';
-    document.getElementById('ks-f-qty').value     = d.qty || '';
-    document.getElementById('ks-f-unit').value    = d.unit || '';
-    document.getElementById('ks-f-notes').value   = d.notes || '';
-  } else {
-    document.getElementById('ks-modal-title').textContent = '📦 Tambah Entri Stok';
-    ['ks-f-name','ks-f-qty','ks-f-unit','ks-f-notes'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-    document.getElementById('ks-f-date').value = today;
-    document.getElementById('ks-f-date-in').value = '';
-    document.getElementById('ks-f-date-out').value = '';
-    document.getElementById('ks-f-type').value = 'in';
-  }
-  const sb = document.getElementById('ks-sb'); if(sb) sb.style.display='none';
-  
-  // 💡 FIX: Paksa muncul dengan gaya display inline
-  const modal = document.getElementById('ks-modal-overlay');
-  if(modal) {
-      modal.style.display = 'flex';
-      modal.classList.add('show');
-  }
-}
+// ── Storage helpers ──────────────────────────────────────────
+function gKS()         { try { return JSON.parse(localStorage.getItem('sail_kartu_stok') || '[]'); } catch { return []; } }
+function sKS(list)     { localStorage.setItem('sail_kartu_stok', JSON.stringify(list)); }
+function gSCProducts() { try { return JSON.parse(localStorage.getItem('sail_sc_products') || '[]'); } catch { return []; } }
+function sSCProducts(d){ localStorage.setItem('sail_sc_products', JSON.stringify(d)); }
+function gSCTxn()      { try { return JSON.parse(localStorage.getItem('sail_sc_txn') || '[]'); } catch { return []; } }
+function sSCTxn(d)     { localStorage.setItem('sail_sc_txn', JSON.stringify(d)); }
 
-function closeKartuStokForm() {
-  // 💡 FIX: Paksa sembunyikan sepenuhnya
-  const modal = document.getElementById('ks-modal-overlay');
-  if(modal) {
-      modal.style.display = 'none';
-      modal.classList.remove('show');
-  }
-  _ksEditIdx = -1;
-}
-
-// ── Kartu Stok localStorage helpers ──────────────────────────
-function gKS()       { try { return JSON.parse(localStorage.getItem('sail_kartu_stok') || '[]'); } catch { return []; } }
-function sKS(list)   { localStorage.setItem('sail_kartu_stok', JSON.stringify(list)); }
+let _ksEditIdx    = -1;
+let _scProdEditId = null;
+let _scTxnProdId  = null;
+let _scTxnEditId  = null;
 
 function initKartuStok() {
-  renderKartuStok();
+  renderStockCards();
 }
 
-function renderKartuStok() {
-  const q    = (document.getElementById('ks-search')?.value || '').toLowerCase();
-  const type = document.getElementById('ks-filter-type')?.value || '';
-  let data   = gKS();
-  const total = data.length;
-  const inCount  = data.filter(d => d.type === 'in').length;
-  const outCount = data.filter(d => d.type === 'out').length;
-  if (q)    data = data.filter(d => d.name.toLowerCase().includes(q));
-  if (type) data = data.filter(d => d.type === type);
+function renderStockCards() {
+  const q         = (document.getElementById('sc-search')?.value || '').toLowerCase();
+  const products  = gSCProducts();
+  const txnAll    = gSCTxn();
+  const container = document.getElementById('sc-cards-container');
+  const emptyEl   = document.getElementById('sc-empty');
+  if (!container) return;
 
-  const tbody  = document.getElementById('ks-tbody');
-  const empty  = document.getElementById('ks-empty');
-  const table  = document.getElementById('ks-table');
-  if (!tbody) return;
+  const filtered = q
+    ? products.filter(p => p.name.toLowerCase().includes(q) || (p.code||'').toLowerCase().includes(q))
+    : products;
 
-  const el = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
-  el('ks-total-count', total);
-  el('ks-in-count',  inCount);
-  el('ks-out-count', outCount);
-
-  if (!data.length) {
-    table.style.display = 'none'; empty.style.display = 'block';
+  if (!filtered.length) {
+    container.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
     return;
   }
-  table.style.display = ''; empty.style.display = 'none';
+  if (emptyEl) emptyEl.style.display = 'none';
 
-  const allData = gKS(); // For real index lookup
-  tbody.innerHTML = data.map((d) => {
-    const realIdx = allData.findIndex(x => x.id === d.id);
-    const typeTag = d.type === 'in'
-      ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:#dcfce7;color:#15803d;border:1px solid #86efac">📥 MASUK</span>'
-      : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5">📤 KELUAR</span>';
-    return `<tr>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--txt3)">${realIdx+1}</td>
-      <td style="font-size:11px;white-space:nowrap">${d.date || '—'}</td>
-      <td style="font-weight:600;color:var(--txt)">${d.name}</td>
-      <td>${typeTag}</td>
-      <td style="font-size:11px;white-space:nowrap;color:var(--green)">${d.dateIn || '—'}</td>
-      <td style="font-size:11px;white-space:nowrap;color:var(--red)">${d.dateOut || '—'}</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:600">${d.qty || '—'}</td>
-      <td style="font-size:11px;color:var(--txt3)">${d.unit || '—'}</td>
-      <td style="font-size:11px;color:var(--txt2);max-width:180px">${d.notes || '—'}</td>
-      <td>
-        <div style="display:flex;gap:4px">
-          <button class="pj-btn pj-btn-edit" onclick="editKartuStok(${realIdx})">✏️</button>
-          <button class="pj-btn pj-btn-end" style="padding:4px 8px" onclick="deleteKartuStok(${realIdx})">🗑️</button>
+  container.innerHTML = filtered.map((p) => {
+    const txns = txnAll
+      .filter(t => t.productId === p.id)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    let runBal = 0;
+    const fmt = v => v ? parseFloat(v).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:3}) : '';
+    const txnRows = txns.map((t, ti) => {
+      const d = parseFloat(t.debit)  || 0;
+      const c = parseFloat(t.credit) || 0;
+      runBal += d - c;
+      const minSt  = parseFloat(p.min)||0;
+      const balClr = runBal < 0 ? '#dc2626' : runBal <= minSt ? '#d97706' : '#15803d';
+      const rowBg  = ti % 2 === 0 ? '#fff' : '#f8fafc';
+      return `<tr style="background:${rowBg}">
+        <td style="font-family:'DM Mono',monospace;font-size:11px;text-align:center;color:#94a3b8;border:1px solid #e2e8f0;padding:5px 6px">${ti+1}</td>
+        <td style="font-size:11px;white-space:nowrap;border:1px solid #e2e8f0;padding:5px 8px">${t.date||'—'}</td>
+        <td style="font-size:11px;border:1px solid #e2e8f0;padding:5px 8px;max-width:160px">${t.desc||'—'}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#15803d;text-align:center;border:1px solid #e2e8f0;padding:5px 8px">${d ? fmt(t.debit) : ''}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:#dc2626;text-align:center;border:1px solid #e2e8f0;padding:5px 8px">${c ? fmt(t.credit) : ''}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:800;text-align:center;border:1px solid #e2e8f0;padding:5px 8px;color:${balClr}">${runBal.toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:3})}</td>
+        <td style="font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.5px;text-align:center;border:1px solid #e2e8f0;padding:5px 8px">${t.seal||'—'}</td>
+        <td style="font-size:11px;border:1px solid #e2e8f0;padding:5px 8px;text-align:center">${t.pic||p.pic||'—'}</td>
+        <td style="font-size:11px;color:#64748b;border:1px solid #e2e8f0;padding:5px 8px;max-width:140px">${t.notes||'—'}</td>
+        <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;white-space:nowrap">
+          <button class="pj-btn pj-btn-edit" style="padding:3px 7px;font-size:11px" onclick="editSCTxn('${p.id}','${t.id}')">✏️</button>
+          <button class="pj-btn pj-btn-end"  style="padding:3px 7px;font-size:11px" onclick="deleteSCTxn('${t.id}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    const finalBal   = txns.reduce((acc, t) => acc + (parseFloat(t.debit)||0) - (parseFloat(t.credit)||0), 0);
+    const minSt      = parseFloat(p.min)||0;
+    const balChipBg  = finalBal < 0 ? '#fee2e2' : finalBal <= minSt ? '#fef9c3' : '#dcfce7';
+    const balChipClr = finalBal < 0 ? '#b91c1c' : finalBal <= minSt ? '#92400e' : '#15803d';
+    const balChipBdr = finalBal < 0 ? '#fca5a5' : finalBal <= minSt ? '#fde047' : '#86efac';
+    const prodIdx    = products.findIndex(x => x.id === p.id);
+
+    return `
+    <div style="border:2px solid #22c55e;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+      <div style="background:#22c55e;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:.3px">📋 LAPORAN KARTU STOK BARANG</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div style="background:${balChipBg};border:1px solid ${balChipBdr};color:${balChipClr};padding:3px 12px;border-radius:100px;font-size:11px;font-weight:800;white-space:nowrap">
+            Saldo: ${finalBal.toLocaleString('id-ID')} ${p.unit||''}
+          </div>
+          <button class="pj-btn" style="background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:#fff;font-size:11px;padding:4px 10px" onclick="openSCProductForm(${prodIdx})">✏️ Edit</button>
+          <button class="pj-btn" style="background:rgba(220,38,38,.2);border-color:rgba(220,38,38,.5);color:#fca5a5;font-size:11px;padding:4px 10px" onclick="deleteSCProduct('${p.id}')">🗑️</button>
+          <button style="background:#15803d;color:#fff;border:none;border-radius:6px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit" onclick="openSCTxnForm('${p.id}')">➕ Tambah Transaksi</button>
         </div>
-      </td>
-    </tr>`;
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;background:#fff;border-bottom:2px solid #22c55e">
+        <div style="padding:10px 18px;border-right:1px solid #e2e8f0">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <tr><td style="color:#64748b;padding:2px 0;width:120px;font-weight:600">Nama Barang</td><td style="padding:2px 0">: <strong>${p.name}</strong></td></tr>
+            <tr><td style="color:#64748b;padding:2px 0;font-weight:600">Kode Barang</td><td style="padding:2px 0">: ${p.code||'—'}</td></tr>
+            <tr><td style="color:#64748b;padding:2px 0;font-weight:600">Satuan Barang</td><td style="padding:2px 0">: ${p.unit||'—'}</td></tr>
+          </table>
+        </div>
+        <div style="padding:10px 18px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <tr><td style="color:#64748b;padding:2px 0;width:120px;font-weight:600">Minimum Stok</td><td style="padding:2px 0">: ${p.min||'—'}</td></tr>
+            <tr><td style="color:#64748b;padding:2px 0;font-weight:600">Maximum Stok</td><td style="padding:2px 0">: ${p.max||'—'}</td></tr>
+            <tr><td style="color:#64748b;padding:2px 0;font-weight:600">Lokasi</td><td style="padding:2px 0">: ${p.loc||'—'}</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;background:#fff">
+        <table style="width:100%;border-collapse:collapse;min-width:900px">
+          <thead>
+            <tr style="background:#22c55e;color:#fff">
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 6px;font-size:11px;text-align:center;width:36px">No.</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center;white-space:nowrap">Tanggal</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center">Deskripsi</th>
+              <th colspan="3" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center">Barang</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center;white-space:nowrap">No. Seal</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center;white-space:nowrap">Penanggung Jawab</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center">Keterangan</th>
+              <th rowspan="2" style="border:1px solid #16a34a;padding:7px 8px;font-size:11px;text-align:center;width:68px">Aksi</th>
+            </tr>
+            <tr style="background:#16a34a;color:#fff">
+              <th style="border:1px solid #15803d;padding:5px 8px;font-size:11px;text-align:center;white-space:nowrap">Debit (Masuk)</th>
+              <th style="border:1px solid #15803d;padding:5px 8px;font-size:11px;text-align:center;white-space:nowrap">Kredit (Keluar)</th>
+              <th style="border:1px solid #15803d;padding:5px 8px;font-size:11px;text-align:center">Sisa</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${txnRows || `<tr><td colspan="10" style="text-align:center;padding:32px;color:#94a3b8;font-size:12px;border:1px solid #e2e8f0">Belum ada transaksi — klik <strong>➕ Tambah Transaksi</strong></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
   }).join('');
 }
 
-function submitKartuStok() {
-  const name = document.getElementById('ks-f-name')?.value.trim();
-  if (!name) { showKsSt('error','❌ Nama barang wajib diisi!'); return; }
-  const qty  = document.getElementById('ks-f-qty')?.value;
-  if (!qty)  { showKsSt('error','❌ Jumlah wajib diisi!'); return; }
+// ── PRODUCT FORM ─────────────────────────────────────────────
+function openSCProductForm(idx = -1) {
+  _scProdEditId = null;
+  const products = gSCProducts();
+  if (idx >= 0 && idx < products.length) {
+    const p = products[idx];
+    _scProdEditId = p.id;
+    document.getElementById('sc-prod-modal-title').textContent = '✏️ Edit Produk';
+    document.getElementById('sc-p-name').value = p.name || '';
+    document.getElementById('sc-p-code').value = p.code || '';
+    document.getElementById('sc-p-unit').value = p.unit || '';
+    document.getElementById('sc-p-min').value  = p.min  || '';
+    document.getElementById('sc-p-max').value  = p.max  || '';
+    document.getElementById('sc-p-loc').value  = p.loc  || '';
+    document.getElementById('sc-p-pic').value  = p.pic  || '';
+  } else {
+    document.getElementById('sc-prod-modal-title').textContent = '📦 Tambah Produk';
+    ['sc-p-name','sc-p-code','sc-p-unit','sc-p-min','sc-p-max','sc-p-loc','sc-p-pic'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  }
+  const sb = document.getElementById('sc-p-sb'); if (sb) sb.style.display = 'none';
+  const m  = document.getElementById('sc-prod-modal');
+  if (m) { m.style.display = 'flex'; m.classList.add('show'); }
+}
+
+function closeSCProductForm() {
+  const m = document.getElementById('sc-prod-modal');
+  if (m) { m.style.display = 'none'; m.classList.remove('show'); }
+  _scProdEditId = null;
+}
+
+function submitSCProduct() {
+  const name = document.getElementById('sc-p-name')?.value.trim();
+  if (!name) { showSCProdSt('error', '❌ Product name is required!'); return; }
+  const products = gSCProducts();
   const entry = {
-    id:      _ksEditIdx >= 0 ? gKS()[_ksEditIdx].id : Date.now(),
+    id:   _scProdEditId || Date.now().toString(),
     name,
-    type:    document.getElementById('ks-f-type')?.value || 'in',
-    date:    document.getElementById('ks-f-date')?.value || '',
-    dateIn:  document.getElementById('ks-f-date-in')?.value || '',
-    dateOut: document.getElementById('ks-f-date-out')?.value || '',
-    qty,
-    unit:    document.getElementById('ks-f-unit')?.value.trim() || '',
-    notes:   document.getElementById('ks-f-notes')?.value.trim() || '',
+    code: document.getElementById('sc-p-code')?.value.trim() || '',
+    unit: document.getElementById('sc-p-unit')?.value.trim() || '',
+    min:  document.getElementById('sc-p-min')?.value  || '',
+    max:  document.getElementById('sc-p-max')?.value  || '',
+    loc:  document.getElementById('sc-p-loc')?.value.trim() || '',
+    pic:  document.getElementById('sc-p-pic')?.value.trim() || '',
   };
-  const data = gKS();
-  if (_ksEditIdx >= 0) data[_ksEditIdx] = entry;
-  else data.unshift(entry);
-  sKS(data);
-  showKsSt('success', _ksEditIdx >= 0 ? '✅ Entri diperbarui!' : '✅ Entri stok ditambahkan!');
-  setTimeout(() => { closeKartuStokForm(); renderKartuStok(); }, 800);
+  if (_scProdEditId) {
+    const idx = products.findIndex(p => p.id === _scProdEditId);
+    if (idx >= 0) products[idx] = entry; else products.push(entry);
+  } else {
+    products.push(entry);
+  }
+  sSCProducts(products);
+  showSCProdSt('success', _scProdEditId ? '✅ Product updated!' : '✅ Product added!');
+  setTimeout(() => { closeSCProductForm(); renderStockCards(); }, 700);
 }
-function editKartuStok(idx) {
-  openKartuStokForm(idx);
+
+function deleteSCProduct(id) {
+  const p = gSCProducts().find(x => x.id === id);
+  if (!confirm(`Delete product "${p?.name||id}" and ALL its transactions?`)) return;
+  sSCProducts(gSCProducts().filter(x => x.id !== id));
+  sSCTxn(gSCTxn().filter(t => t.productId !== id));
+  renderStockCards();
+  showQuickToast('🗑️ Product deleted.');
 }
-function deleteKartuStok(idx) {
-  const name = gKS()[idx]?.name || 'entri ini';
-  if (!confirm(`Hapus "${name}"?`)) return;
-  const data = gKS(); data.splice(idx,1); sKS(data); renderKartuStok();
-  showQuickToast('🗑️ Entri dihapus.');
+
+// ── TRANSACTION FORM ─────────────────────────────────────────
+function openSCTxnForm(productId, txnId = null) {
+  _scTxnProdId = productId;
+  _scTxnEditId = txnId;
+  const today = new Date().toISOString().split('T')[0];
+
+  const p   = gSCProducts().find(x => x.id === productId);
+  const lbl = document.getElementById('sc-txn-prod-label');
+  if (lbl) lbl.textContent = p ? `📦 Product: ${p.name}${p.code ? ' (' + p.code + ')' : ''}` : '';
+
+  if (txnId) {
+    const t = gSCTxn().find(x => x.id === txnId);
+    if (t) {
+      document.getElementById('sc-txn-modal-title').textContent = '✏️ Edit Transaksi';
+      document.getElementById('sc-t-date').value   = t.date   || today;
+      document.getElementById('sc-t-debit').value  = t.debit  || '';
+      document.getElementById('sc-t-credit').value = t.credit || '';
+      document.getElementById('sc-t-seal').value   = t.seal   || '';
+      document.getElementById('sc-t-pic').value    = t.pic    || '';
+      document.getElementById('sc-t-desc').value   = t.desc   || '';
+      document.getElementById('sc-t-notes').value  = t.notes  || '';
+    }
+  } else {
+    document.getElementById('sc-txn-modal-title').textContent = '➕ Tambah Transaksi';
+    document.getElementById('sc-t-date').value = today;
+    ['sc-t-debit','sc-t-credit','sc-t-seal','sc-t-pic','sc-t-desc','sc-t-notes'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  }
+  const sb = document.getElementById('sc-t-sb'); if (sb) sb.style.display = 'none';
+  const m  = document.getElementById('sc-txn-modal');
+  if (m) { m.style.display = 'flex'; m.classList.add('show'); }
 }
-function showKsSt(type,msg) {
-  const b=document.getElementById('ks-sb'),m=document.getElementById('ks-sm');
-  if(!b||!m)return; b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg;
-  if(type==='success') setTimeout(()=>{if(b)b.style.display='none';},3000);
+
+function closeSCTxnForm() {
+  const m = document.getElementById('sc-txn-modal');
+  if (m) { m.style.display = 'none'; m.classList.remove('show'); }
+  _scTxnProdId = null; _scTxnEditId = null;
 }
-window.editKartuStok   = editKartuStok;
-window.deleteKartuStok = deleteKartuStok;
+
+function submitSCTxn() {
+  const date   = document.getElementById('sc-t-date')?.value;
+  if (!date)   { showSCTxnSt('error', '❌ Date is required!'); return; }
+  const debit  = document.getElementById('sc-t-debit')?.value  || '';
+  const credit = document.getElementById('sc-t-credit')?.value || '';
+  if (!debit && !credit) { showSCTxnSt('error', '❌ Fill in Debit (In) or Credit (Out)!'); return; }
+  const txns  = gSCTxn();
+  const entry = {
+    id:        _scTxnEditId || Date.now().toString(),
+    productId: _scTxnProdId,
+    date, debit, credit,
+    seal:  document.getElementById('sc-t-seal')?.value.trim()  || '',
+    pic:   document.getElementById('sc-t-pic')?.value.trim()   || '',
+    desc:  document.getElementById('sc-t-desc')?.value.trim()  || '',
+    notes: document.getElementById('sc-t-notes')?.value.trim() || '',
+  };
+  if (_scTxnEditId) {
+    const idx = txns.findIndex(t => t.id === _scTxnEditId);
+    if (idx >= 0) txns[idx] = entry; else txns.push(entry);
+  } else {
+    txns.push(entry);
+  }
+  sSCTxn(txns);
+  showSCTxnSt('success', '✅ Transaction saved!');
+  setTimeout(() => { closeSCTxnForm(); renderStockCards(); }, 700);
+}
+
+function editSCTxn(productId, txnId) {
+  openSCTxnForm(productId, txnId);
+}
+
+function deleteSCTxn(txnId) {
+  if (!confirm('Delete this transaction?')) return;
+  sSCTxn(gSCTxn().filter(t => t.id !== txnId));
+  renderStockCards();
+  showQuickToast('🗑️ Transaction deleted.');
+}
+
+function showSCProdSt(type, msg) {
+  const b = document.getElementById('sc-p-sb'), m = document.getElementById('sc-p-sm');
+  if (!b || !m) return;
+  b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + type; m.textContent = msg;
+  if (type === 'success') setTimeout(() => { if (b) b.style.display = 'none'; }, 3000);
+}
+
+function showSCTxnSt(type, msg) {
+  const b = document.getElementById('sc-t-sb'), m = document.getElementById('sc-t-sm');
+  if (!b || !m) return;
+  b.style.display = 'flex'; b.className = 'de-status-bar de-status-' + type; m.textContent = msg;
+  if (type === 'success') setTimeout(() => { if (b) b.style.display = 'none'; }, 3000);
+}
+
+// ── Backward compat stubs ─────────────────────────────────────
+function openKartuStokForm()  { openSCProductForm(); }
+function closeKartuStokForm() { closeSCProductForm(); }
+function submitKartuStok()    { submitSCProduct(); }
+function renderKartuStok()    { renderStockCards(); }
+function editKartuStok()  {}
+function deleteKartuStok() {}
+function showKsSt(type, msg) {}
+window.editKartuStok    = editKartuStok;
+window.deleteKartuStok  = deleteKartuStok;
+window.openSCProductForm  = openSCProductForm;
+window.closeSCProductForm = closeSCProductForm;
+window.submitSCProduct    = submitSCProduct;
+window.deleteSCProduct    = deleteSCProduct;
+window.openSCTxnForm  = openSCTxnForm;
+window.closeSCTxnForm = closeSCTxnForm;
+window.submitSCTxn    = submitSCTxn;
+window.editSCTxn      = editSCTxn;
+window.deleteSCTxn    = deleteSCTxn;
+window.renderStockCards = renderStockCards;
 
 // ═══════════════════════════════════════════════════════════
 // SURAT JALAN
@@ -8943,151 +9801,154 @@ function downloadSuratJalanPDF(idx) {
     return dt.toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
   };
 
-  // Baris barang — minimal 8 baris agar tabel penuh seperti template
-  const MIN_ROWS = 8;
-  const items = sj.items || [];
-  let rowsHTML = items.map((it, i) => `
-    <tr>
-      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${i+1}</td>
-      <td style="border:1px solid #333;padding:5px 8px;">${it.name||''}</td>
-      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${it.qty||''}</td>
-      <td style="border:1px solid #333;padding:5px 8px;">${it.desc||''}</td>
-    </tr>`).join('');
-  // Tambah baris kosong
-  for (let i = items.length; i < MIN_ROWS; i++) {
-    rowsHTML += `<tr>
-      <td style="border:1px solid #333;padding:5px 8px;text-align:center;">${i+1}</td>
-      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
-      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
-      <td style="border:1px solid #333;padding:5px 8px;">&nbsp;</td>
-    </tr>`;
-  }
+  // Format No. SJ → SJ/dd/mm/yyyy dari tanggal dokumen
+  const fmtNoSJ = (d) => {
+    if (!d) return sj.no || '—';
+    const dt = new Date(d);
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const yyyy = dt.getFullYear();
+    return `SJ/${dd}/${mm}/${yyyy}`;
+  };
+
+  // Baris barang — hanya sebanyak produk yang diisi (tidak ada padding kosong)
+  const items = sj.items?.filter(it => it.name?.trim()) || [];
+  const rowsHTML = items.length
+    ? items.map((it, i) => `
+        <tr>
+          <td style="border:1px solid #555;padding:4px 7px;text-align:center;">${i+1}</td>
+          <td style="border:1px solid #555;padding:4px 7px;">${it.name||''}</td>
+          <td style="border:1px solid #555;padding:4px 7px;text-align:center;">${it.qty||''}</td>
+          <td style="border:1px solid #555;padding:4px 7px;">${it.desc||''}</td>
+        </tr>`).join('')
+    : `<tr>
+        <td style="border:1px solid #555;padding:4px 7px;text-align:center;">1</td>
+        <td style="border:1px solid #555;padding:4px 7px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:4px 7px;">&nbsp;</td>
+        <td style="border:1px solid #555;padding:4px 7px;">&nbsp;</td>
+       </tr>`;
+
+  // Satu blok form (dipakai 2x)
+  const formBlock = `
+    <div class="sj-form">
+      <div class="header">
+        <div class="logo-box">PT SILIWANGI<br>AGRO<br>INDO LESTARI</div>
+        <div class="doc-title">SURAT JALAN</div>
+      </div>
+      <table class="info-table">
+        <tr>
+          <td class="lbl">Tanggal</td><td class="sep">:</td>
+          <td class="val">${fmtDate(sj.date)}</td>
+          <td style="width:30px"></td>
+          <td class="lbl" style="text-align:right">Tujuan</td><td class="sep">:</td>
+          <td class="val" style="min-width:160px;">${sj.penerima||''}</td>
+        </tr>
+        <tr>
+          <td class="lbl">No. SJ</td><td class="sep">:</td>
+          <td class="val">${fmtNoSJ(sj.date)}</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td class="lbl">Nopol / Kendaraan</td><td class="sep">:</td>
+          <td class="val">${sj.kendaraan||''}</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+        <tr>
+          <td class="lbl">Driver</td><td class="sep">:</td>
+          <td class="val">${sj.driver||''}</td>
+          <td></td><td></td><td></td><td></td>
+        </tr>
+      </table>
+      <div style="font-size:11px;margin-bottom:6px;">Dikirimkan barang-barang sebagai berikut :</div>
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="width:32px;">No</th>
+            <th>Nama Barang</th>
+            <th style="width:60px;">QTY</th>
+            <th style="width:180px;">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHTML}</tbody>
+      </table>
+      ${sj.notes ? `<div style="font-size:10px;margin-bottom:7px;">Catatan: ${sj.notes}</div>` : ''}
+      <div class="sig-row">
+        <div class="sig-box"><div class="sig-title">Gudang</div><div class="sig-name">${sj.pengirim||''}</div></div>
+        <div class="sig-box"><div class="sig-title">Driver</div><div class="sig-name">${sj.driver||''}</div></div>
+        <div class="sig-box"><div class="sig-title">Diterima Oleh</div><div class="sig-name"></div></div>
+      </div>
+    </div>`;
 
   const html = `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Surat Jalan ${sj.no}</title>
+  <title>Surat Jalan ${fmtNoSJ(sj.date)}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, sans-serif; font-size:12px; color:#000; background:#fff; padding:20px 28px; }
-    .page { max-width:740px; margin:0 auto; }
+    body { font-family: Arial, sans-serif; font-size:11px; color:#000; background:#fff; }
 
-    /* Header */
-    .header { display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #333; padding-bottom:10px; margin-bottom:14px; }
-    .logo-area { display:flex; align-items:center; gap:10px; }
-    .logo-box { width:70px; height:60px; border:1px solid #aaa; display:flex; align-items:center; justify-content:center; font-size:9px; color:#666; text-align:center; border-radius:4px; }
-    .company-name { font-size:13px; font-weight:700; line-height:1.4; }
-    .company-sub { font-size:9px; color:#555; }
-    .doc-title { font-size:22px; font-weight:700; letter-spacing:2px; text-align:right; }
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 8mm 12mm;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
 
-    /* Info fields */
-    .info-table { width:100%; margin-bottom:14px; }
-    .info-table td { padding:3px 6px; vertical-align:top; font-size:12px; }
-    .info-table td.lbl { width:130px; font-weight:600; }
-    .info-table td.sep { width:14px; text-align:center; }
-    .info-table td.val { border-bottom:1px solid #aaa; min-width:180px; }
-    .info-right td.lbl { text-align:right; }
+    .sj-form {
+      flex: 1;
+      padding: 8px 0 6px 0;
+      border-bottom: 2px dashed #aaa;
+    }
+    .sj-form:last-child { border-bottom: none; }
 
-    /* Items table */
-    .items-table { width:100%; border-collapse:collapse; margin-bottom:18px; }
-    .items-table thead tr { background:#3a4a5c; color:#fff; }
-    .items-table th { border:1px solid #333; padding:7px 8px; text-align:center; font-size:11px; }
-    .items-table td { border:1px solid #333; padding:5px 8px; font-size:11px; }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2.5px solid #333;
+      padding-bottom: 7px;
+      margin-bottom: 10px;
+    }
+    .logo-box {
+      width: 62px; height: 52px;
+      border: 1px solid #aaa;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 8px; color: #555; text-align: center; border-radius: 3px;
+    }
+    .doc-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
 
-    /* Signatures */
-    .sig-row { display:flex; gap:0; border:1px solid #333; }
-    .sig-box { flex:1; padding:10px 14px; min-height:80px; border-right:1px solid #333; }
-    .sig-box:last-child { border-right:none; }
-    .sig-title { font-size:11px; font-weight:700; margin-bottom:6px; }
-    .sig-name { font-size:11px; margin-top:4px; min-height:50px; }
+    .info-table { width: 100%; margin-bottom: 10px; }
+    .info-table td { padding: 2px 5px; vertical-align: top; font-size: 11px; }
+    .info-table td.lbl { width: 120px; font-weight: 600; }
+    .info-table td.sep { width: 12px; text-align: center; }
+    .info-table td.val { border-bottom: 1px solid #999; min-width: 140px; }
 
-    .note-area { font-size:11px; margin-bottom:10px; }
+    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    .items-table thead tr { background: #3a4a5c; color: #fff; }
+    .items-table th { border: 1px solid #555; padding: 5px 7px; text-align: center; font-size: 10px; }
+    .items-table td { border: 1px solid #555; padding: 4px 7px; font-size: 10px; }
+
+    .sig-row { display: flex; border: 1px solid #555; }
+    .sig-box { flex: 1; padding: 8px 12px; min-height: 60px; border-right: 1px solid #555; }
+    .sig-box:last-child { border-right: none; }
+    .sig-title { font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+    .sig-name  { font-size: 10px; margin-top: 3px; min-height: 36px; }
 
     @media print {
-      body { padding:10px 16px; }
-      @page { size: A4; margin: 10mm; }
+      body { margin: 0; }
+      .page { padding: 8mm 12mm; }
+      @page { size: A4; margin: 0; }
     }
   </style>
 </head>
 <body>
 <div class="page">
-
-  <!-- ── HEADER ── -->
-  <div class="header">
-    <div class="logo-area">
-      <div class="logo-box">PT SILIWANGI<br>AGRO<br>INDO LESTARI</div>
-    </div>
-    <div class="doc-title">SURAT JALAN</div>
-  </div>
-
-  <!-- ── INFO ── -->
-  <table class="info-table" style="margin-bottom:6px;">
-    <tr>
-      <td class="lbl">Tanggal</td>
-      <td class="sep">:</td>
-      <td class="val">${fmtDate(sj.date)}</td>
-      <td style="width:40px"></td>
-      <td class="lbl" style="text-align:right">Tujuan</td>
-      <td class="sep">:</td>
-      <td class="val" style="min-width:200px;">${sj.penerima||''}</td>
-    </tr>
-    <tr>
-      <td class="lbl">No. SJ</td>
-      <td class="sep">:</td>
-      <td class="val">${sj.no||''}</td>
-      <td></td>
-      <td></td><td></td><td></td>
-    </tr>
-    <tr>
-      <td class="lbl">Nopol / Kendaraan</td>
-      <td class="sep">:</td>
-      <td class="val">${sj.kendaraan||''}</td>
-      <td></td>
-      <td></td><td></td><td></td>
-    </tr>
-    <tr>
-      <td class="lbl">Driver</td>
-      <td class="sep">:</td>
-      <td class="val">${sj.driver||''}</td>
-      <td></td>
-      <td></td><td></td><td></td>
-    </tr>
-  </table>
-
-  <div style="font-size:12px;margin-bottom:8px;">Dikirimkan barang-barang sebagai berikut :</div>
-
-  <!-- ── ITEMS TABLE ── -->
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th style="width:40px;">No</th>
-        <th>Nama Barang</th>
-        <th style="width:80px;">QTY</th>
-        <th style="width:220px;">Keterangan</th>
-      </tr>
-    </thead>
-    <tbody>${rowsHTML}</tbody>
-  </table>
-
-  ${sj.notes ? `<div class="note-area">Catatan: ${sj.notes}</div>` : ''}
-
-  <!-- ── SIGNATURES ── -->
-  <div class="sig-row">
-    <div class="sig-box">
-      <div class="sig-title">Gudang</div>
-      <div class="sig-name">${sj.pengirim||''}</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-title">Driver</div>
-      <div class="sig-name">${sj.driver||''}</div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-title">Diterima Oleh</div>
-      <div class="sig-name"></div>
-    </div>
-  </div>
-
+  ${formBlock}
+  ${formBlock}
 </div>
 <script>window.onload = () => { window.print(); }<\/script>
 </body>

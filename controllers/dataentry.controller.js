@@ -304,8 +304,30 @@ async function getProductionHistory(req, res) {
 // ═══════════════════════════════════════════════════════════
 async function saveUtility(req, res) {
   try {
-    const d = req.body;
+    let d = req.body;
     if (!d) return res.status(400).json({ success: false, error: 'Body kosong' });
+
+    // ── Flatten nested boiler/chiller format dari frontend ──────────
+    // Frontend kirim: { boiler: { b1: '...', notes: '...' }, chiller: { c1: '...' } }
+    // Controller expect: { b1: '...', c1: '...', notes: '...' }
+    if (d.boiler || d.chiller) {
+      const flat = { ...d };
+      if (d.boiler && typeof d.boiler === 'object') {
+        Object.entries(d.boiler).forEach(([k, v]) => {
+          if (k === 'notes') flat.boiler_notes = v;
+          else flat[k] = v;
+        });
+      }
+      if (d.chiller && typeof d.chiller === 'object') {
+        Object.entries(d.chiller).forEach(([k, v]) => {
+          if (k === 'notes') flat.chiller_notes = v;
+          else flat[k] = v;
+        });
+      }
+      delete flat.boiler;
+      delete flat.chiller;
+      d = flat;
+    }
 
     let projectId = null;
     if (d.project_name) {
@@ -391,7 +413,7 @@ async function saveUtility(req, res) {
         ) VALUES (
           $1,$2,CURRENT_DATE,
           $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-          $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34
+          $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33
         ) RETURNING id
       `, [
         projectId, d.project_name || null,
@@ -502,8 +524,11 @@ async function saveLaboratorium(req, res) {
           cip_lab_checks      = COALESCE($40, cip_lab_checks),
           notes               = COALESCE($41, notes),
           foto_urls           = COALESCE($42, foto_urls),
+          brix_entries        = COALESCE($43, brix_entries),
+          moisture_entries    = COALESCE($44, moisture_entries),
+          cip_lab_entries     = COALESCE($45, cip_lab_entries),
           updated_at          = now()
-        WHERE id = $43 RETURNING id
+        WHERE id = $46 RETURNING id
       `, [
         parseNum(d.b1), parseNum(d.b2), parseNum(d.b3), parseNum(d.b4), parseNum(d.b5),
         d.b6 || null, parseNum(d.b7), parseNum(d.b8), parseIntVal(d.b9),
@@ -520,7 +545,10 @@ async function saveLaboratorium(req, res) {
         d.cip_lab_done === true ? true : null,
         d.cip_lab_checks ? JSON.stringify(d.cip_lab_checks) : null,
         d.notes         || null,
-        d.foto_urls?.length ? JSON.stringify(d.foto_urls) : null,
+        d.foto_urls?.length        ? JSON.stringify(d.foto_urls)        : null,
+        d.brix_entries?.length     ? JSON.stringify(d.brix_entries)     : null,
+        d.moisture_entries?.length ? JSON.stringify(d.moisture_entries) : null,
+        d.cip_lab_entries?.length  ? JSON.stringify(d.cip_lab_entries)  : null,
         existing.rows[0].id,
       ]);
       resultId = upd.rows[0]?.id;
@@ -541,12 +569,13 @@ async function saveLaboratorium(req, res) {
           c15_oil_efficiency, c16_oil_fuel_cons, c17_steam_output, c18_surface_bd,
           boiler_notes, chiller_notes,
           cip_lab_done, cip_lab_checks,
-          notes, foto_urls
+          notes, foto_urls,
+          brix_entries, moisture_entries, cip_lab_entries
         ) VALUES (
           $1,$2,CURRENT_DATE,
           $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
           $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,
-          $40,$41,$42,$43,$44,$45
+          $40,$41,$42,$43,$44,$45,$46,$47
         ) RETURNING id
       `, [
         projectId, d.project_name || null,
@@ -565,7 +594,10 @@ async function saveLaboratorium(req, res) {
         d.cip_lab_done === true,
         JSON.stringify(d.cip_lab_checks || {}),
         d.notes || null,
-        JSON.stringify(d.foto_urls || []),
+        JSON.stringify(d.foto_urls        || []),
+        JSON.stringify(d.brix_entries     || []),
+        JSON.stringify(d.moisture_entries || []),
+        JSON.stringify(d.cip_lab_entries  || []),
       ]);
       resultId = ins.rows[0]?.id;
     }

@@ -157,6 +157,8 @@ const {
   getLingkungan,
   getLatestLingkungan,
   getPatroli,
+  getSensorSettings,
+  saveSensorSettings,
 } = require('../controllers/iotController');
 
 // Dashboard summary (semua sensor terbaru)
@@ -176,5 +178,11 @@ router.get('/lingkungan/latest',  getLatestLingkungan);
 
 // Patroli
 router.get('/patroli',            getPatroli);
+
+// ══ SENSOR SETTINGS (Cross-Device Sync) ════════════════════════════
+// GET  /api/iot/sensor-settings → Load all sensor configs from DB
+// POST /api/iot/sensor-settings → Save/update sensor configs to DB
+router.get('/sensor-settings',  getSensorSettings);
+router.post('/sensor-settings', saveSensorSettings);
 
 module.exports = router;

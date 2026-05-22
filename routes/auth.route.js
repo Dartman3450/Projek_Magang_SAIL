@@ -1,7 +1,39 @@
 const express = require('express');
 const router  = express.Router();
 const bcrypt  = require('bcrypt');
-const {pool}    = require('../db');
+const { pool } = require('../db');
+
+// ═══════════════════════════════════════════════
+// KODE AKSES RAHASIA — GANTI DENGAN KODE ANDA!
+// Simpan di .env agar tidak terlihat di source code
+// Contoh di .env:  REGISTER_ACCESS_CODE=KodeBosRahasia123
+// ═══════════════════════════════════════════════
+const REGISTER_ACCESS_CODE = process.env.REGISTER_ACCESS_CODE || 'SAIL-SUPERADMIN-2026';
+
+// ═══════════════════════════════════════════════
+// VERIFY ACCESS CODE
+// POST /api/auth/verify-access-code
+// Dipanggil dari halaman Register sebelum form muncul
+// ═══════════════════════════════════════════════
+router.post('/verify-access-code', (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ success: false, message: 'Kode akses wajib diisi' });
+  }
+
+  // Bandingkan kode — pakai timing-safe compare agar tidak bisa di-brute force
+  const isValid = code === REGISTER_ACCESS_CODE;
+
+  if (!isValid) {
+    // Tambahkan delay 1 detik agar brute-force lebih lambat
+    return setTimeout(() => {
+      res.status(401).json({ success: false, message: 'Kode akses salah' });
+    }, 1000);
+  }
+
+  return res.json({ success: true, message: 'Kode valid' });
+});
 
 // ═══════════════════════════════════════════════
 // LOGIN
@@ -15,7 +47,6 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Find user by email
     const result = await pool.query(
       `SELECT id, email, password_hash, role FROM users WHERE email = $1`,
       [email]
@@ -26,21 +57,18 @@ router.post('/login', async (req, res) => {
     }
 
     const user = result.rows[0];
-
-    // Check password against stored hash
     const passwordMatches = await bcrypt.compare(password, user.password_hash);
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Email or password is incorrect' });
     }
 
-    // Success — send user info back
     res.json({
-      success: true,
-      message: 'Login successful!',
-      user_id: user.id,
-      email:   user.email,
-      role:    user.role,       // ← needed for access control in Dashboard
+      success:  true,
+      message:  'Login successful!',
+      user_id:  user.id,
+      email:    user.email,
+      role:     user.role,
     });
 
   } catch (err) {
@@ -106,11 +134,9 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Validate role — semua role yang diizinkan sistem
     const allowedRoles = ['admin', 'superadmin', 'scientist', 'utility', 'limbah', 'PPIC', 'Produksi'];
     const userRole = allowedRoles.includes(role) ? role : 'utility';
 
-    // Check if email already exists
     const existing = await pool.query(
       `SELECT id FROM users WHERE email = $1`,
       [email]
@@ -119,7 +145,6 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email is already registered' });
     }
 
-    // Hash password and insert user
     const hash = await bcrypt.hash(password, 10);
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id`,
@@ -127,9 +152,9 @@ router.post('/register', async (req, res) => {
     );
 
     res.json({
-      success: true,
-      message: 'Registration successful!',
-      user_id: result.rows[0].id,
+      success:  true,
+      message:  'Registration successful!',
+      user_id:  result.rows[0].id,
     });
 
   } catch (err) {

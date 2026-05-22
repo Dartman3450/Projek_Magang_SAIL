@@ -23,6 +23,77 @@
   <link rel="stylesheet" href="/Dashboard/css/07-projects.css"/>    <!-- Halaman project -->
   <link rel="stylesheet" href="/Dashboard/css/08-alerts.css"/>      <!-- Water level alert -->
   <link rel="stylesheet" href="/Dashboard/css/09-v2-additions.css"/><!-- v2: Kartu Stok, Surat Jalan, Photo -->
+
+  <!-- ═══ INLINE ALERT BANNER STYLES ═══ -->
+  <style>
+    /* ── Alert Banner Strip ── */
+    #alert-banner-strip {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+      width: 100%;
+      position: sticky;
+      top: 0;
+      z-index: 500;
+    }
+    .alert-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      border-bottom: 1px solid transparent;
+      animation: bannerSlideIn 0.3s ease;
+    }
+    @keyframes bannerSlideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .alert-banner.warn {
+      background: #fefce8;
+      color: #854d0e;
+      border-color: #fde68a;
+    }
+    .alert-banner.danger {
+      background: #fef2f2;
+      color: #991b1b;
+      border-color: #fca5a5;
+      animation: bannerSlideIn 0.3s ease, dangerPulse 2s ease-in-out infinite;
+    }
+    @keyframes dangerPulse {
+      0%, 100% { background: #fef2f2; }
+      50%       { background: #fee2e2; }
+    }
+    .alert-banner-icon { font-size: 14px; flex-shrink: 0; }
+    .alert-banner-text { flex: 1; }
+    .alert-banner-tag {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      padding: 2px 7px;
+      border-radius: 20px;
+      flex-shrink: 0;
+    }
+    .alert-banner.warn  .alert-banner-tag { background: #fde68a; color: #78350f; }
+    .alert-banner.danger .alert-banner-tag { background: #fca5a5; color: #7f1d1d; animation: tagBlink 1s step-end infinite; }
+    @keyframes tagBlink { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .alert-banner-dismiss {
+      background: transparent;
+      border: 1px solid currentColor;
+      color: inherit;
+      border-radius: 5px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      opacity: .7;
+      font-family: inherit;
+      flex-shrink: 0;
+    }
+    .alert-banner-dismiss:hover { opacity: 1; }
+  </style>
 </head>
 <body>
 
@@ -30,7 +101,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="logo-wrap">
     <div class="logo-tag">SAIL</div>
-    <div class="logo-sub">Support Operational System</div>
+    <div class="logo-sub">Operational Support System</div>
   </div>
   <nav class="nav">
     <div class="nav-section-label">Main Menu</div>
@@ -57,16 +128,21 @@
       </div>
     </div>
 
+    <div class="nav-item" onclick="loadPage('organoleptic'); setActive(this);">
+      🧪 Organoleptic
+    </div>
+
     <div class="nav-group">
       <div class="nav-group-head" onclick="toggleNav(this)"><span class="ico">📊</span><span>Reporting</span><span class="arr">▾</span></div>
       <div class="nav-sub">
         <div class="nav-sub-item" onclick="loadPage('reporting')" data-page="reporting">Laporan Harian</div>
+        <div class="nav-sub-item" onclick="loadPage('project-reporting')" data-page="project-reporting">Laporan Project</div>
         <div class="nav-sub-item" onclick="loadPage('surat-jalan')" data-page="surat-jalan">Surat Jalan</div>
       </div>
     </div>
 
     <div class="nav-section-label">Gudang</div>
-    <div class="nav-item" onclick="loadPage('kartu-stok')" data-page="kartu-stok"><span class="ico">📦</span> Kartu Stok</div>
+    <div class="nav-item" onclick="loadPage('kartu-stok')" data-page="kartu-stok"><span class="ico">📦</span>Stock Card</div>
 
     <div class="nav-section-label">Settings</div>
     <div class="nav-group">
@@ -103,10 +179,32 @@
       <div class="clock-txt" id="clock">--:--:--</div>
     </div>
   </div>
+
+  <!-- ═══ ALERT BANNER STRIP — muncul di bawah topbar saat ada bahaya ═══ -->
+  <div id="alert-banner-strip"></div>
   <div class="content" id="content"></div>
 </div>
 
-<script src="/Dashboard/js/app.js"></script>
+<!-- ═══ MODULES ═══ -->
+<script src="/Dashboard/js/styles.js"></script>
+<script src="/Dashboard/js/config.js"></script>
+<script src="/Dashboard/js/session-manager.js"></script>
+<script src="/Dashboard/js/nav.js"></script>
+<script src="/Dashboard/js/iot.js"></script>
+<script src="/Dashboard/js/sensors.js"></script>
+<script src="/Dashboard/js/ui.js"></script>
+<script src="/Dashboard/js/data-entry.js"></script>
+<script src="/Dashboard/js/utility.js"></script>
+<script src="/Dashboard/js/laboratory.js"></script>
+<script src="/Dashboard/js/project.js"></script>
+<script src="/Dashboard/js/production-ops.js"></script>
+<script src="/Dashboard/js/organoleptic.js"></script>
+<script src="/Dashboard/js/reports.js"></script>
+<script src="/Dashboard/js/settings.js"></script>
+<script src="/Dashboard/js/stock.js"></script>
+<script src="/Dashboard/js/surat-jalan.js"></script>
+<script src="/Dashboard/js/missing-functions.js"></script>
+
 
 <!-- ═══ IoT DETAIL DRAWER ═══ -->
 <div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"></div>
@@ -121,33 +219,9 @@
   </div>
 </div>
 
-<!-- ═══ WATER LEVEL ALERT MODALS ═══ -->
-<!-- WARN alert -->
-<div class="wl-alert-overlay" id="wl-warn-overlay">
-  <div class="wl-alert-box warn" id="wl-warn-box">
-    <span class="wl-alert-icon">⚠️</span>
-    <div class="wl-alert-title">Peringatan Level Air</div>
-    <div class="wl-alert-sensor" id="wl-warn-pct">—%</div>
-    <div class="wl-alert-msg">
-      Air berada di bawah batas <strong>WARNING</strong>.<br>
-      Segera periksa pasokan air — level terlalu rendah!
-    </div>
-    <button class="wl-alert-dismiss" onclick="dismissWLAlert('warn')">Mengerti</button>
-  </div>
-</div>
-<!-- DANGER alert -->
-<div class="wl-alert-overlay" id="wl-danger-overlay">
-  <div class="wl-alert-box danger" id="wl-danger-box">
-    <span class="wl-alert-icon">🚨</span>
-    <div class="wl-alert-title">BAHAYA — Air Kritis!</div>
-    <div class="wl-alert-sensor" id="wl-danger-pct">—%</div>
-    <div class="wl-alert-msg">
-      Air telah mencapai level <strong>DANGER</strong>!<br>
-      Tindakan segera diperlukan — sistem dalam risiko!
-    </div>
-    <button class="wl-alert-dismiss" onclick="dismissWLAlert('danger')">Tutup Peringatan</button>
-  </div>
-</div>
+<!-- ═══ WATER LEVEL ALERT MODALS — hidden, IDs kept for JS compatibility ═══ -->
+<div id="wl-warn-overlay"  style="display:none" aria-hidden="true"><span id="wl-warn-pct"></span></div>
+<div id="wl-danger-overlay" style="display:none" aria-hidden="true"><span id="wl-danger-pct"></span><div id="wl-danger-box"></div></div>
 
 <!-- ═══ LOGOUT MODAL ═══ -->
 <div id="logout-overlay" onclick="closeLogout()" style="
@@ -182,6 +256,14 @@
     </button>
   </div>
 </div>
-
+ <script>
+  // Inject user dari localStorage (diset saat login)
+  window.SAIL_USER = {
+    username: localStorage.getItem('email')    || localStorage.getItem('sail_username') || '',
+    name:     localStorage.getItem('name')     || localStorage.getItem('email') || '',
+    role:     localStorage.getItem('role')     || 'user',
+    user_id:  localStorage.getItem('user_id')  || null,
+  };
+</script>
 </body>
 </html>

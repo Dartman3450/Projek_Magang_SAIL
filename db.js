@@ -9,6 +9,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port:     process.env.DB_PORT,
+  query_timeout: 5000,  // 5 second timeout for queries
 };
 
 // Main pool — used by auth.route.js and webauthn.route.js

@@ -65,11 +65,12 @@ async function login(event) {
       return;
     }
 
-    // Simpan session
+    // Simpan session + timestamp login untuk session timeout
     localStorage.setItem('isLoggedin', 'true');
     localStorage.setItem('user_id',    String(data.user_id));
     localStorage.setItem('email',      data.email);
     localStorage.setItem('role',       data.role);
+    localStorage.setItem('login_time', String(Date.now())); // Timestamp login (milliseconds)
 
     showLoginStatus('success', '✅ Login berhasil! Mengalihkan ke dashboard…');
 

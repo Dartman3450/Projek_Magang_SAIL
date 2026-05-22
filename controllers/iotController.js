@@ -9,7 +9,26 @@ const LIMIT = 100;
 async function getSummary(req, res) {
   try {
     const [wlRes, wfRes, envRes, patTotalRes, patListRes] = await Promise.all([
-      poolIoT.query('SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'),
+      poolIoT.query(`
+        SELECT
+          MAX(s1_cm)  FILTER (WHERE s1_cm  IS NOT NULL) AS s1_cm,
+          MAX(s2_cm)  FILTER (WHERE s2_cm  IS NOT NULL) AS s2_cm,
+          MAX(s3_cm)  FILTER (WHERE s3_cm  IS NOT NULL) AS s3_cm,
+          MAX(s4_cm)  FILTER (WHERE s4_cm  IS NOT NULL) AS s4_cm,
+          MAX(s5_cm)  FILTER (WHERE s5_cm  IS NOT NULL) AS s5_cm,
+          MAX(s6_cm)  FILTER (WHERE s6_cm  IS NOT NULL) AS s6_cm,
+          MAX(s7_cm)  FILTER (WHERE s7_cm  IS NOT NULL) AS s7_cm,
+          MAX(s8_cm)  FILTER (WHERE s8_cm  IS NOT NULL) AS s8_cm,
+          MAX(s9_cm)  FILTER (WHERE s9_cm  IS NOT NULL) AS s9_cm,
+          MAX(s10_cm) FILTER (WHERE s10_cm IS NOT NULL) AS s10_cm,
+          MAX(p1)     FILTER (WHERE p1     IS NOT NULL) AS p1,
+          MAX(p2)     FILTER (WHERE p2     IS NOT NULL) AS p2,
+          MAX(created_at) AS created_at
+        FROM (
+          SELECT * FROM laporan_water_level
+          ORDER BY created_at DESC LIMIT 10
+        ) recent
+      `),
       poolIoT.query('SELECT id, rate, total, created_at FROM laporan_water_flow ORDER BY created_at DESC LIMIT 1'),
       poolIoT.query('SELECT id, t, h, raw, stat, created_at FROM laporan_lingkungan ORDER BY created_at DESC LIMIT 1'),
       poolIoT.query("SELECT COUNT(*) AS total FROM laporan_patroli WHERE created_at >= CURRENT_DATE"),
@@ -45,7 +64,7 @@ async function getSummary(req, res) {
 async function getWaterLevel(req, res) {
   try {
     const { rows } = await poolIoT.query(
-      'SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT $1',
+      'SELECT id, s1_cm, s2_cm, s3_cm, s4_cm, s5_cm, s6_cm, s7_cm, s8_cm, s9_cm, s10_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT $1',
       [LIMIT]
     );
     res.json({ success: true, data: rows });
@@ -60,9 +79,26 @@ async function getWaterLevel(req, res) {
 // ════════════════════════════════════════════════════
 async function getLatestWaterLevel(req, res) {
   try {
-    const { rows } = await poolIoT.query(
-      'SELECT id, s1_cm, s2_cm, p1, p2, created_at FROM laporan_water_level ORDER BY created_at DESC LIMIT 1'
-    );
+    const { rows } = await poolIoT.query(`
+      SELECT
+        MAX(s1_cm)  FILTER (WHERE s1_cm  IS NOT NULL) AS s1_cm,
+        MAX(s2_cm)  FILTER (WHERE s2_cm  IS NOT NULL) AS s2_cm,
+        MAX(s3_cm)  FILTER (WHERE s3_cm  IS NOT NULL) AS s3_cm,
+        MAX(s4_cm)  FILTER (WHERE s4_cm  IS NOT NULL) AS s4_cm,
+        MAX(s5_cm)  FILTER (WHERE s5_cm  IS NOT NULL) AS s5_cm,
+        MAX(s6_cm)  FILTER (WHERE s6_cm  IS NOT NULL) AS s6_cm,
+        MAX(s7_cm)  FILTER (WHERE s7_cm  IS NOT NULL) AS s7_cm,
+        MAX(s8_cm)  FILTER (WHERE s8_cm  IS NOT NULL) AS s8_cm,
+        MAX(s9_cm)  FILTER (WHERE s9_cm  IS NOT NULL) AS s9_cm,
+        MAX(s10_cm) FILTER (WHERE s10_cm IS NOT NULL) AS s10_cm,
+        MAX(p1)     FILTER (WHERE p1     IS NOT NULL) AS p1,
+        MAX(p2)     FILTER (WHERE p2     IS NOT NULL) AS p2,
+        MAX(created_at) AS created_at
+      FROM (
+        SELECT * FROM laporan_water_level
+        ORDER BY created_at DESC LIMIT 10
+      ) recent
+    `);
     res.json({ success: true, data: rows[0] || null });
   } catch (err) {
     console.error('getLatestWaterLevel error:', err.message);
@@ -148,6 +184,144 @@ async function getPatroli(req, res) {
   }
 }
 
+// ════════════════════════════════════════════════════
+//  GET /api/iot/sensor-settings
+//  Load all sensor settings from database
+//  Used by frontend to sync settings across devices
+// ════════════════════════════════════════════════════
+async function getSensorSettings(req, res) {
+  try {
+    const { rows } = await poolIoT.query(
+      `SELECT id, fixed_id, key, name, shape, orientasi, tinggi, panjang, lebar, diameter,
+              sensor_zero_cm, warn_pct, crit_pct, notes, is_active, settings_data,
+              created_at, updated_at
+       FROM sensor_settings
+       WHERE is_active = TRUE
+       ORDER BY fixed_id ASC`
+    );
+    
+    res.json({
+      success: true,
+      data: rows,
+      message: `${rows.length} sensor settings loaded`
+    });
+  } catch (err) {
+    console.error('getSensorSettings error:', err.message);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  POST /api/iot/sensor-settings
+//  Save/update sensor settings to database
+//  Called when user changes tank dimensions in settings modal
+// ════════════════════════════════════════════════════
+async function saveSensorSettings(req, res) {
+  try {
+    const { sensors } = req.body;
+    
+    if (!Array.isArray(sensors)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sensors harus berupa array'
+      });
+    }
+
+    if (sensors.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Minimal 1 sensor harus dikirim'
+      });
+    }
+
+    // Process each sensor
+    let saved = 0;
+    let errors = [];
+
+    for (const sensor of sensors) {
+      try {
+        const {
+          id,
+          fixedId,
+          name,
+          key,
+          shape = 'persegi',
+          orientasi = 'vertikal',
+          tinggi,
+          panjang,
+          lebar,
+          diameter,
+          sensorZeroCm = 0,
+          warnPct = 40,
+          critPct = 15,
+          note = '',
+          settingsData = null
+        } = sensor;
+
+        // Use fixedId or id as unique identifier
+        const uniqueId = fixedId || id;
+        
+        if (!uniqueId || !name) {
+          errors.push(`Sensor ${name || '?'} missing ID atau name`);
+          continue;
+        }
+
+        // UPSERT: insert or update
+        const result = await poolIoT.query(
+          `INSERT INTO sensor_settings
+           (fixed_id, key, name, shape, orientasi, tinggi, panjang, lebar, diameter,
+            sensor_zero_cm, warn_pct, crit_pct, notes, is_active, settings_data)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+           ON CONFLICT (fixed_id) DO UPDATE SET
+             key = EXCLUDED.key,
+             name = EXCLUDED.name,
+             shape = EXCLUDED.shape,
+             orientasi = EXCLUDED.orientasi,
+             tinggi = EXCLUDED.tinggi,
+             panjang = EXCLUDED.panjang,
+             lebar = EXCLUDED.lebar,
+             diameter = EXCLUDED.diameter,
+             sensor_zero_cm = EXCLUDED.sensor_zero_cm,
+             warn_pct = EXCLUDED.warn_pct,
+             crit_pct = EXCLUDED.crit_pct,
+             notes = EXCLUDED.notes,
+             settings_data = EXCLUDED.settings_data,
+             updated_at = CURRENT_TIMESTAMP
+           RETURNING id, fixed_id, name, tinggi, panjang, lebar`,
+          [
+            uniqueId, key, name, shape, orientasi, tinggi, panjang, lebar, diameter,
+            sensorZeroCm, warnPct, critPct, note, true, settingsData ? JSON.stringify(settingsData) : null
+          ]
+        );
+
+        if (result.rows.length > 0) {
+          saved++;
+          console.log(`✅ Sensor "${name}" saved to DB (ID: ${result.rows[0].fixed_id})`);
+        }
+
+      } catch (err) {
+        errors.push(`Error saving sensor: ${err.message}`);
+        console.error('Error saving individual sensor:', err.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `✅ ${saved}/${sensors.length} sensor settings tersimpan ke database`,
+      saved,
+      total: sensors.length,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (err) {
+    console.error('saveSensorSettings error:', err.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error saat menyimpan sensor settings'
+    });
+  }
+}
+
 // ✅ All functions exported with correct names matching iotRoutes.js
 async function getLatest(req, res) {
   return getSummary(req, res);
@@ -163,4 +337,6 @@ module.exports = {
   getLingkungan,
   getLatestLingkungan,
   getPatroli,
+  getSensorSettings,
+  saveSensorSettings,
 };

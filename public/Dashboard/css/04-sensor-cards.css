@@ -14,22 +14,12 @@
 }
 
 /* ─── Tank Cards Grid (responsive by count) ──────── */
+/* ─── Tank Cards Grid — layout dihandle oleh JS renderTankCards() ── */
 #wl-tanks-container {
-  display: grid !important;
-  gap: 10px;
   width: 100%;
+  display: block;
 }
-#wl-tanks-container.tanks-1  { grid-template-columns: 1fr; }
-#wl-tanks-container.tanks-2  { grid-template-columns: repeat(2, 1fr); }
-#wl-tanks-container.tanks-3,
-#wl-tanks-container.tanks-4,
-#wl-tanks-container.tanks-5  { grid-template-columns: repeat(2, 1fr); }
-#wl-tanks-container.tanks-6,
-#wl-tanks-container.tanks-7,
-#wl-tanks-container.tanks-8  { grid-template-columns: repeat(3, 1fr); }
-#wl-tanks-container.tanks-9,
-#wl-tanks-container.tanks-10 { grid-template-columns: repeat(4, 1fr); }
-#wl-tanks-container           { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+/* Sub-grid rows dibuat oleh JS sebagai <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px"> */
 
 /* ─── Tank Card Cell ─────────────────────────────── */
 .tank-card-cell {

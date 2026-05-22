@@ -34,11 +34,13 @@
 .esp-badge.waiting   { background: #fef9ec; border-color: #f0d078; color: #9a7200; }
 .esp-badge.connected { background: #edfaf4; border-color: #8edcba; color: #0e7a4a; }
 .esp-badge.error     { background: #fef2f2; border-color: #f0a0a0; color: #b91c1c; }
+.esp-badge.offline   { background: #fef2f2; border-color: #f0a0a0; color: #b91c1c; }
 
 .esp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .esp-badge.waiting   .esp-dot { background: #d4a017; animation: espPulse 1.8s infinite; }
 .esp-badge.connected .esp-dot { background: var(--green); box-shadow: 0 0 5px var(--green); }
 .esp-badge.error     .esp-dot { background: var(--red); }
+.esp-badge.offline   .esp-dot { background: var(--red); }
 
 @keyframes espPulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
 

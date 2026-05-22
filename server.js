@@ -58,16 +58,23 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // ══ ROUTES ═════════════════════════════════════════════════════
-const iotRoutes      = require("./routes/iotRoutes");
-const authRoutes     = require("./routes/auth.route");
-const projectsRoute  = require("./routes/projects.route");
-const dataentryRoute = require("./routes/dataentry.route");
+const iotRoutes       = require("./routes/iotRoutes");
+const authRoutes      = require("./routes/auth.route");   // ← satu-satunya auth route
+const projectsRoute   = require("./routes/projects.route");
+const dataentryRoute  = require("./routes/dataentry.route");
+const kartuStokRoute  = require("./routes/kartuStok.route");
+const suratJalanRoute = require("./routes/suratJalan.route");
 
-app.use("/api/iot",       iotRoutes);
-app.use("/api/webauthn",  require("./routes/webauthn.route"));
-app.use("/api/auth",      authRoutes);
-app.use("/api/projects",  projectsRoute);
-app.use("/api/dataentry", dataentryRoute);
+app.use('/api/organoleptic', require('./routes/organoleptic.route'));
+app.use('/api/receipts',     require('./routes/receipts.route'));
+app.use('/api/kartu-stok',   kartuStokRoute);
+app.use('/api/surat-jalan',  suratJalanRoute);
+app.use("/api/iot",          iotRoutes);
+app.use("/api/webauthn",     require("./routes/webauthn.route"));
+app.use("/api/auth",         authRoutes);   // ← hanya satu, file auth.route.js
+app.use("/api/projects",     projectsRoute);
+app.use("/api/dataentry",    dataentryRoute);
+
 
 // ══ MQTT ═══════════════════════════════════════════════════════
 const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://192.168.0.211";
@@ -108,26 +115,38 @@ mqttClient.on("message", async (topic, message) => {
   try {
     // ── sensor/water_level ──────────────────────────────────────
     if (topic === "sensor/water_level") {
-      const s1Val = data.s1_cm ?? data.s1;
-      const s2Val = data.s2_cm ?? data.s2;
-      const p1Val = data.p1;
-      const p2Val = data.p2;
+      // Build dynamic INSERT — hanya kolom yang ada di payload dan nilainya > 0
+      // Kolom yang tidak ada → NULL di DB (bukan 0), supaya FILTER aggregate di
+      // iotController bisa merge data dari 2 ESP yang kirim terpisah
+      const clamp = v => Math.max(0, Math.min(9999, parseFloat(v)));
+      const cols = [], vals = [];
 
-      if (s1Val == null || s2Val == null) {
-        console.warn("WL: field s1/s2 tidak ada di payload:", JSON.stringify(data));
+      for (let i = 1; i <= 10; i++) {
+        const key = `s${i}`;
+        const raw = data[`${key}_cm`] ?? data[key] ?? null;
+        if (raw != null) {
+          const v = clamp(raw);
+          if (v > 0) { cols.push(`s${i}_cm`); vals.push(v); }
+        }
+      }
+
+      // Pump (opsional)
+      const p1Val = data.p1 ?? data.pump1 ?? null;
+      const p2Val = data.p2 ?? data.pump2 ?? null;
+      if (p1Val != null) { cols.push('p1'); vals.push(parseInt(p1Val)); }
+      if (p2Val != null) { cols.push('p2'); vals.push(parseInt(p2Val)); }
+
+      if (cols.length === 0) {
+        console.warn("WL: tidak ada nilai sensor valid di payload:", JSON.stringify(data));
         return;
       }
 
+      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
       await poolIoT.query(
-        "INSERT INTO laporan_water_level (s1_cm, s2_cm, p1, p2) VALUES ($1, $2, $3, $4)",
-        [
-          Math.max(0, Math.min(9999, parseInt(s1Val))),
-          Math.max(0, Math.min(9999, parseInt(s2Val))),
-          p1Val != null ? parseInt(p1Val) : 1,
-          p2Val != null ? parseInt(p2Val) : 1,
-        ]
+        `INSERT INTO laporan_water_level (${cols.join(', ')}) VALUES (${placeholders})`,
+        vals
       );
-      console.log(`💧 WL saved: s1_cm=${s1Val} s2_cm=${s2Val} p1=${p1Val} p2=${p2Val}`);
+      console.log(`💧 WL saved: ${cols.map((c,i) => `${c}=${vals[i]}`).join(' ')}`);
     }
 
     // ── sensor/water_flow ───────────────────────────────────────
@@ -235,7 +254,6 @@ app.get("/register", (req, res) => {
 // ══ START SERVER ═══════════════════════════════════════════════
 const startServer = () => {
   if (sslOptions) {
-    // HTTPS mode — WebAuthn berfungsi normal
     https.createServer(sslOptions, app).listen(PORT, "0.0.0.0", () => {
       console.log("-------------------------------------------");
       console.log(`🚀 Server SAIL berjalan di port ${PORT} (HTTPS)`);
@@ -245,14 +263,13 @@ const startServer = () => {
       console.log("-------------------------------------------");
     });
   } else {
-    // HTTP fallback — WebAuthn TIDAK berfungsi kecuali di localhost
     app.listen(PORT, "0.0.0.0", () => {
-  console.log("-------------------------------------------");
-  console.log(`🚀 Server SAIL berjalan di port ${PORT}`);
-  console.log(`👉 Akses Lokal    : http://localhost:${PORT}`);
-  console.log(`👉 Akses Jaringan : http://${NETWORK_IP}:${PORT}`);
-  console.log("-------------------------------------------");
-   });
+      console.log("-------------------------------------------");
+      console.log(`🚀 Server SAIL berjalan di port ${PORT}`);
+      console.log(`👉 Akses Lokal    : http://localhost:${PORT}`);
+      console.log(`👉 Akses Jaringan : http://${NETWORK_IP}:${PORT}`);
+      console.log("-------------------------------------------");
+    });
   }
 };
 

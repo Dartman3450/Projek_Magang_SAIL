@@ -162,3 +162,210 @@
   font-family: inherit;
 }
 .fp-item-remove:hover { background: #fee2e2; }
+
+/* ═══════════════════════════════════════════════════════════
+   TAHAPAN PRODUKSI — Floating Fixed Panel (White Theme)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Wrapper — posisi fixed diset via JS (_applyFloatWrapPosition) */
+.dep-stage-float-wrap {
+  /* JS sets: position:fixed; left:Xpx; top:Ypx; right:0; z-index:200 */
+}
+
+/* Panel utama — putih */
+.pst-float-panel {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 24px rgba(0,0,0,.10), 0 1px 4px rgba(0,0,0,.06);
+  animation: pstSlideDown .25s cubic-bezier(.16,1,.3,1);
+}
+@keyframes pstSlideDown {
+  from { opacity:0; transform:translateY(-10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+/* Header panel */
+.pst-float-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.pst-float-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--txt);
+  letter-spacing: .2px;
+}
+
+.pst-badge {
+  font-size: 10px;
+  background: #7c3aed;
+  color: white;
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-weight: 700;
+}
+
+/* Body panel */
+.pst-float-body {
+  padding: 8px 20px 10px;
+  overflow-y: auto;
+  max-height: calc(46vh - 48px);
+}
+
+/* Grid 2 kolom */
+.pst-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+}
+
+/* Setiap baris tahapan */
+.pst-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.pst-row:last-child { border-bottom: none; }
+
+.pst-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txt2);
+}
+
+.pst-ts {
+  font-size: 10px;
+  font-family: 'DM Mono', monospace;
+  font-weight: 400;
+  color: var(--txt3);
+  white-space: nowrap;
+  min-width: 100px;
+  text-align: right;
+}
+.pst-ts.pst-ts-done {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.pst-btn {
+  padding: 4px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  min-width: 56px;
+  cursor: pointer;
+  transition: filter .15s, transform .1s;
+}
+.pst-btn:hover:not(:disabled) { filter: brightness(1.1); transform: scale(1.04); }
+.pst-btn-start { background: #dc2626; }
+.pst-btn-run   { background: #15803d; cursor: default; }
+
+/* Footer — tombol Tutup di tengah bawah panel */
+.pst-float-footer {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+.pst-close-tab {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 20px 20px;
+  padding: 4px 24px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--txt3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background .15s, color .15s;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: 0 4px 10px rgba(0,0,0,.07);
+}
+.pst-close-tab:hover { background: #eef2f7; color: var(--txt2); }
+.pst-close-tab-arrow { font-size: 10px; }
+
+/* Tombol reopen — posisi fixed diset via JS saat ditutup */
+.dep-stage-reopen-btn button {
+  pointer-events: all;
+  background: var(--surface);
+  color: var(--txt2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 20px 20px;
+  padding: 5px 22px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.10);
+  transition: background .15s, color .15s;
+  font-family: 'DM Sans', sans-serif;
+  letter-spacing: .2px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.dep-stage-reopen-btn button:hover { background: #eef2f7; color: var(--txt); }
+
+/* ═══════════════════════════════════════════════════════════
+   STOCK CARD — FINISH STATUS & STAMP
+   ═══════════════════════════════════════════════════════════ */
+.sc-card-wrapper {
+  position: relative;
+}
+.sc-card-wrapper.finished {
+  /* Hanya blur bagian isi, tidak header dengan tombol dan stamp */
+}
+/* Blur hanya div info produk dan tabel transaksi, bukan header */
+.sc-card-wrapper.finished > div:nth-child(3),
+.sc-card-wrapper.finished > div:nth-child(4) {
+  filter: blur(2px);
+  pointer-events: none;
+}
+.sc-card-wrapper.finished .sc-actions {
+  pointer-events: auto;
+}
+.sc-stamp {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-15deg);
+  width: auto;
+  background: #dc2626;
+  color: white;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.85;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  display: none;
+  border-radius: 6px;
+}
+.sc-card-wrapper.finished .sc-stamp {
+  display: block;
+}
+.sc-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  transition: opacity .2s;
+}

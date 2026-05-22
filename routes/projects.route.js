@@ -101,9 +101,12 @@ router.put('/:id', async (req, res) => {
     if (d.cip_prod_checks !== undefined) add('cip_prod_checks', JSON.stringify(d.cip_prod_checks));
     if (d.cip_lab_done  !== undefined) add('cip_lab_done',    d.cip_lab_done);
     if (d.cip_lab_checks !== undefined) add('cip_lab_checks', JSON.stringify(d.cip_lab_checks));
-    if (d.fp_done       !== undefined) add('fp_done',         d.fp_done);
-    if (d.fp_entries    !== undefined) add('fp_entries',      JSON.stringify(d.fp_entries));
-    if (d.locked        !== undefined) add('locked',          d.locked);
+    if (d.fp_done              !== undefined) add('fp_done',              d.fp_done);
+    if (d.fp_entries           !== undefined) add('fp_entries',           JSON.stringify(d.fp_entries));
+    if (d.locked               !== undefined) add('locked',               d.locked);
+    if (d.extraction_done      !== undefined) add('extraction_done',      d.extraction_done);
+    if (d.extraction_checks    !== undefined) add('extraction_checks',    JSON.stringify(d.extraction_checks));
+    if (d.extraction_timestamps!== undefined) add('extraction_timestamps',JSON.stringify(d.extraction_timestamps));
 
     add('updated_at', new Date());
 
@@ -169,27 +172,63 @@ router.put('/:id/setpoint', async (req, res) => {
 router.put('/:id/cip', async (req, res) => {
   try {
     const { id } = req.params;
-    const { cip_prod_done, cip_prod_checks, cip_lab_done, cip_lab_checks } = req.body;
+    const {
+      cip_prod_done, cip_prod_checks, cip_prod_timestamps,
+      cip_lab_done,  cip_lab_checks,  cip_lab_timestamps,
+    } = req.body;
     const { rows } = await pool.query(`
       UPDATE projects SET
-        cip_prod_done   = COALESCE($1, cip_prod_done),
-        cip_prod_checks = COALESCE($2, cip_prod_checks),
-        cip_lab_done    = COALESCE($3, cip_lab_done),
-        cip_lab_checks  = COALESCE($4, cip_lab_checks),
-        updated_at      = now()
-      WHERE id = $5
+        cip_prod_done       = COALESCE($1, cip_prod_done),
+        cip_prod_checks     = COALESCE($2, cip_prod_checks),
+        cip_prod_timestamps = COALESCE($3, cip_prod_timestamps),
+        cip_lab_done        = COALESCE($4, cip_lab_done),
+        cip_lab_checks      = COALESCE($5, cip_lab_checks),
+        cip_lab_timestamps  = COALESCE($6, cip_lab_timestamps),
+        updated_at          = now()
+      WHERE id = $7
       RETURNING *
     `, [
-      cip_prod_done   != null ? cip_prod_done  : null,
-      cip_prod_checks ? JSON.stringify(cip_prod_checks) : null,
-      cip_lab_done    != null ? cip_lab_done   : null,
-      cip_lab_checks  ? JSON.stringify(cip_lab_checks)  : null,
+      cip_prod_done       != null ? cip_prod_done                       : null,
+      cip_prod_checks     ? JSON.stringify(cip_prod_checks)             : null,
+      cip_prod_timestamps ? JSON.stringify(cip_prod_timestamps)         : null,
+      cip_lab_done        != null ? cip_lab_done                        : null,
+      cip_lab_checks      ? JSON.stringify(cip_lab_checks)              : null,
+      cip_lab_timestamps  ? JSON.stringify(cip_lab_timestamps)          : null,
       id,
     ]);
     if (!rows.length) return res.status(404).json({ success: false, error: 'Project not found' });
     res.json({ success: true, data: rows[0] });
   } catch (err) {
     console.error('PUT /projects/:id/cip:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════
+// PUT /api/projects/:id/extraction — simpan Extraction checklist
+// ════════════════════════════════════════════════════════
+router.put('/:id/extraction', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { extraction_done, extraction_checks, extraction_timestamps } = req.body;
+    const { rows } = await pool.query(`
+      UPDATE projects SET
+        extraction_done       = COALESCE($1, extraction_done),
+        extraction_checks     = COALESCE($2, extraction_checks),
+        extraction_timestamps = COALESCE($3, extraction_timestamps),
+        updated_at            = now()
+      WHERE id = $4
+      RETURNING *
+    `, [
+      extraction_done       != null ? extraction_done                   : null,
+      extraction_checks     ? JSON.stringify(extraction_checks)         : null,
+      extraction_timestamps ? JSON.stringify(extraction_timestamps)     : null,
+      id,
+    ]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Project not found' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error('PUT /projects/:id/extraction:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -217,6 +256,29 @@ router.put('/:id/fp', async (req, res) => {
     res.json({ success: true, data: rows[0] });
   } catch (err) {
     console.error('PUT /projects/:id/fp:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════
+// PUT /api/projects/:id/stages — simpan Production Stage timestamps
+// ════════════════════════════════════════════════════════
+router.put('/:id/stages', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { prod_stages } = req.body;
+    if (!prod_stages) return res.status(400).json({ success: false, error: 'prod_stages required' });
+    const { rows } = await pool.query(`
+      UPDATE projects SET
+        prod_stages = $1,
+        updated_at  = now()
+      WHERE id = $2
+      RETURNING *
+    `, [JSON.stringify(prod_stages), id]);
+    if (!rows.length) return res.status(404).json({ success: false, error: 'Project not found' });
+    res.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error('PUT /projects/:id/stages:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

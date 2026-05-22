@@ -77,8 +77,21 @@ router.get ('/laboratorium',  ctrl.getLaboratorium);
 router.post('/limbah',        ctrl.saveLimbah);
 router.get ('/limbah',        ctrl.getLimbah);
 
+// ── Laboratorium Harian ──────────────────────────────────
+router.post('/laboratorium-harian', ctrl.saveLaboratoriumHarian);
+router.get ('/laboratorium-harian', ctrl.getLaboratoriumHarian);
+
+// ── Limbah Harian ─────────────────────────────────────────
+router.post('/limbah-harian', ctrl.saveLimbahHarian);
+router.get ('/limbah-harian', ctrl.getLimbahHarian);
+
 // ── Laporan Harian ───────────────────────────────────────
 router.post('/laporan',       ctrl.saveLaporan);
 router.get ('/laporan',       ctrl.getLaporan);
+
+// ── Lab Samples (master data — sync antar perangkat) ─────────
+router.get   ('/lab-samples', ctrl.getLabSamples);
+router.post  ('/lab-samples', ctrl.createLabSample);
+router.delete('/lab-samples', ctrl.deleteLabSample);
 
 module.exports = router;

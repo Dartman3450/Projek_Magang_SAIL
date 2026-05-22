@@ -3,56 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Register – SAIL</title>
-  <link rel="stylesheet" href="../Homepage/sail-unified.css">
+  <title>Register – SAIL (Admin Only)</title>
+  <link rel="stylesheet" href="/Homepage/sail-unified.css">
   <style>
-    /* Role dropdown — matches form-input style */
-    .form-select {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1.5px solid var(--border, #e4e8ed);
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 14px;
-      color: var(--txt, #1a202c);
-      background: var(--bg, #f4f6f8);
-      outline: none;
-      cursor: pointer;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 12px center;
-      transition: border-color .15s, box-shadow .15s;
-    }
-    .form-select:focus {
-      border-color: var(--blue, #2b7de9);
-      box-shadow: 0 0 0 3px rgba(43,125,233,0.10);
-      background-color: white;
-    }
-
-    /* Role description hint below dropdown */
-    .role-hint {
-      font-size: 11px;
-      color: var(--txt3, #a0aec0);
-      margin-top: 5px;
-      min-height: 16px;
-      transition: all .15s;
-    }
-
-    /* Inline status bar */
-    .reg-status {
-      display: none;
+    .page-center {
+      display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      margin-top: 10px;
+      justify-content: center;
+      min-height: calc(100vh - 60px);
+      background: #eef1f5;
+      padding: 32px 16px;
     }
-    .reg-status.error   { display: flex; background: #fff5f5; border: 1px solid #fecaca; color: #dc3545; }
-    .reg-status.success { display: flex; background: #f0fdf4; border: 1px solid #bbf7d0; color: #18a96a; }
-    .reg-status.loading { display: flex; background: #eff6ff; border: 1px solid #bfdbfe; color: #2b7de9; }
+    .card { width: 100%; max-width: 440px; }
+
+    /* Gate overlay — ditampilkan dulu sebelum form register */
+    #gate-screen { display: block; }
+    #register-screen { display: none; }
+
+    .login-status { display:none; margin-top:12px; padding:10px 14px;
+      border-radius:8px; font-size:13px; font-weight:600; }
+    .login-status.error   { display:block; background:#fef2f2;color:#b91c1c;border:1px solid #fecaca; }
+    .login-status.success { display:block; background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0; }
+    .login-status.loading { display:block; background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe; }
   </style>
 </head>
 <body>
@@ -61,65 +33,175 @@
       <div class="brand-name">SAIL</div>
       <div class="brand-sub">Support Operational System</div>
     </div>
-    <div class="nav-hint">Register</div>
+    <div class="nav-hint">Register (Admin)</div>
   </div>
 
   <div class="page-center">
     <div class="card">
       <div class="card-accent"></div>
-      <div class="card-body">
+
+      <!-- ── STEP 1: Gate — masukkan kode rahasia ── -->
+      <div id="gate-screen" class="card-body">
+        <div class="card-icon">🔑</div>
+        <div class="card-title">Admin Access Required</div>
+        <div class="card-desc">Halaman ini hanya untuk admin. Masukkan kode akses untuk melanjutkan.</div>
+
+        <div class="form-group" style="margin-top:20px;">
+          <label class="form-label" for="access-code">Kode Akses</label>
+          <input class="form-input" type="password" id="access-code" placeholder="Masukkan kode rahasia…">
+        </div>
+        <button class="btn-primary" id="btn-verify">Verifikasi</button>
+        <div id="gate-status" class="login-status"></div>
+
+        <div style="margin-top:16px;text-align:center;">
+          <a href="/" class="card-link" style="font-size:13px;">← Kembali ke Login</a>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: Form Register (muncul setelah kode benar) ── -->
+      <div id="register-screen" class="card-body">
         <div class="card-icon">👤</div>
-        <div class="card-title">Create Account</div>
-        <div class="card-desc">Register to get access to the SAIL operational dashboard.</div>
+        <div class="card-title">Buat Akun Baru</div>
+        <div class="card-desc">Isi data di bawah untuk membuat akun user baru.</div>
 
-        <form onsubmit="register(event)">
+        <form id="registerForm" style="margin-top:20px;">
           <div class="form-group">
-            <label class="form-label" for="email">Email Address</label>
-            <input class="form-input" type="email" id="email" placeholder="user@sail.id" required>
+            <label class="form-label" for="reg-email">Email Address</label>
+            <input class="form-input" type="email" id="reg-email" placeholder="user@sail.id" required>
           </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="password">Password</label>
-              <input class="form-input" type="password" id="password" placeholder="Min. 6 characters" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="confirm-password">Confirm Password</label>
-              <input class="form-input" type="password" id="confirm-password" placeholder="••••••••" required>
-            </div>
-          </div>
-
-          <!-- Role selection -->
           <div class="form-group">
-            <label class="form-label" for="role">Account Role</label>
-            <select class="form-select" id="role" onchange="updateRoleHint()">
+            <label class="form-label" for="reg-password">Password</label>
+            <input class="form-input" type="password" id="reg-password" placeholder="Min. 6 karakter" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-role">Role</label>
+            <select class="form-input" id="reg-role">
               <option value="utility">Utility</option>
               <option value="scientist">Scientist</option>
-              <option value="Produksi">Produksi</option>
-              <option value="PPIC">PPIC</option>
               <option value="limbah">Limbah</option>
+              <option value="PPIC">PPIC</option>
+              <option value="Produksi">Produksi</option>
               <option value="admin">Admin</option>
-              <option value="superadmin">Super Admin</option>
             </select>
-            <div class="role-hint" id="role-hint">
-              Access: Dashboard, Data Entry Utility, Reporting, Settings
-            </div>
           </div>
-
-          <button type="submit" class="btn-primary" id="btn-register">Create Account →</button>
+          <button type="submit" class="btn-primary" id="btn-register">Buat Akun</button>
+          <div id="reg-status" class="login-status"></div>
         </form>
 
-        <!-- Status message — replaces alert() -->
-        <div class="reg-status" id="reg-status"></div>
-
+        <div style="margin-top:16px;text-align:center;">
+          <a href="/" class="card-link" style="font-size:13px;">← Kembali ke Login</a>
+        </div>
       </div>
+
       <div class="card-footer">
-        <a href="/" class="card-link">Already have an account? Sign in</a>
-        <div class="card-note">Only registered users can access the system</div>
+        <div class="card-note">Akses terbatas — hanya untuk administrator sistem</div>
       </div>
     </div>
   </div>
 
-  <script src="/Register/Register.js"></script>
+  <script>
+    // ═══════════════════════════════════════════
+    // STEP 1: Verifikasi kode akses ke backend
+    // ═══════════════════════════════════════════
+    document.getElementById('btn-verify').addEventListener('click', async () => {
+      const code = document.getElementById('access-code').value.trim();
+      const statusEl = document.getElementById('gate-status');
+
+      if (!code) {
+        statusEl.className = 'login-status error';
+        statusEl.textContent = '❌ Kode akses tidak boleh kosong';
+        return;
+      }
+
+      statusEl.className = 'login-status loading';
+      statusEl.textContent = '⏳ Memverifikasi…';
+
+      try {
+        const res = await fetch('/api/auth/verify-access-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          statusEl.className = 'login-status error';
+          statusEl.textContent = '❌ ' + (data.message || 'Kode akses salah');
+          return;
+        }
+
+        // Kode benar → tampilkan form register
+        document.getElementById('gate-screen').style.display = 'none';
+        document.getElementById('register-screen').style.display = 'block';
+
+      } catch (err) {
+        statusEl.className = 'login-status error';
+        statusEl.textContent = '❌ Tidak bisa terhubung ke server';
+      }
+    });
+
+    // Enter key pada input kode
+    document.getElementById('access-code').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('btn-verify').click();
+    });
+
+    // ═══════════════════════════════════════════
+    // STEP 2: Submit form register
+    // ═══════════════════════════════════════════
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email    = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const role     = document.getElementById('reg-role').value;
+      const statusEl = document.getElementById('reg-status');
+      const btn      = document.getElementById('btn-register');
+
+      if (!email || !password) {
+        statusEl.className = 'login-status error';
+        statusEl.textContent = '❌ Email dan password wajib diisi';
+        return;
+      }
+      if (password.length < 6) {
+        statusEl.className = 'login-status error';
+        statusEl.textContent = '❌ Password minimal 6 karakter';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Membuat akun…';
+      statusEl.className = 'login-status loading';
+      statusEl.textContent = '⏳ Menyimpan data…';
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, role }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          statusEl.className = 'login-status error';
+          statusEl.textContent = '❌ ' + (data.message || 'Gagal membuat akun');
+          btn.disabled = false;
+          btn.textContent = 'Buat Akun';
+          return;
+        }
+
+        statusEl.className = 'login-status success';
+        statusEl.textContent = `✅ Akun berhasil dibuat! (ID: ${data.user_id})`;
+        document.getElementById('registerForm').reset();
+        btn.disabled = false;
+        btn.textContent = 'Buat Akun';
+
+      } catch (err) {
+        statusEl.className = 'login-status error';
+        statusEl.textContent = '❌ Tidak bisa terhubung ke server';
+        btn.disabled = false;
+        btn.textContent = 'Buat Akun';
+      }
+    });
+  </script>
 </body>
 </html>

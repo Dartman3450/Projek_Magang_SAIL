@@ -300,35 +300,48 @@ async function getProductionHistory(req, res) {
 
 
 // ═══════════════════════════════════════════════════════════
-// UTILITY — UPSERT per project + tanggal
+// UTILITY HARIAN — INSERT ke tabel de_utility_harian (Solar/Listrik/Air)
+// UTILITY PROJECT — UPSERT ke tabel de_utility (Boiler/Chiller)
 // ═══════════════════════════════════════════════════════════
 async function saveUtility(req, res) {
   try {
-    let d = req.body;
+    const d = req.body;
     if (!d) return res.status(400).json({ success: false, error: 'Body kosong' });
 
-    // ── Flatten nested boiler/chiller format dari frontend ──────────
-    // Frontend kirim: { boiler: { b1: '...', notes: '...' }, chiller: { c1: '...' } }
-    // Controller expect: { b1: '...', c1: '...', notes: '...' }
-    if (d.boiler || d.chiller) {
-      const flat = { ...d };
-      if (d.boiler && typeof d.boiler === 'object') {
-        Object.entries(d.boiler).forEach(([k, v]) => {
-          if (k === 'notes') flat.boiler_notes = v;
-          else flat[k] = v;
-        });
-      }
-      if (d.chiller && typeof d.chiller === 'object') {
-        Object.entries(d.chiller).forEach(([k, v]) => {
-          if (k === 'notes') flat.chiller_notes = v;
-          else flat[k] = v;
-        });
-      }
-      delete flat.boiler;
-      delete flat.chiller;
-      d = flat;
+    // ── Flatten nested boiler/chiller payload dari frontend ──
+    // Frontend kirim: { boiler: { b1, b2, ... }, chiller: { c1, c2, ... } }
+    if (d.boiler && typeof d.boiler === 'object') {
+      Object.assign(d, d.boiler);
+    }
+    if (d.chiller && typeof d.chiller === 'object') {
+      const { notes: chillerNotes, ...chillerFields } = d.chiller;
+      Object.assign(d, chillerFields);
+      if (chillerNotes) d.chiller_notes = chillerNotes;
     }
 
+    // ── Data Harian (Solar / Listrik / Air) → tabel de_utility_harian ──
+    if (d.tipe === 'harian') {
+      const ins = await pool.query(`
+        INSERT INTO de_utility_harian (
+          tanggal, kategori, label, awal, akhir, total, notes, foto_urls
+        ) VALUES (
+          COALESCE($1::date, CURRENT_DATE),
+          $2, $3, $4, $5, $6, $7, $8
+        ) RETURNING id
+      `, [
+        d.tanggal      || null,
+        d.kategori     || null,
+        d.label        || null,
+        d.awal  != null ? parseFloat(d.awal)  : null,
+        d.akhir != null ? parseFloat(d.akhir) : null,
+        d.total != null ? parseFloat(d.total) : null,
+        d.notes        || null,
+        JSON.stringify(d.foto_urls || []),
+      ]);
+      return res.json({ success: true, id: ins.rows[0]?.id, action: 'inserted' });
+    }
+
+    // ── Data Project (Boiler/Chiller) → tabel de_utility ──
     let projectId = null;
     if (d.project_name) {
       const pRes = await pool.query(
@@ -409,14 +422,16 @@ async function saveUtility(req, res) {
           c1_set_point, c2_water_in_temp, c3_water_out_temp, c4_cap,
           c5_discharge_a, c6_suction_a, c7_discharge_b, c8_suction_b,
           c9_unit_capacity, c10_cir_a_capacity, c11_cir_b_capacity,
-          notes, foto_urls
+          notes, chiller_notes, foto_urls
         ) VALUES (
-          $1,$2,CURRENT_DATE,
-          $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-          $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33
+          $1,$2,$3,
+          $4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+          $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
         ) RETURNING id
       `, [
-        projectId, d.project_name || null,
+        projectId,
+        d.project_name || null,
+        d.tanggal || new Date().toISOString().split('T')[0],
         parseNum(d.b1), parseNum(d.b2), parseNum(d.b3), parseNum(d.b4), parseNum(d.b5),
         d.b6 || null, parseNum(d.b7), parseNum(d.b8), parseIntVal(d.b9),
         d.b10 || null, d.b11 || null,
@@ -425,7 +440,8 @@ async function saveUtility(req, res) {
         parseNum(d.c1), parseNum(d.c2), parseNum(d.c3), parseNum(d.c4),
         parseNum(d.c5), parseNum(d.c6), parseNum(d.c7), parseNum(d.c8),
         parseNum(d.c9), parseNum(d.c10), parseNum(d.c11),
-        d.notes || null,
+        d.notes         || null,
+        d.chiller_notes || null,
         JSON.stringify(d.foto_urls || []),
       ]);
       resultId = ins.rows[0]?.id;
@@ -440,12 +456,30 @@ async function saveUtility(req, res) {
 
 async function getUtility(req, res) {
   try {
-    const { project_name, tanggal } = req.query;
-    let q = `SELECT * FROM de_utility WHERE 1=1`;
+    const { project_name, tanggal, tanggal_dari, tanggal_sampai, tipe, kategori, limit } = req.query;
+    const maxRows = Math.min(parseInt(limit) || 200, 500);
+
+    // ── Query harian → de_utility_harian ──
+    if (tipe === 'harian') {
+      let q = `SELECT *, 'harian' AS tipe FROM de_utility_harian WHERE 1=1`;
+      const params = [];
+      if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+      if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+      if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+      if (kategori)       { params.push(kategori);        q += ` AND kategori = $${params.length}`; }
+      q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
+      const result = await pool.query(q, params);
+      return res.json({ success: true, data: result.rows });
+    }
+
+    // ── Query project → de_utility ──
+    let q = `SELECT *, 'project' AS tipe FROM de_utility WHERE 1=1`;
     const params = [];
-    if (project_name) { params.push(project_name); q += ` AND project_name = $${params.length}`; }
-    if (tanggal)      { params.push(tanggal);       q += ` AND tanggal = $${params.length}`; }
-    q += ` ORDER BY created_at DESC LIMIT 50`;
+    if (project_name)   { params.push(project_name);   q += ` AND project_name = $${params.length}`; }
+    if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+    if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+    if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+    q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
     const result = await pool.query(q, params);
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -456,6 +490,8 @@ async function getUtility(req, res) {
 
 // ═══════════════════════════════════════════════════════════
 // LABORATORIUM — UPSERT per project + tanggal
+// Payload: project_name, brix_entries[], moisture_entries[],
+//          cip_lab_done, cip_lab_checks{}, cip_lab_entries[], notes, foto_urls[]
 // ═══════════════════════════════════════════════════════════
 async function saveLaboratorium(req, res) {
   try {
@@ -477,127 +513,51 @@ async function saveLaboratorium(req, res) {
       [d.project_name || '']
     );
 
+    const brixJSON   = d.brix_entries?.length    ? JSON.stringify(d.brix_entries)    : null;
+    const moistJSON  = d.moisture_entries?.length ? JSON.stringify(d.moisture_entries): null;
+    const cipEntJSON = d.cip_lab_entries?.length  ? JSON.stringify(d.cip_lab_entries) : null;
+    const cipChkJSON = d.cip_lab_checks           ? JSON.stringify(d.cip_lab_checks)  : null;
+    const fotoJSON   = d.foto_urls?.length        ? JSON.stringify(d.foto_urls)       : null;
+    const cipDone    = d.cip_lab_done === true ? true : null;
+
     let resultId;
 
     if (existing.rows.length > 0) {
       const upd = await pool.query(`
         UPDATE de_laboratorium SET
-          b1_steam_press      = COALESCE($1,  b1_steam_press),
-          b2_fg_temp          = COALESCE($2,  b2_fg_temp),
-          b3_fw_temp          = COALESCE($3,  b3_fw_temp),
-          b4_scale_temp       = COALESCE($4,  b4_scale_temp),
-          b5_overheat_temp    = COALESCE($5,  b5_overheat_temp),
-          b6_next_blowdown    = COALESCE($6,  b6_next_blowdown),
-          b7_conductivity     = COALESCE($7,  b7_conductivity),
-          b8_air_press        = COALESCE($8,  b8_air_press),
-          b9_ignition_count   = COALESCE($9,  b9_ignition_count),
-          b10_oil_lfire_time  = COALESCE($10, b10_oil_lfire_time),
-          b11_oil_hfire_time  = COALESCE($11, b11_oil_hfire_time),
-          b12_flue_lfire_temp = COALESCE($12, b12_flue_lfire_temp),
-          b13_flue_hfire_temp = COALESCE($13, b13_flue_hfire_temp),
-          b14_fw_avg_temp     = COALESCE($14, b14_fw_avg_temp),
-          b15_oil_efficiency  = COALESCE($15, b15_oil_efficiency),
-          b16_oil_fuel_cons   = COALESCE($16, b16_oil_fuel_cons),
-          b17_steam_output    = COALESCE($17, b17_steam_output),
-          b18_surface_bd      = COALESCE($18, b18_surface_bd),
-          c1_steam_press      = COALESCE($19, c1_steam_press),
-          c2_fg_temp          = COALESCE($20, c2_fg_temp),
-          c3_fw_temp          = COALESCE($21, c3_fw_temp),
-          c4_scale_temp       = COALESCE($22, c4_scale_temp),
-          c5_overheat_temp    = COALESCE($23, c5_overheat_temp),
-          c6_next_blowdown    = COALESCE($24, c6_next_blowdown),
-          c7_conductivity     = COALESCE($25, c7_conductivity),
-          c8_air_press        = COALESCE($26, c8_air_press),
-          c9_ignition_count   = COALESCE($27, c9_ignition_count),
-          c10_oil_lfire_time  = COALESCE($28, c10_oil_lfire_time),
-          c11_oil_hfire_time  = COALESCE($29, c11_oil_hfire_time),
-          c12_flue_lfire_temp = COALESCE($30, c12_flue_lfire_temp),
-          c13_flue_hfire_temp = COALESCE($31, c13_flue_hfire_temp),
-          c14_fw_avg_temp     = COALESCE($32, c14_fw_avg_temp),
-          c15_oil_efficiency  = COALESCE($33, c15_oil_efficiency),
-          c16_oil_fuel_cons   = COALESCE($34, c16_oil_fuel_cons),
-          c17_steam_output    = COALESCE($35, c17_steam_output),
-          c18_surface_bd      = COALESCE($36, c18_surface_bd),
-          boiler_notes        = COALESCE($37, boiler_notes),
-          chiller_notes       = COALESCE($38, chiller_notes),
-          cip_lab_done        = COALESCE($39, cip_lab_done),
-          cip_lab_checks      = COALESCE($40, cip_lab_checks),
-          notes               = COALESCE($41, notes),
-          foto_urls           = COALESCE($42, foto_urls),
-          brix_entries        = COALESCE($43, brix_entries),
-          moisture_entries    = COALESCE($44, moisture_entries),
-          cip_lab_entries     = COALESCE($45, cip_lab_entries),
-          updated_at          = now()
-        WHERE id = $46 RETURNING id
-      `, [
-        parseNum(d.b1), parseNum(d.b2), parseNum(d.b3), parseNum(d.b4), parseNum(d.b5),
-        d.b6 || null, parseNum(d.b7), parseNum(d.b8), parseIntVal(d.b9),
-        d.b10 || null, d.b11 || null,
-        parseNum(d.b12), parseNum(d.b13), parseNum(d.b14), parseNum(d.b15),
-        parseNum(d.b16), parseNum(d.b17), parseNum(d.b18),
-        parseNum(d.c1), parseNum(d.c2), parseNum(d.c3), parseNum(d.c4), parseNum(d.c5),
-        d.c6 || null, parseNum(d.c7), parseNum(d.c8), parseIntVal(d.c9),
-        d.c10 || null, d.c11 || null,
-        parseNum(d.c12), parseNum(d.c13), parseNum(d.c14), parseNum(d.c15),
-        parseNum(d.c16), parseNum(d.c17), parseNum(d.c18),
-        d.boiler_notes  || null,
-        d.chiller_notes || null,
-        d.cip_lab_done === true ? true : null,
-        d.cip_lab_checks ? JSON.stringify(d.cip_lab_checks) : null,
-        d.notes         || null,
-        d.foto_urls?.length        ? JSON.stringify(d.foto_urls)        : null,
-        d.brix_entries?.length     ? JSON.stringify(d.brix_entries)     : null,
-        d.moisture_entries?.length ? JSON.stringify(d.moisture_entries) : null,
-        d.cip_lab_entries?.length  ? JSON.stringify(d.cip_lab_entries)  : null,
-        existing.rows[0].id,
-      ]);
+          -- append entry baru agar history input hari yang sama tidak tertimpa
+          brix_entries     = CASE
+            WHEN $1::jsonb IS NULL THEN brix_entries
+            ELSE COALESCE(brix_entries, '[]'::jsonb) || $1::jsonb
+          END,
+          moisture_entries = CASE
+            WHEN $2::jsonb IS NULL THEN moisture_entries
+            ELSE COALESCE(moisture_entries, '[]'::jsonb) || $2::jsonb
+          END,
+          cip_lab_done     = COALESCE($3, cip_lab_done),
+          cip_lab_checks   = COALESCE($4, cip_lab_checks),
+          cip_lab_entries  = COALESCE($5, cip_lab_entries),
+          notes            = COALESCE($6, notes),
+          foto_urls        = COALESCE($7, foto_urls),
+          updated_at       = now()
+        WHERE id = $8 RETURNING id
+      `, [brixJSON, moistJSON, cipDone, cipChkJSON, cipEntJSON, d.notes||null, fotoJSON, existing.rows[0].id]);
       resultId = upd.rows[0]?.id;
 
     } else {
       const ins = await pool.query(`
         INSERT INTO de_laboratorium (
           project_id, project_name, tanggal,
-          b1_steam_press, b2_fg_temp, b3_fw_temp, b4_scale_temp, b5_overheat_temp,
-          b6_next_blowdown, b7_conductivity, b8_air_press, b9_ignition_count,
-          b10_oil_lfire_time, b11_oil_hfire_time,
-          b12_flue_lfire_temp, b13_flue_hfire_temp, b14_fw_avg_temp,
-          b15_oil_efficiency, b16_oil_fuel_cons, b17_steam_output, b18_surface_bd,
-          c1_steam_press, c2_fg_temp, c3_fw_temp, c4_scale_temp, c5_overheat_temp,
-          c6_next_blowdown, c7_conductivity, c8_air_press, c9_ignition_count,
-          c10_oil_lfire_time, c11_oil_hfire_time,
-          c12_flue_lfire_temp, c13_flue_hfire_temp, c14_fw_avg_temp,
-          c15_oil_efficiency, c16_oil_fuel_cons, c17_steam_output, c18_surface_bd,
-          boiler_notes, chiller_notes,
-          cip_lab_done, cip_lab_checks,
-          notes, foto_urls,
-          brix_entries, moisture_entries, cip_lab_entries
-        ) VALUES (
-          $1,$2,CURRENT_DATE,
-          $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,
-          $22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,
-          $40,$41,$42,$43,$44,$45,$46,$47
-        ) RETURNING id
+          brix_entries, moisture_entries,
+          cip_lab_done, cip_lab_checks, cip_lab_entries,
+          notes, foto_urls
+        ) VALUES ($1,$2,CURRENT_DATE,$3,$4,$5,$6,$7,$8,$9) RETURNING id
       `, [
-        projectId, d.project_name || null,
-        parseNum(d.b1), parseNum(d.b2), parseNum(d.b3), parseNum(d.b4), parseNum(d.b5),
-        d.b6 || null, parseNum(d.b7), parseNum(d.b8), parseIntVal(d.b9),
-        d.b10 || null, d.b11 || null,
-        parseNum(d.b12), parseNum(d.b13), parseNum(d.b14), parseNum(d.b15),
-        parseNum(d.b16), parseNum(d.b17), parseNum(d.b18),
-        parseNum(d.c1), parseNum(d.c2), parseNum(d.c3), parseNum(d.c4), parseNum(d.c5),
-        d.c6 || null, parseNum(d.c7), parseNum(d.c8), parseIntVal(d.c9),
-        d.c10 || null, d.c11 || null,
-        parseNum(d.c12), parseNum(d.c13), parseNum(d.c14), parseNum(d.c15),
-        parseNum(d.c16), parseNum(d.c17), parseNum(d.c18),
-        d.boiler_notes  || null,
-        d.chiller_notes || null,
-        d.cip_lab_done === true,
-        JSON.stringify(d.cip_lab_checks || {}),
-        d.notes || null,
-        JSON.stringify(d.foto_urls        || []),
-        JSON.stringify(d.brix_entries     || []),
-        JSON.stringify(d.moisture_entries || []),
-        JSON.stringify(d.cip_lab_entries  || []),
+        projectId, d.project_name||null,
+        brixJSON??'[]', moistJSON??'[]',
+        d.cip_lab_done===true,
+        cipChkJSON??'{}', cipEntJSON??'[]',
+        d.notes||null, fotoJSON??'[]',
       ]);
       resultId = ins.rows[0]?.id;
     }
@@ -608,17 +568,28 @@ async function saveLaboratorium(req, res) {
     res.status(500).json({ success: false, error: err.message });
   }
 }
-
 async function getLaboratorium(req, res) {
   try {
-    const { project_name, tanggal } = req.query;
+    const { project_name, tanggal, tanggal_dari, tanggal_sampai, limit, harian } = req.query;
     let q = `SELECT * FROM de_laboratorium WHERE 1=1`;
     const params = [];
-    if (project_name) { params.push(project_name); q += ` AND project_name = $${params.length}`; }
-    if (tanggal)      { params.push(tanggal);       q += ` AND tanggal = $${params.length}`; }
-    q += ` ORDER BY created_at DESC LIMIT 50`;
+    // harian=1 → hanya data entry harian (tanpa project)
+    if (harian === '1') { q += ` AND (project_name IS NULL OR project_name = '')`; }
+    if (project_name)   { params.push(project_name);   q += ` AND project_name = $${params.length}`; }
+    if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+    if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+    if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+    const maxRows = Math.min(parseInt(limit) || 200, 500);
+    q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
     const result = await pool.query(q, params);
-    res.json({ success: true, data: result.rows });
+    // Parse JSON fields agar frontend tidak perlu JSON.parse
+    const rows = result.rows.map(r => ({
+      ...r,
+      brix_entries:     typeof r.brix_entries     === 'string' ? JSON.parse(r.brix_entries     || '[]') : (r.brix_entries     || []),
+      moisture_entries: typeof r.moisture_entries === 'string' ? JSON.parse(r.moisture_entries || '[]') : (r.moisture_entries || []),
+      cip_lab_entries:  typeof r.cip_lab_entries  === 'string' ? JSON.parse(r.cip_lab_entries  || '[]') : (r.cip_lab_entries  || []),
+    }));
+    res.json({ success: true, data: rows });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -633,36 +604,61 @@ async function saveLimbah(req, res) {
     const d = req.body;
     if (!d) return res.status(400).json({ success: false, error: 'Body kosong' });
 
+    // Validasi tanggal minimal
+    const tanggal = d.tanggal || new Date().toISOString().split('T')[0];
+    if (!tanggal) return res.status(400).json({ success: false, error: 'Tanggal tidak valid' });
+
     const result = await pool.query(`
       INSERT INTO de_limbah (
-        tanggal, volume, cod, bod, tss, ph, temp_effluent, notes, foto_urls
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id
+        tanggal, project_name, tipe,
+        awal, akhir, volume,
+        cod, bod, tss, ph, temp_effluent,
+        notes, foto_urls
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
     `, [
-      d.tanggal || new Date().toISOString().split('T')[0],
-      parseNum(d.vol),
+      tanggal,
+      d.project_name || null,
+      d.tipe         || 'harian',
+      parseNum(d.awal),
+      parseNum(d.akhir),
+      parseNum(d.vol_m3 ?? d.vol),
       parseNum(d.cod),
       parseNum(d.bod),
       parseNum(d.tss),
       parseNum(d.ph),
-      parseNum(d.temp),   // form pakai 'temp', kolom DB 'temp_effluent'
-      d.notes    || null,
+      parseNum(d.temp_effluent ?? d.temp) || null,
+      d.notes   || null,
       JSON.stringify(d.foto_urls || []),
     ]);
 
-    res.json({ success: true, id: result.rows[0]?.id, action: 'inserted' });
+    if (!result.rows[0]) {
+      return res.status(500).json({ success: false, error: 'Data tidak tersimpan, coba lagi' });
+    }
+
+    console.log('✅ saveLimbah SUCCESS:', result.rows[0].id);
+    res.json({ 
+      success: true, 
+      id: result.rows[0].id, 
+      data: result.rows[0],
+      message: 'Data limbah berhasil disimpan' 
+    });
   } catch (err) {
-    console.error('❌ saveLimbah:', err.message);
+    console.error('❌ saveLimbah ERROR:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
 
 async function getLimbah(req, res) {
   try {
-    const { tanggal } = req.query;
+    const { tanggal, tanggal_dari, tanggal_sampai, project_name, limit } = req.query;
     let q = `SELECT * FROM de_limbah WHERE 1=1`;
     const params = [];
-    if (tanggal) { params.push(tanggal); q += ` AND tanggal = $${params.length}`; }
-    q += ` ORDER BY created_at DESC LIMIT 50`;
+    if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+    if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+    if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+    if (project_name)   { params.push(project_name);   q += ` AND project_name = $${params.length}`; }
+    const maxRows = Math.min(parseInt(limit) || 200, 500);
+    q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
     const result = await pool.query(q, params);
     res.json({ success: true, data: result.rows });
   } catch (err) {
@@ -713,10 +709,233 @@ async function getLaporan(req, res) {
 }
 
 
+
+// ═══════════════════════════════════════════════════════════
+// LABORATORIUM HARIAN — tabel de_laboratorium_harian
+// ═══════════════════════════════════════════════════════════
+async function saveLaboratoriumHarian(req, res) {
+  try {
+    const d       = req.body;
+    const tgl     = d.tanggal || new Date().toISOString().split('T')[0];
+    const section = d.section || null; // 'tw1' | 'tw2' | 'filter'
+    const a       = d.analisa || {};
+
+    // Build notes string (backward compat)
+    let notesVal = d.notes || null;
+    if (d.analisa && typeof d.analisa === 'object') {
+      const parts = [];
+      if (section)    parts.push('[' + section.toUpperCase() + ']');
+      if (a.sample)   parts.push('Sample: ' + a.sample);
+      if (a.ph)       parts.push('pH: ' + a.ph);
+      if (a.tds)      parts.push('TDS: ' + a.tds + ' mg/L');
+      if (a.hardness) parts.push('Hardness: ' + a.hardness + ' mg/L');
+      if (a.alkali)   parts.push('Alkali: ' + a.alkali + ' mg/L');
+      if (parts.length) notesVal = parts.join(' | ') + (d.notes ? '\n' + d.notes : '');
+    }
+
+    const brixJSON   = d.brix_entries?.length     ? JSON.stringify(d.brix_entries)     : null;
+    const moistJSON  = d.moisture_entries?.length ? JSON.stringify(d.moisture_entries) : null;
+    const cipEntJSON = d.cip_lab_entries?.length  ? JSON.stringify(d.cip_lab_entries)  : null;
+    const cipChkJSON = d.cip_lab_checks           ? JSON.stringify(d.cip_lab_checks)   : null;
+    const fotoJSON   = d.foto_urls?.length        ? JSON.stringify(d.foto_urls)        : null;
+
+    // Cek apakah baris tanggal hari ini sudah ada
+    const existing = await pool.query(
+      `SELECT id, notes, water_quality FROM de_laboratorium_harian WHERE tanggal = $1 ORDER BY created_at DESC LIMIT 1`,
+      [tgl]
+    );
+
+    if (section && existing.rows.length > 0) {
+      // ── UPDATE: PUSH entry baru ke array section (tidak overwrite) ──
+      const row   = existing.rows[0];
+      const oldWQ = row.water_quality || {};
+
+      // Pastikan section adalah array — migrate dari format object lama jika perlu
+      const existingEntries = Array.isArray(oldWQ[section])
+        ? oldWQ[section]
+        : (oldWQ[section] && typeof oldWQ[section] === 'object' ? [oldWQ[section]] : []);
+
+      const newEntry = {
+        tds:         a.tds      ? parseFloat(a.tds)      : null,
+        hardness:    a.hardness ? parseFloat(a.hardness) : null,
+        ph:          a.ph       ? parseFloat(a.ph)       : null,
+        alkaline:    a.alkali   ? parseFloat(a.alkali)   : null,
+        sample:      a.sample   || null,
+        recorded_at: new Date().toISOString(),
+      };
+
+      const newWQ = {
+        ...oldWQ,
+        [section]: [...existingEntries, newEntry],
+      };
+
+      const oldNotes     = row.notes || '';
+      const updatedNotes = oldNotes + (oldNotes ? '\n' : '') + notesVal;
+
+      await pool.query(
+        `UPDATE de_laboratorium_harian
+         SET water_quality = $1, notes = $2, updated_at = now()
+         WHERE id = $3`,
+        [JSON.stringify(newWQ), updatedNotes, row.id]
+      );
+      return res.json({ success: true, id: row.id, action: 'updated', entries: newWQ[section].length });
+    }
+
+    // ── INSERT: baris baru untuk tanggal ini (atau entry non-analisa) ──
+    const wqInit = (section && a) ? {
+      [section]: [{
+        tds:         a.tds      ? parseFloat(a.tds)      : null,
+        hardness:    a.hardness ? parseFloat(a.hardness) : null,
+        ph:          a.ph       ? parseFloat(a.ph)       : null,
+        alkaline:    a.alkali   ? parseFloat(a.alkali)   : null,
+        sample:      a.sample   || null,
+        recorded_at: new Date().toISOString(),
+      }]
+    } : {};
+
+    const result = await pool.query(`
+      INSERT INTO de_laboratorium_harian (
+        tanggal, brix_entries, moisture_entries,
+        cip_lab_done, cip_lab_checks, cip_lab_entries,
+        notes, foto_urls, water_quality
+      ) VALUES (COALESCE($1::date, CURRENT_DATE), $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id
+    `, [
+      tgl,
+      brixJSON   || '[]',
+      moistJSON  || '[]',
+      d.cip_lab_done === true,
+      cipChkJSON || '{}',
+      cipEntJSON || '[]',
+      notesVal,
+      fotoJSON   || '[]',
+      JSON.stringify(wqInit),
+    ]);
+    res.json({ success: true, id: result.rows[0]?.id, action: 'inserted' });
+  } catch (err) {
+    console.error('❌ saveLaboratoriumHarian:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function getLaboratoriumHarian(req, res) {
+  try {
+    const { tanggal, tanggal_dari, tanggal_sampai, limit } = req.query;
+    let q = `SELECT *, 'harian' AS tipe FROM de_laboratorium_harian WHERE 1=1`;
+    const params = [];
+    if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+    if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+    if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+    const maxRows = Math.min(parseInt(limit) || 200, 500);
+    q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
+    const result = await pool.query(q, params);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LIMBAH HARIAN — tabel de_limbah_harian
+// ═══════════════════════════════════════════════════════════
+async function saveLimbahHarian(req, res) {
+  try {
+    const d = req.body;
+    const result = await pool.query(`
+      INSERT INTO de_limbah_harian (
+        tanggal, awal, akhir, volume,
+        cod, bod, tss, ph, temp_effluent,
+        jar_alum, jar_total, notes, foto_urls
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id
+    `, [
+      d.tanggal || new Date().toISOString().split('T')[0],
+      parseNum(d.awal),
+      parseNum(d.akhir),
+      parseNum(d.vol_m3 ?? d.vol ?? d.volume),
+      parseNum(d.cod),
+      parseNum(d.bod),
+      parseNum(d.tss),
+      parseNum(d.ph),
+      parseNum(d.temp ?? d.temp_effluent),
+      parseNum(d.jar_alum),
+      parseNum(d.jar_total),
+      d.notes || null,
+      JSON.stringify(d.foto_urls || []),
+    ]);
+    res.json({ success: true, id: result.rows[0]?.id, action: 'inserted' });
+  } catch (err) {
+    console.error('❌ saveLimbahHarian:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function getLimbahHarian(req, res) {
+  try {
+    const { tanggal, tanggal_dari, tanggal_sampai, limit } = req.query;
+    let q = `SELECT *, 'harian' AS tipe FROM de_limbah_harian WHERE 1=1`;
+    const params = [];
+    if (tanggal)        { params.push(tanggal);         q += ` AND tanggal = $${params.length}`; }
+    if (tanggal_dari)   { params.push(tanggal_dari);   q += ` AND tanggal >= $${params.length}`; }
+    if (tanggal_sampai) { params.push(tanggal_sampai); q += ` AND tanggal <= $${params.length}`; }
+    const maxRows = Math.min(parseInt(limit) || 200, 500);
+    q += ` ORDER BY created_at DESC LIMIT ${maxRows}`;
+    const result = await pool.query(q, params);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+// ── Lab Samples ──────────────────────────────────────────────
+async function getLabSamples(req, res) {
+  try {
+    const result = await pool.query(
+      `SELECT id, name FROM lab_samples ORDER BY name ASC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function createLabSample(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Nama sample wajib diisi' });
+    }
+    const result = await pool.query(
+      `INSERT INTO lab_samples (name) VALUES ($1)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id, name`,
+      [name.trim()]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function deleteLabSample(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nama sample wajib diisi' });
+    }
+    await pool.query(`DELETE FROM lab_samples WHERE name = $1`, [name.trim()]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 module.exports = {
-  saveProduction,   getProduction,   getProductionHistory,
-  saveUtility,      getUtility,
-  saveLaboratorium, getLaboratorium,
-  saveLimbah,       getLimbah,
-  saveLaporan,      getLaporan,
+  saveProduction,         getProduction,         getProductionHistory,
+  saveUtility,            getUtility,
+  saveLaboratorium,       getLaboratorium,
+  saveLaboratoriumHarian, getLaboratoriumHarian,
+  saveLimbah,             getLimbah,
+  saveLimbahHarian,       getLimbahHarian,
+  saveLaporan,            getLaporan,
+  getLabSamples, createLabSample, deleteLabSample,
 };

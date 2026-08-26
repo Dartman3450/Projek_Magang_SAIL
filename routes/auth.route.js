@@ -134,7 +134,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    const allowedRoles = ['admin', 'superadmin', 'scientist', 'utility', 'limbah', 'PPIC', 'Produksi'];
+    const allowedRoles = ['admin', 'superadmin', 'scientist', 'utility', 'limbah', 'PPIC', 'Produksi', 'display'];
     const userRole = allowedRoles.includes(role) ? role : 'utility';
 
     const existing = await pool.query(

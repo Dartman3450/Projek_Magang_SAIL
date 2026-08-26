@@ -121,12 +121,26 @@ mqttClient.on("message", async (topic, message) => {
       const clamp = v => Math.max(0, Math.min(9999, parseFloat(v)));
       const cols = [], vals = [];
 
-      for (let i = 1; i <= 10; i++) {
+      for (let i = 1; i <= 11; i++) {
         const key = `s${i}`;
         const raw = data[`${key}_cm`] ?? data[key] ?? null;
         if (raw != null) {
           const v = clamp(raw);
           if (v > 0) { cols.push(`s${i}_cm`); vals.push(v); }
+        }
+      }
+
+      // s12 — fuel genset, satuan persen, masuk tabel laporan_fuel_level (bukan laporan_water_level)
+      if (data.s12 != null) {
+        const fuelPct = clamp(data.s12);
+        if (fuelPct > 0) {
+          const FUEL_CAPACITY = 721;
+          const liters = Math.round(fuelPct / 100 * FUEL_CAPACITY * 10) / 10;
+          await poolIoT.query(
+            `INSERT INTO laporan_fuel_level (percent, liters, created_at) VALUES ($1, $2, NOW())`,
+            [fuelPct, liters]
+          );
+          console.log(`⛽ FUEL saved: ${fuelPct}% (${liters} L)`);
         }
       }
 

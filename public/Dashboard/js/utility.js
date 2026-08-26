@@ -26,6 +26,7 @@ function getDataEntryUtility(key,title,sub,icon){return`<div class="de-wrap">
         <option value="solar">⛽ Solar</option>
         <option value="listrik">⚡ Listrik</option>
         <option value="air">💧 Air</option>
+        <option value="Genset">Genset</option>
       </select>
     </div>
 
@@ -101,10 +102,11 @@ function utilSwitchType(key, type) {
       loadPJ('ongoing').then(allProjs => {
         const currentRole = localStorage.getItem('role') || 'utility';
         const isAdmin     = ['admin','superadmin'].includes(currentRole);
-        const projs = isAdmin ? allProjs : allProjs.filter(p => {
+        const roleFiltered = isAdmin ? allProjs : allProjs.filter(p => {
           if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
           return p.allowed_roles.includes(currentRole);
         });
+        const projs = roleFiltered.filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
         projSel.innerHTML = '<option value="">-- Pilih project --</option>';
         projs.forEach(p => {
           const realIdx = allProjs.indexOf(p);
@@ -152,11 +154,11 @@ function utilRenderHarian(key, cat) {
             </div>
             <div class="de-field">
               <label class="de-label" style="color:#111;">AWAL</label>
-              <input class="de-input" type="number" id="util-${uid}-awal" step="0.01" placeholder="Nilai awal..." oninput="utilCalcTotal('${uid}')">
+              <input class="de-input" type="number" id="util-${uid}-awal" step="0.01" placeholder="Nilai awal..." onfocus="this.select()" onclick="this.select()" oninput="utilCalcTotal('${uid}')">
             </div>
             <div class="de-field">
               <label class="de-label" style="color:#111;">AKHIR</label>
-              <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." oninput="utilCalcTotal('${uid}')">
+              <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." onfocus="this.select()" onclick="this.select()" oninput="utilCalcTotal('${uid}')">
             </div>
             <div class="de-field">
               <label class="de-label" style="color:#111;">TOTAL <span style="font-weight:400;color:var(--txt3)"></span></label>
@@ -180,6 +182,86 @@ function utilRenderHarian(key, cat) {
 
   // Kategori lain (solar, listrik) → render 1 form seperti biasa
   const labels = { solar: '⛽ Solar (Liter)', listrik: '⚡ Listrik (kWh)' };
+
+  // ── Kategori Genset ─────────────────────────────────────────────────────
+  if (cat === 'Genset') {
+    const uid = key + '_Genset';
+    const fieldNum = (id, label, unit, placeholder='0') => `
+      <div class="de-field">
+        <label class="de-label" style="color:#111;">${label}</label>
+        <div class="input-group">
+          <input class="de-input" type="number" step="0.01" id="util-${uid}-${id}" placeholder="${placeholder}" onfocus="this.select()" onclick="this.select()">
+          <span class="group-unit">${unit}</span>
+        </div>
+      </div>`;
+    const fieldCheck = (id, label, std) => `
+      <div class="de-field" style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;">
+        <input type="checkbox" id="util-${uid}-${id}" style="width:18px;height:18px;accent-color:#15803d;cursor:pointer;flex-shrink:0;">
+        <div style="flex:1;">
+          <label for="util-${uid}-${id}" style="font-size:13px;font-weight:600;color:#111;cursor:pointer;">${label}</label>
+          <div style="font-size:11px;color:var(--txt3);">Standar: ${std}</div>
+        </div>
+      </div>`;
+
+    area.innerHTML = `
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:16px;">⚡ Genset — Check List Monitoring Harian</div>
+        <div class="de-grid">
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">TANGGAL</label>
+            <input class="de-input" type="date" id="util-${uid}-date" value="${new Date().toISOString().split('T')[0]}">
+          </div>
+          <div class="de-field">
+            <label class="de-label" style="color:#111;">NAMA STAFF</label>
+            <input class="de-input" type="text" id="util-${uid}-staff" placeholder="Nama staff...">
+          </div>
+        </div>
+
+        <div style="margin:16px 0 10px;font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:.7px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;">📊 Parameter Numerik</div>
+        <div class="de-grid">
+          ${fieldNum('volt_ac',       '1. VOLT AC',           'V',   '400')}
+          ${fieldNum('volt_dc_batre', '2. VOLT DC BATRE',     'V',   '24')}
+          ${fieldNum('hertz',         '3. HERTZ',             'Hz',  '50')}
+          ${fieldNum('temp_mesin',    '5. TEMPERATUR MESIN',  '°C',  '0')}
+          ${fieldNum('temp_air',      '6. TEMPERATUR AIR',    '°C',  '0')}
+          ${fieldNum('oli_jam',       '7. OLI',               'jam', '0')}
+          ${fieldNum('oli_liter',     '7. OLI',               'L',   '0')}
+          ${fieldNum('temp_oli',      '8. TEMPERATUR OLI',    '°C',  '0')}
+        </div>
+
+        <div style="margin:16px 0 10px;font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:.7px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;">✅ Parameter Checklist (centang jika OK)</div>
+        <div class="de-grid">
+          ${fieldCheck('charger',       '4. CHARGER',                  'OK')}
+          ${fieldCheck('accu_water',    '9. ACCU WATER',               'Ada')}
+          ${fieldCheck('air_radiator',  '10. KETERSEDIAAN AIR RADIATOR','Ada')}
+          ${fieldCheck('radiator',      '11. RADIATOR',                'Tidak bocor')}
+          ${fieldCheck('filter_oli',    '12. FILTER OLI',              'Tidak bocor')}
+          ${fieldCheck('filter_solar',  '13. FILTER SOLAR',            'Tidak bocor')}
+          ${fieldCheck('filter_udara',  '14. FILTER UDARA',            'Tidak bocor')}
+          ${fieldCheck('fuel_sep',      '15. FUEL/WATER SEPARATOR',    'Tidak bocor')}
+          ${fieldCheck('water_sep',     '16. WATER SEPARATOR',         'Tidak bocor')}
+          ${fieldCheck('kopling',       '17. KOPLING',                 'Tidak bocor')}
+          ${fieldCheck('v_belt',        '18. V-BELT',                  'Tidak bocor')}
+        </div>
+
+        <div style="margin:16px 0 10px;font-size:11px;font-weight:800;color:var(--txt3);letter-spacing:.7px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:6px;">📝 Catatan</div>
+        <div class="de-grid">
+          <div class="de-field de-full">
+            <label class="de-label" style="color:#111;">NOTES</label>
+            <textarea class="de-input de-textarea" id="util-${uid}-notes" placeholder="Catatan tambahan..."></textarea>
+          </div>
+          ${buildPhotoUpload(uid)}
+        </div>
+
+        <div class="de-status-bar" id="util-${uid}-sb" style="display:none"><span id="util-${uid}-sm"></span></div>
+        <div class="de-actions">
+          <button class="de-btn de-btn-ghost" onclick="utilResetHarian('${uid}')">🔄 Reset</button>
+          <button class="de-btn de-btn-primary" onclick="utilSaveGenset('${uid}')">💾 Simpan</button>
+        </div>
+      </div>`;
+    return;
+  }
+
   const label = labels[cat] || cat;
   const uid = key + '_' + cat;
 
@@ -193,11 +275,11 @@ function utilRenderHarian(key, cat) {
         </div>
         <div class="de-field">
           <label class="de-label" style="color:#111;">AWAL</label>
-          <input class="de-input" type="number" id="util-${uid}-awal" step="0.01" placeholder="Nilai awal..." oninput="utilCalcTotal('${uid}')">
+          <input class="de-input" type="number" id="util-${uid}-awal" step="0.01" placeholder="Nilai awal..." onfocus="this.select()" onclick="this.select()" oninput="utilCalcTotal('${uid}')">
         </div>
         <div class="de-field">
           <label class="de-label" style="color:#111;">AKHIR</label>
-          <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." oninput="utilCalcTotal('${uid}')">
+          <input class="de-input" type="number" id="util-${uid}-akhir" step="0.01" placeholder="Nilai akhir..." onfocus="this.select()" onclick="this.select()" oninput="utilCalcTotal('${uid}')">
         </div>
         <div class="de-field">
           <label class="de-label" style="color:#111;">TOTAL <span style="font-weight:400;color:var(--txt3)"></span></label>
@@ -307,12 +389,78 @@ async function utilSaveHarian(uid, cat) {
 }
 window.utilSaveHarian = utilSaveHarian;
 
+async function utilSaveGenset(uid) {
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Genset ini?')) return;
+
+  const b = document.getElementById('util-'+uid+'-sb');
+  const m = document.getElementById('util-'+uid+'-sm');
+  const showSt = (type, msg) => {
+    if(b&&m){ b.style.display='flex'; b.className='de-status-bar de-status-'+type; m.textContent=msg; }
+  };
+  showSt('loading','⏳ Menyimpan...');
+
+  const g  = (id) => document.getElementById('util-'+uid+'-'+id);
+  const gv = (id) => g(id)?.value || null;
+  const gc = (id) => g(id)?.checked ? 'OK' : 'Tidak';
+
+  const tanggal = gv('date') || new Date().toISOString().split('T')[0];
+
+  // Semua data genset disimpan di extra_data (jsonb)
+  const extra_data = {
+    staff:        gv('staff'),
+    volt_ac:      parseFloat(gv('volt_ac'))       || null,
+    volt_dc:      parseFloat(gv('volt_dc_batre')) || null,
+    hertz:        parseFloat(gv('hertz'))         || null,
+    temp_mesin:   parseFloat(gv('temp_mesin'))    || null,
+    temp_air:     parseFloat(gv('temp_air'))      || null,
+    oli_jam:      parseFloat(gv('oli_jam'))       || null,
+    oli_liter:    parseFloat(gv('oli_liter'))     || null,
+    temp_oli:     parseFloat(gv('temp_oli'))      || null,
+    charger:      gc('charger'),
+    accu_water:   gc('accu_water'),
+    air_radiator: gc('air_radiator'),
+    radiator:     gc('radiator'),
+    filter_oli:   gc('filter_oli'),
+    filter_solar: gc('filter_solar'),
+    filter_udara: gc('filter_udara'),
+    fuel_sep:     gc('fuel_sep'),
+    water_sep:    gc('water_sep'),
+    kopling:      gc('kopling'),
+    v_belt:       gc('v_belt'),
+  };
+
+  const payload = {
+    tanggal,
+    kategori:   'genset',
+    label:      '⚡ Genset',
+    tipe:       'harian',
+    notes:      gv('notes'),
+    extra_data,
+  };
+
+  try {
+    const res  = await fetch('/api/dataentry/utility', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || json.message || 'Gagal simpan');
+    showSt('success', '✅ Data Genset tersimpan!');
+    setTimeout(() => { if(b) b.style.display='none'; }, 3000);
+  } catch(err) {
+    console.error('utilSaveGenset error:', err);
+    showSt('error', '❌ Gagal: ' + err.message);
+  }
+}
+window.utilSaveGenset = utilSaveGenset;
+
 // Helper: build a single numbered row with label + time slots
 function _utilProjField(uid, rowId, label, type='number', unit='') {
   const unitSpan = unit ? `<span class="de-input-unit">${unit}</span>` : '';
   const inputEl = unit
-    ? `<div class="de-input-wrap"><input class="de-input" type="${type}" step="0.01" id="util-${uid}-${rowId}" placeholder="—">${unitSpan}</div>`
-    : `<input class="de-input" type="${type}" id="util-${uid}-${rowId}" placeholder="—">`;
+    ? `<div class="de-input-wrap"><input class="de-input" type="${type}" step="0.01" id="util-${uid}-${rowId}" placeholder="—" onfocus="this.select()" onclick="this.select()">${unitSpan}</div>`
+    : `<input class="de-input" type="${type}" id="util-${uid}-${rowId}" placeholder="—" onfocus="this.select()" onclick="this.select()">`;
   return `
     <tr>
       <td style="padding:6px 10px;font-size:12px;color:#555;border-bottom:1px solid var(--border);white-space:nowrap;min-width:28px;text-align:center;font-weight:600;">${rowId}</td>
@@ -388,6 +536,8 @@ async function utilRenderProject(key, idx) {
     prevData = proj.utilityData?.[uid] || {};
   }
 
+
+
   area.innerHTML = `
     <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px;">
@@ -411,7 +561,7 @@ async function utilRenderProject(key, idx) {
           <div class="de-field"><label class="de-label" style="color:#111;">Feed water temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b3', prevData.b3, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Scale monitor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b4', prevData.b4, '°C')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Overheat sensor temperature</label>${makeNumberInputWithUnit('util-'+uid+'-b5', prevData.b5, '°C')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">To Next Blowdown</label>${makeInputFieldWithUnit('util-'+uid+'-b6', prevData.b6, 'H')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">To Next Blowdown</label>${makeNumberInputWithUnit('util-'+uid+'-b6', prevData.b6, 'H')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Conductivity</label>${makeNumberInputWithUnit('util-'+uid+'-b7', prevData.b7, 'mS/m')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Air pressure</label>${makeNumberInputWithUnit('util-'+uid+'-b8', prevData.b8, 'pa')}</div>
           <div class="de-field"><label class="de-label" style="color:#111;">Ignition count</label>${makeNumberInputWithUnit('util-'+uid+'-b9', prevData.b9)}</div>
@@ -493,16 +643,26 @@ async function utilSaveProject(uid, projName) {
   showSt('loading','⏳ Menyimpan ke database...');
 
   // Kumpulkan nilai Boiler (b1-b18)
+  // Skip field yang masih sama dengan set point (data-prev-value = abu-abu, belum diubah user)
   const boilerData = {};
   for (let i = 1; i <= 18; i++) {
     const el = document.getElementById('util-'+uid+'-b'+i);
-    boilerData['b' + i] = el ? (el.value || '') : '';
+    if (!el) { boilerData['b'+i] = ''; continue; }
+    const val = el.value || '';
+    const prevVal = el.dataset?.prevValue || '';
+    // Kalau warna masih abu (#999) berarti belum diubah — kirim kosong agar tidak masuk DB
+    const isUnchanged = prevVal && val === prevVal && el.style?.color === 'rgb(153, 153, 153)';
+    boilerData['b' + i] = isUnchanged ? '' : val;
   }
   // Kumpulkan nilai Chiller (c1-c11)
   const chillerData = {};
   for (let i = 1; i <= 11; i++) {
     const el = document.getElementById('util-'+uid+'-c'+i);
-    chillerData['c' + i] = el ? (el.value || '') : '';
+    if (!el) { chillerData['c'+i] = ''; continue; }
+    const val = el.value || '';
+    const prevVal = el.dataset?.prevValue || '';
+    const isUnchanged = prevVal && val === prevVal && el.style?.color === 'rgb(153, 153, 153)';
+    chillerData['c' + i] = isUnchanged ? '' : val;
   }
   boilerData.notes  = document.getElementById('util-'+uid+'-notes')?.value  || '';
   chillerData.notes = document.getElementById('util-'+uid+'-cnotes')?.value || '';
@@ -592,4 +752,3 @@ async function utilSaveProject(uid, projName) {
   }
 }
 window.utilSaveProject = utilSaveProject;
-

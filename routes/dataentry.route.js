@@ -67,7 +67,8 @@ router.get ('/production/history', ctrl.getProductionHistory);
 
 // ── Utility ─────────────────────────────────────────────
 router.post('/utility',       ctrl.saveUtility);
-router.get ('/utility',       ctrl.getUtility);
+router.get ('/utility',         ctrl.getUtility);
+router.get ('/utility/history', ctrl.getUtilityHistory);
 
 // ── Laboratorium ─────────────────────────────────────────
 router.post('/laboratorium',  ctrl.saveLaboratorium);
@@ -93,5 +94,17 @@ router.get ('/laporan',       ctrl.getLaporan);
 router.get   ('/lab-samples', ctrl.getLabSamples);
 router.post  ('/lab-samples', ctrl.createLabSample);
 router.delete('/lab-samples', ctrl.deleteLabSample);
+
+// ── Lab Locations (master data lokasi sample lab) ─────────────
+router.get   ('/lab-locations', ctrl.getLabLocations);
+router.post  ('/lab-locations', ctrl.createLabLocation);
+router.delete('/lab-locations', ctrl.deleteLabLocation);
+
+// ── Surat Jalan ─────────────────────────────────────────────
+router.get   ('/surat-jalan',      ctrl.getSuratJalan);
+router.post  ('/surat-jalan',      ctrl.createSuratJalan);
+router.patch ('/surat-jalan/:id',  ctrl.updateSuratJalan);
+router.put   ('/surat-jalan/:id',  ctrl.updateSuratJalan);
+router.delete('/surat-jalan/:id',  ctrl.deleteSuratJalan);
 
 module.exports = router;

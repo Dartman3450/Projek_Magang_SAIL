@@ -24,6 +24,39 @@ function mkPipe(id,n){
     c.appendChild(p);
   }
 }
+
+// ══════════════════════════════════════════════════════════
+// ESP STATUS CHECK & DISPLAY
+// ══════════════════════════════════════════════════════════
+
+// Check apakah semua ESP completely offline
+function isEspOffline() {
+  // Jika window vars ada, check dari sana
+  if (typeof espConnected !== 'undefined') return !espConnected;
+  if (typeof window.mqttConnected !== 'undefined') return !window.mqttConnected;
+  return false;
+}
+
+// Update status indicator based on ESP connection
+function updateConnectionStatus() {
+  const statusEl = document.getElementById('wl-status');
+  if (!statusEl) return;
+  
+  const offline = isEspOffline();
+  
+  if (offline) {
+    statusEl.className = 's-pill st-offline';
+    statusEl.textContent = '🔴 No Data';
+    statusEl.title = 'MQTT disconnected - ESP offline or not transmitting';
+    statusEl.style.animation = 'pulse-offline 2s ease-in-out infinite';
+  } else {
+    statusEl.className = 's-pill st-ok';
+    statusEl.textContent = '🟢 Connected';
+    statusEl.title = 'MQTT connected - receiving live data';
+    statusEl.style.animation = 'none';
+  }
+}
+
 async function fetchSummary() {
   try {
     const res = await fetch(API.summary);
@@ -47,11 +80,13 @@ async function fetchSummary() {
     if (d.lingkungan?.created_at)   _espLastSeen.env = d.lingkungan.created_at;
 
     updateEspBadge();
+    updateConnectionStatus();  // Update status indicator
 
     applyWL(d.water_level);
     applyWF(d.water_flow);
     applyEnv(d.lingkungan);
     applyPatroli(d.total_patroli);
+    if (typeof applyFuelGenset === 'function') applyFuelGenset(d.fuel_level);
     if (typeof applyWWTP   === 'function') applyWWTP(d.wwtp   ?? d.limbah ?? null);
     if (typeof applyDiesel === 'function') applyDiesel(d.diesel ?? d.diesel_oil ?? null);
 
@@ -74,37 +109,68 @@ async function fetchSummary() {
     if (typeof updateEspBadge === 'function') {
       updateEspBadge();
     }
+    
+    // Update status indicator to show offline
+    updateConnectionStatus();
   }
 }
 
 // Clear all tank water level data when MQTT is offline
+// Handle all sensor elements dengan berbagai suffix (-fw, -chiller, -tw2, -diesel, dll)
 function clearAllTankData() {
   const sensors = getSensors();
+  const SECTION_SUFFIXES = ['', '-fw', '-chiller', '-tw2', '-diesel'];
+  
   sensors.forEach(s => {
-    // Clear percentage
-    const pctEl = document.getElementById('tank-pct-' + s.id);
-    if (pctEl) pctEl.textContent = '—%';
-    
-    // Show offline badge
-    const offlineEl = document.getElementById('tank-offline-' + s.id);
-    if (offlineEl) offlineEl.style.display = 'flex';
-    
-    // Set water level to 0
-    const waterEl = document.getElementById('tank-water-' + s.id);
-    if (waterEl) waterEl.style.height = '0%';
-    
-    // Clear volume
-    const volEl = document.getElementById('tank-vol-' + s.id);
-    if (volEl) volEl.textContent = '—lt / —lt';
-    
-    // Clear height in cm
-    const cmEl = document.getElementById('tank-cm-' + s.id);
-    if (cmEl) cmEl.textContent = '— cm air';
-    
-    // Clear progress bar
-    const barEl = document.getElementById('tank-bar-' + s.id);
-    if (barEl) barEl.style.width = '0%';
+    // Clear untuk setiap variant element (main + suffix variants)
+    SECTION_SUFFIXES.forEach(suffix => {
+      const fullId = s.id + suffix;
+      
+      // Clear percentage
+      const pctEl = document.getElementById('tank-pct-' + fullId);
+      if (pctEl) pctEl.textContent = '—%';
+      
+      // Show offline badge
+      const offlineEl = document.getElementById('tank-offline-' + fullId);
+      if (offlineEl) offlineEl.style.display = 'flex';
+      
+      // Set water level to 0
+      const waterEl = document.getElementById('tank-water-' + fullId);
+      if (waterEl) waterEl.style.height = '0%';
+      
+      // Clear volume
+      const volEl = document.getElementById('tank-vol-' + fullId);
+      if (volEl) volEl.textContent = '—lt / —lt';
+      
+      // Clear height in cm
+      const cmEl = document.getElementById('tank-cm-' + fullId);
+      if (cmEl) cmEl.textContent = '— cm air';
+      
+      // Clear progress bar
+      const barEl = document.getElementById('tank-bar-' + fullId);
+      if (barEl) barEl.style.width = '0%';
+      
+      // Clear tank body color
+      const bodyEl = document.getElementById('tank-body-' + fullId);
+      if (bodyEl) bodyEl.style.border = '1.5px solid #cbd5e1';
+      
+      // Mini variants (jika ada)
+      const pctMiniEl = document.getElementById('tank-pct-mini-' + fullId);
+      if (pctMiniEl) pctMiniEl.textContent = '—%';
+      
+      const volMiniEl = document.getElementById('tank-vol-mini-' + fullId);
+      if (volMiniEl) volMiniEl.textContent = '— L';
+    });
   });
+  
+  // Update status indicator
+  const statusEl = document.getElementById('wl-status');
+  if (statusEl) {
+    statusEl.className = 's-pill st-offline';
+    statusEl.textContent = '🔴 MQTT Offline';
+  }
+  
+  console.log('📴 All tank data cleared — MQTT/ESP disconnected');
 }
 
 function showOverlays(show) {
@@ -124,33 +190,60 @@ const SENSOR_COLORS = [
   { border:'#dc3545', water:'linear-gradient(180deg,#fca5a5,#b91c1c)', waterDark:'#991b1b', bg:'#fef2f2', text:'var(--red)',    label:'#dc3545' },
 ];
 
-// ── 10 TANGKI POSISI TETAP (TANPA DUPLIKASI) ──────────────────────────────────
-// Layout di dashboard:
-//   Row 1: air_proses | feed_slurry | chiller_in | chiller_out
-//   Row 2: solar | slurry_1 | slurry_2 | edi
-//   Row 3: ground_tank_a (s9) | ground_tank_b (s10) — WWTP
-//   Row 4: diesel_tank (s5 shared)
+
 const FIXED_TANK_SLOTS = [
-  // fixedId harus SAMA PERSIS dengan element ID di dashboard iot.js
-  // Mapping key sensor firmware:
-  //   s1=air_proses, s2=feed_slury, s3=tanu_edi, s4=feed_edi
-  //   s5=solar, s6=slury_1, s7=slury_2, s8=boiler_fw
-  //   s9=ground_tank_a, s10=ground_tank_b
-  { fixedId:'air_proses',   name:'Air Proses',        key:'s1',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'feed_slury',   name:'Feed Slury',        key:'s2',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'tanu_edi',     name:'Tank Aroma',        key:'s3',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'feed_edi',     name:'Feed Aroma',        key:'s4',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'solar',        name:'Solar/Diesel Tank', key:'s5',  active:true,  shape:'persegi',  orientasi:'horizontal', tinggi:1.2,  panjang:2.5,  lebar:1.5, sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'slury_1',      name:'Slury 1',           key:'s6',  active:true,  shape:'silinder', orientasi:'horizontal', tinggi:0.8,  panjang:6,               sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'slury_2',      name:'Slury 2',           key:'s7',  active:true,  shape:'silinder', orientasi:'horizontal', tinggi:0.8,  panjang:6,               sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'boiler_fw',    name:'Boiler Feed Water', key:'s8',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1,    panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'ground_tank_a',name:'Ground Tank A',     key:'s9',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
-  { fixedId:'ground_tank_b',name:'Ground Tank B',     key:'s10', active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0, warnPct:40, critPct:15 },
+
+  { fixedId:'air_proses',   name:'Process Water',     key:'s1',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1,    panjang:3,    lebar:2,   sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'feed_slury',   name:'Feed Slurry Water', key:'s2',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.5,  panjang:6,    lebar:2,   sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'chiller in',     name:'Chiller In',        key:'s4',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.22, panjang:1,    lebar:0.8, sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'chiller out',     name:'Chiller Out',       key:'s5',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.22, panjang:1,    lebar:0.8, sensorZeroCm:0,  warnPct:40, critPct:15 },
+  { fixedId:'solar',        name:'Tangki Solar',      key:'s3',  active:true,  shape:'silinder', orientasi:'horizontal', tinggi:1.48, panjang:4.23,            sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'slury_1',      name:'Slurry 1',          key:'s7',  active:true,  shape:'silinder', orientasi:'vertikal',   tinggi:2.13, diameter:0.978,            sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'slury_2',      name:'Slurry 2',          key:'s8',  active:true,  shape:'silinder', orientasi:'vertikal',   tinggi:2.13, diameter:0.978,            sensorZeroCm:0,  warnPct:40, critPct:15 },
+  { fixedId:'boiler_fw',    name:'Tank Aroma',        key:'s6',  active:true,  shape:'silinder',  orientasi:'vertikal',   tinggi:0.445,panjang:3.65, lebar:0.745,sensorZeroCm:0, warnPct:40, critPct:15 },
+  { fixedId:'ground_tank_a',name:'Ground Tank A',     key:'s9',  active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:2,    panjang:12,   lebar:3,   sensorZeroCm:0,  warnPct:40, critPct:15 },
+  { fixedId:'ground_tank_b',name:'Ground Tank B',     key:'s10', active:true,  shape:'persegi',  orientasi:'vertikal',   tinggi:1.2,  panjang:1,    lebar:1,   sensorZeroCm:0,  warnPct:40, critPct:15 },
+  { fixedId:'edi_cadangan', name:'EDI Cadangan',     key:'s11', active:true,  shape:'silinder', orientasi:'vertikal',   tinggi:1,    diameter:1,               sensorZeroCm:0, warnPct:40, critPct:15 },
 ];
 
 // Get unique IDs dan KEYS untuk menghindari duplikasi
 const FIXED_IDS = [...new Set(FIXED_TANK_SLOTS.map(f => f.fixedId))];
 const FIXED_KEYS = [...new Set(FIXED_TANK_SLOTS.map(f => f.key))];
+
+// ── SENSOR DATA CACHE: Store last valid readings ─────────────────────────────
+// Jika sensor tidak kirim data baru atau data=0, gunakan cache terakhir
+const SENSOR_DATA_CACHE = {};
+
+function getCachedSensorValue(sensorKey) {
+  return SENSOR_DATA_CACHE[sensorKey] ?? null;
+}
+
+function setCachedSensorValue(sensorKey, rawCm) {
+  if (rawCm !== null && rawCm !== undefined && Number.isFinite(Number(rawCm))) {
+    SENSOR_DATA_CACHE[sensorKey] = Number(rawCm);
+    console.log(`💾 Cached ${sensorKey}=${rawCm}cm`);
+  }
+}
+
+function getSensorValueWithFallback(wl, sensorKey, fixedId) {
+  // Coba cari value dari API terlebih dahulu
+  let val = wl[sensorKey + '_cm'] ?? wl[sensorKey] ?? wl[fixedId + '_cm'] ?? wl[fixedId] ?? null;
+  
+  // Jika nilai valid (bukan null, bukan 0, bukan undefined)
+  if (val !== null && val !== undefined && val !== '' && Number(val) > 0) {
+    return { value: val, source: 'fresh' };
+  }
+  
+  // Fallback ke cache terakhir
+  const cached = getCachedSensorValue(sensorKey);
+  if (cached !== null) {
+    console.log(`♻️ Using cached ${sensorKey}=${cached}cm (no fresh data)`);
+    return { value: cached, source: 'cache' };
+  }
+  
+  // Jika tidak ada cache juga, return null
+  return { value: null, source: 'none' };
+}
 
 // ── Cache untuk sensor settings (diisi dari API, fallback ke localStorage) ──
 let _sensorSettingsCache = null;
@@ -174,7 +267,30 @@ function getSensors() {
       // Cari data tersimpan: cocokkan fixedId dulu, lalu key
       const found = saved.find(s => s.fixedId === def.fixedId || s.id === def.fixedId)
                   || saved.find(s => s.key === def.key && !FIXED_IDS.includes(s.id));
-      return { ...def, ...(found || {}), fixedId: def.fixedId, id: def.fixedId };
+      
+      // 🔧 CRITICAL FIX: Never override 'key' from FIXED_TANK_SLOTS with corrupted localStorage data
+      // This prevents swapped sensor mappings like s6↔s8
+      if (found) {
+        // Start with defaults from FIXED_TANK_SLOTS
+        const result = { ...def };
+        
+        // User-provided fields always override defaults (except key/fixedId/id which we control)
+        const dimFields = ['tinggi','panjang','lebar','diameter','sensorZeroCm','shape','orientasi','name'];
+        dimFields.forEach(f => {
+          // If user explicitly set this field (not null/undefined/empty), use their value
+          if (found[f] !== null && found[f] !== undefined && found[f] !== '') {
+            result[f] = found[f];
+          }
+        });
+        
+        // Preserve system fields
+        result.fixedId = def.fixedId;
+        result.id = def.fixedId;
+        result.key = def.key;
+        
+        return result;
+      }
+      return { ...def, fixedId: def.fixedId, id: def.fixedId };
     }).filter(t => t !== null);
 
     // ── Extra tanks: yang bukan fixed ──────────────────────────
@@ -202,7 +318,30 @@ function getSensors() {
     
     const found = saved.find(s => s.fixedId === def.fixedId || s.id === def.fixedId)
                 || saved.find(s => s.key === def.key && !FIXED_IDS.includes(s.id));
-    return { ...def, ...(found || {}), fixedId: def.fixedId, id: def.fixedId };
+    
+    // 🔧 CRITICAL FIX: Never override 'key' from FIXED_TANK_SLOTS with corrupted localStorage data
+    // This prevents swapped sensor mappings like s6↔s8
+    if (found) {
+      // Start with defaults from FIXED_TANK_SLOTS
+      const result = { ...def };
+      
+      // User-provided fields always override defaults (except key/fixedId/id which we control)
+      const dimFields = ['tinggi','panjang','lebar','diameter','sensorZeroCm','shape','orientasi','name'];
+      dimFields.forEach(f => {
+        // If user explicitly set this field (not null/undefined/empty), use their value
+        if (found[f] !== null && found[f] !== undefined && found[f] !== '') {
+          result[f] = found[f];
+        }
+      });
+      
+      // Preserve system fields
+      result.fixedId = def.fixedId;
+      result.id = def.fixedId;
+      result.key = def.key;
+      
+      return result;
+    }
+    return { ...def, fixedId: def.fixedId, id: def.fixedId };
   }).filter(t => t !== null);
 
   // ── Extra tanks: yang bukan fixed ──────────────────────────
@@ -213,6 +352,45 @@ function getSensors() {
   );
 
   return [...fixedTanks, ...extraTanks];
+}
+
+// 🔧 Auto-fix corrupted sensor settings in localStorage
+// This handles cases where sensor keys were accidentally swapped
+function autoFixCorruptedSensorSettings() {
+  try {
+    const raw = localStorage.getItem('tank_sensors');
+    if (!raw) return false;
+    
+    const saved = JSON.parse(raw);
+    let hasCorruption = false;
+    
+    // Check each FIXED_TANK_SLOT for key mismatches
+    const fixed = saved.map(s => {
+      const def = FIXED_TANK_SLOTS.find(f => f.fixedId === s.fixedId);
+      if (def && def.key !== s.key) {
+        console.warn(`🔧 Auto-fixing sensor key mismatch: ${s.fixedId} was ${s.key}, should be ${def.key}`);
+        hasCorruption = true;
+        return { ...s, key: def.key };
+      }
+      // Also fix diameter if it's wrong for slurry tanks
+      if ((s.fixedId === 'slury_1' || s.fixedId === 'slury_2') && s.diameter && s.diameter !== 0.97) {
+        console.warn(`🔧 Auto-fixing diameter for ${s.fixedId}: was ${s.diameter}, should be 0.97`);
+        hasCorruption = true;
+        return { ...s, diameter: 0.97, panjang: 0.97 };
+      }
+      return s;
+    });
+    
+    if (hasCorruption) {
+      console.log('💾 Saving corrected sensor settings...');
+      localStorage.setItem('tank_sensors', JSON.stringify(fixed));
+      _sensorSettingsCache = fixed;
+      return true;
+    }
+  } catch (err) {
+    console.warn('⚠️ Error in autoFixCorruptedSensorSettings:', err.message);
+  }
+  return false;
 }
 
 // Simpan sensors ke API (primary) DAN localStorage (fallback)
@@ -269,11 +447,11 @@ async function loadSensorSettingsFromAPI() {
       key: s.key,
       shape: s.shape || 'persegi',
       orientasi: s.orientasi || 'vertikal',
-      tinggi: s.tinggi ? parseFloat(s.tinggi) : null,
-      panjang: s.panjang ? parseFloat(s.panjang) : null,
-      lebar: s.lebar ? parseFloat(s.lebar) : null,
-      diameter: s.diameter ? parseFloat(s.diameter) : null,
-      sensorZeroCm: parseFloat(s.sensor_zero_cm || 0),
+      tinggi: (s.tinggi !== null && s.tinggi !== undefined && s.tinggi !== '') ? parseFloat(s.tinggi) : null,
+      panjang: (s.panjang !== null && s.panjang !== undefined && s.panjang !== '') ? parseFloat(s.panjang) : null,
+      lebar: (s.lebar !== null && s.lebar !== undefined && s.lebar !== '') ? parseFloat(s.lebar) : null,
+      diameter: (s.diameter !== null && s.diameter !== undefined && s.diameter !== '') ? parseFloat(s.diameter) : null,
+      sensorZeroCm: (s.sensor_zero_cm !== null && s.sensor_zero_cm !== undefined && s.sensor_zero_cm !== '') ? parseFloat(s.sensor_zero_cm) : 0,
       warnPct: parseInt(s.warn_pct || 40),
       critPct: parseInt(s.crit_pct || 15),
       note: s.notes || '',
@@ -297,21 +475,27 @@ async function loadSensorSettingsFromAPI() {
 // Start periodic sync of sensor settings from API (setiap 30 detik)
 // Ini memastikan perubahan dari device lain langsung terlihat
 function startSensorSettingsSync() {
+  // Guard: jangan jalankan sync kalau sudah ada yang jalan
+  if (window._sensorSyncInterval) return;
+
   // Load awal saat pertama kali
   loadSensorSettingsFromAPI();
   
-  // Periodic check setiap 30 detik
-  setInterval(() => {
+  // Periodic check setiap 30 detik — simpan ID agar bisa di-clear
+  window._sensorSyncInterval = setInterval(() => {
     loadSensorSettingsFromAPI();
   }, 30000);
   
   // Juga sync saat page mendapat fokus kembali
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) {
-      console.log('🔄 Dashboard kembali aktif, sinkronisasi sensor settings dari database...');
-      loadSensorSettingsFromAPI();
-    }
-  });
+  if (!window._sensorSyncVisibility) {
+    window._sensorSyncVisibility = true;
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        console.log('🔄 Dashboard kembali aktif, sinkronisasi sensor settings dari database...');
+        loadSensorSettingsFromAPI();
+      }
+    });
+  }
 }
 
 
@@ -332,7 +516,9 @@ function calcVolumeLiter(sensor, rawCm) {
       const L = +(sensor.panjang || 1) * 100;
       return Math.max(0, segmenVolume(h, r, L) / 1000);
     } else {
-      const r = (+(sensor.diameter || 1) / 2) * 100;
+      // Silinder vertikal: gunakan panjang sebagai diameter (atau diameter jika ada)
+      const diameterCm = (+(sensor.diameter || sensor.panjang || 1)) * 100;
+      const r = diameterCm / 2;
       return (Math.PI * r * r * h) / 1000;
     }
   } else {
@@ -355,7 +541,9 @@ function calcMaxVolumeLiter(sensor) {
       const L = +(sensor.panjang || 1) * 100;
       return (Math.PI * r * r * L) / 1000;
     } else {
-      const r = (+(sensor.diameter || 1) / 2) * 100;
+      // Silinder vertikal: gunakan panjang sebagai diameter (atau diameter jika ada)
+      const diameterCm = (+(sensor.diameter || sensor.panjang || 1)) * 100;
+      const r = diameterCm / 2;
       return (Math.PI * r * r * tinggiCm) / 1000;
     }
   } else {
@@ -478,10 +666,36 @@ function pctVolToLinear(pctVol, tinggiTankiCm) {
 }
 
 // ── Warna tangki berdasarkan % isi ───────────────────────────────────────────
+// ── Warna tangki air biasa: merah ≤40%, kuning 41-60%, hijau >60% ─────────────
 function getTankColorByPct(pct) {
-  if (pct <= 25)  return { border:'#dc3545', water:'linear-gradient(180deg,#fca5a5,#dc3545)', bg:'#fff5f5', label:'#dc3545' };
-  if (pct <= 50)  return { border:'#c99a0a', water:'linear-gradient(180deg,#fde68a,#b45309)', bg:'#fefce8', label:'#b45309' };
-  return                 { border:'#18a96a', water:'linear-gradient(180deg,#6ee7b7,#059669)', bg:'#f0fdf4', label:'#18a96a' };
+ if (pct <= 40)  return { 
+  border:'#7f1d1d', 
+  water:'linear-gradient(180deg,#dc2626,#7f1d1d)', 
+  bg:'#fff1f2', 
+  label:'#7f1d1d'
+};
+  if (pct <= 60) return { 
+    border:'#ca8a04', 
+    water:'linear-gradient(180deg,#fde047,#eab308)', 
+    bg:'#fefce8', 
+    label:'#ca8a04' 
+};
+  return { 
+    border:'#18a96a', 
+    water:'linear-gradient(180deg,#6ee7b7,#059669)', 
+    bg:'#f0fdf4', 
+    label:'#18a96a' 
+  };
+}
+
+// ── Warna tangki SOLAR: coklat 0 - 100% ────────────────
+function getTankColorSolar(pct) {
+  return { 
+    border:'#78350f', 
+    water:'linear-gradient(180deg,#b45309,#78350f)', 
+    bg:'#694c1a86', 
+    label:'#78350f' 
+  };
 }
 
 // ── Helper: buat HTML 1 kartu tangki ─────────────────────────────────────────
@@ -722,10 +936,10 @@ function _makeGroundTankAWithFlowHTML(s, i) {
       <div style="display:flex;align-items:center;gap:6px;width:100%;justify-content:center;margin-bottom:8px">
         ${tankVisualHTML}
         <div style="display:flex;flex-direction:column;align-items:flex-start;min-width:0">
-          <div id="tank-pct-${s.id}" style="font-family:'DM Mono',monospace;font-size:26px;font-weight:800;color:${col.label};line-height:1">—%</div>
-          <div id="tank-vol-${s.id}" style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;color:${col.label};margin-top:3px;white-space:nowrap">— of ${maxVol.toLocaleString('id-ID')} L</div>
-          <div id="tank-cm-${s.id}" style="font-size:8px;color:var(--txt3);margin-top:2px">— cm</div>
-          <div id="tank-offline-${s.id}" style="margin-top:5px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:8px;font-weight:700;color:#94a3b8;letter-spacing:.5px">
+          <div id="tank-pct-mini-${s.id}" style="font-family:'DM Mono',monospace;font-size:26px;font-weight:800;color:${col.label};line-height:1">—%</div>
+          <div id="tank-vol-mini-${s.id}" style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;color:${col.label};margin-top:3px;white-space:nowrap">— of ${maxVol.toLocaleString('id-ID')} L</div>
+          <div id="tank-cm-mini-${s.id}" style="font-size:8px;color:var(--txt3);margin-top:2px">— cm</div>
+          <div id="tank-offline-mini-${s.id}" style="margin-top:5px;display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;background:#f1f5f9;border:1px solid #e2e8f0;font-size:8px;font-weight:700;color:#94a3b8;letter-spacing:.5px">
             <span style="width:5px;height:5px;border-radius:50%;background:#94a3b8;display:inline-block"></span>OFFLINE
           </div>
         </div>
@@ -826,7 +1040,10 @@ function applyWL(wl) {
   if (!wl) return;
   window._lastWLData = wl;
   set('wl-time', fmtT(wl.created_at));
+  // DEBUG: log semua keys yang masuk dari API
+  console.log('[applyWL] water_level keys:', Object.keys(wl));
   const sensors = getSensors();
+  console.log(`🔄 applyWL: Processing ${sensors.length} sensors:`, sensors.map(s => ({id: s.id, fixedId: s.fixedId, key: s.key, active: s.active})));
   let grandTotal = 0;
   let sumPct = 0;
   const volRows = document.getElementById('wl-vol-rows');
@@ -836,7 +1053,14 @@ function applyWL(wl) {
     // Skip sensor nonaktif — kartu sudah tampil abu-abu dari _makeTankCardHTML
     if (s.active === false) return;
 
-    let rawCm = wl[s.key + '_cm'] ?? wl[s.key] ?? null;
+    // Gunakan fallback cache jika data tidak tersedia atau 0
+    const dataResult = getSensorValueWithFallback(wl, s.key, s.fixedId);
+    // Cache hanya dari fresh data
+    if (dataResult.source === 'fresh') setCachedSensorValue(s.key, dataResult.value);
+    // Cache/none = offline → tampilkan —%
+    let rawCm = (dataResult.source === 'fresh') ? dataResult.value : null;
+
+    console.log(`[applyWL] sensor ${s.name} (key=${s.key}, fixedId=${s.fixedId}): rawCm=${rawCm} [${dataResult.source}]`);
     if (rawCm === null) {
       // Sensor belum kirim data — tampilkan badge OFFLINE, set kartu ke style grey
       const offEl = document.getElementById('tank-offline-' + s.id);
@@ -857,68 +1081,108 @@ function applyWL(wl) {
     const offEl = document.getElementById('tank-offline-' + s.id);
     if (offEl) offEl.style.display = 'none';
     rawCm = Math.max(0, parseFloat(rawCm));
+    console.log(`[applyWL-2] After offline hide, about to cmToInfo for ${s.id}, rawCm=${rawCm}`);
 
     // Gunakan cmToInfo untuk mendapat % volume (akurat) DAN % linear (untuk info tambahan)
-    const info = cmToInfo(s, rawCm);
-    const pct        = info.pct;        // % volume — yang dipakai untuk fill visual & alert
-    const pctLinear  = info.pctLinear;  // % tinggi linear — info tambahan
-    const waterCm    = +info.h.toFixed(1); // tinggi air dari dasar (cm)
-    const isNonLinear = info.isNonLinear;  // true jika silinder horizontal
-    sumPct += pct;
+    let info, pct, pctLinear, waterCm, isNonLinear;
+    try {
+      info = cmToInfo(s, rawCm);
+      pct        = info.pct;        // % volume — yang dipakai untuk fill visual & alert
+      pctLinear  = info.pctLinear;  // % tinggi linear — info tambahan
+      waterCm    = +Math.max(0, info.h - +(s.sensorZeroCm ?? 0)).toFixed(1); // tinggi air dikurangi zero offset sensor
+      isNonLinear = info.isNonLinear;  // true jika silinder horizontal
+      console.log(`[applyWL] ${s.name} (id=${s.id}): rawCm=${rawCm}, pct=${pct}%, pctLinear=${pctLinear}%, waterCm=${waterCm}cm, shape=${s.shape}, zero=${s.sensorZeroCm}`);
+      sumPct += pct;
+    } catch(e) {
+      console.error(`❌ ERROR cmToInfo for ${s.id}:`, e.message);
+      return;  // Skip this sensor
+    }
 
-    // Warna tangki berdasarkan % isi (merah/kuning/hijau), sama untuk semua tangki
-    const col = getTankColorByPct(pct);
+    // Warna tangki — solar pakai skema coklat/kuning/hijau, lainnya merah/kuning/hijau
+    const col = (s.fixedId === 'solar') ? getTankColorSolar(pct) : getTankColorByPct(pct);
+    
+    // Determine text color: BLACK for warm colors (orange/red), WHITE for cool colors (green)
+    const textColor = (pct <= 50) ? '#000000' : '#ffffff';
+
+    // Pre-declare all elements untuk avoid "used before initialization"
+    const tw = document.getElementById('tank-water-' + s.id);
+    const tb = document.getElementById('tank-body-' + s.id);
+    const tc = document.getElementById('tank-card-' + s.id);
+    const tp = document.getElementById('tank-pct-' + s.id);
+    const tcm = document.getElementById('tank-cm-' + s.id);
+    const tv = document.getElementById('tank-vol-' + s.id);
+    
+    console.log(`🔍 Updating ${s.id}: pct=${pct}%, element check:`, {
+      waterEl: !!tw,
+      bodyEl: !!tb,
+      cardEl: !!tc,
+      pctEl: !!tp,
+      cmEl: !!tcm,
+      volEl: !!tv
+    });
 
     // Update visual: fill air menggunakan % LINEAR agar tampilan tangki proporsional secara visual
     // tapi label persentase menampilkan % VOLUME yang akurat
-    const tw = document.getElementById('tank-water-' + s.id);
     if (tw) {
       tw.style.height = pctLinear + '%';
       tw.style.background = col.water;
+      console.log(`✅ Updated #tank-water-${s.id} height = ${pctLinear}%`);
+    } else {
+      console.warn(`❌ Element #tank-water-${s.id} tidak ditemukan!`);
     }
 
     // Update warna body & border tangki
-    const tb = document.getElementById('tank-body-' + s.id);
     if (tb) {
       tb.style.borderColor = col.border;
       tb.style.background  = col.bg;
+    } else {
+      console.warn(`❌ Element #tank-body-${s.id} tidak ditemukan!`);
     }
 
     // Update warna border-top & label kartu — hijau/kuning/merah sesuai level
-    const tc = document.getElementById('tank-card-' + s.id);
     if (tc) {
       tc.style.borderTopColor = col.border;
       tc.style.opacity = '1';
     }
-
-    const tp = document.getElementById('tank-pct-' + s.id);
+    
     if (tp) {
       if (isNonLinear) {
-        tp.innerHTML = `<span style="font-size:22px;font-weight:800;color:${col.label}">${pct}%</span><span style="font-size:7px;color:var(--txt3);display:block;line-height:1.4">vol · ${pctLinear}% tinggi</span>`;
+        tp.innerHTML = `<span style="font-size:22px;font-weight:800;color:${textColor}">${pct}%</span><span style="font-size:7px;color:var(--txt3);display:block;line-height:1.4">vol · ${pctLinear}% tinggi</span>`;
       } else {
         tp.textContent = pct + '%';
       }
-      tp.style.color = col.label;
+      tp.style.color = textColor;
+      console.log(`✅ Updated #tank-pct-${s.id} = ${pct}%`);
+    } else {
+      console.warn(`❌ Element #tank-pct-${s.id} tidak ditemukan!`);
     }
+    // Juga update elemen mini (di atas tangki visual)
+    const tpMini = document.getElementById('tank-pct-mini-' + s.id);
+    if (tpMini) { tpMini.textContent = pct + '%'; tpMini.style.color = textColor; }
 
-    const tcm = document.getElementById('tank-cm-' + s.id);
     if (tcm) {
       const isHoriz = (s.orientasi || 'vertikal') === 'horizontal';
       tcm.textContent = isHoriz
         ? waterCm.toFixed(1) + ' cm (dari bawah)'
         : waterCm.toFixed(1) + ' cm air';
     }
+    const tcmMini = document.getElementById('tank-cm-mini-' + s.id);
+    if (tcmMini) tcmMini.textContent = waterCm.toFixed(1) + ' cm air';
 
     const vol    = Math.round(calcVolumeLiter(s, rawCm));
     const maxVol = Math.round(calcMaxVolumeLiter(s));
     grandTotal += vol;
 
     // Format volume: "vol of max L"
-    const tv = document.getElementById('tank-vol-' + s.id);
     if (tv) {
       tv.textContent = vol.toLocaleString('id-ID') + ' of ' + maxVol.toLocaleString('id-ID') + ' L';
       tv.style.color = col.label;
     }
+    const tvMini = document.getElementById('tank-vol-mini-' + s.id);
+    if (tvMini) { tvMini.textContent = vol.toLocaleString('id-ID') + ' of ' + maxVol.toLocaleString('id-ID') + ' L'; tvMini.style.color = col.label; }
+    // Hide offline-mini badge
+    const toffMini = document.getElementById('tank-offline-mini-' + s.id);
+    if (toffMini) toffMini.style.display = 'none';
 
     // Update progress bar (new card style)
     const tbar = document.getElementById('tank-bar-' + s.id);
@@ -952,33 +1216,55 @@ function applyWL(wl) {
   const avg = sensors.length ? sumPct / sensors.length : 0;
   pill('wl-status', avg, 70, 90);
 
-  // Update UI baru (iot.js sections)
+  // applyWLToNewUI dulu sebagai pass pertama
   applyWLToNewUI(wl, sensors);
+  // updateNewSectionTanks TERAKHIR — ini final authority untuk semua section cards
+  // Fungsi ini punya hardcoded sensor config fallback dan key lookup paling lengkap
+  if (typeof updateNewSectionTanks === 'function') updateNewSectionTanks(wl);
 }
 
 // ── Bridge: Update elemen di UI baru iot.js dari data applyWL ─────────────────
 // Mapping fixedId → element ID prefix di HTML baru
 const _NEW_UI_ID_MAP = {
-  'air_proses':    'air_proses',
-  'feed_slury':    'feed_slury',
-  'tanu_edi':      'tanu_edi',
-  'feed_edi':      'feed_edi',
-  'slury_1':       'slury_1',
-  'slury_2':       'slury_2',
-  'solar':         'solar',
-  'boiler_fw':     'boiler_fw',
-  'ground_tank_a': 'ground_tank_a',
-  'ground_tank_b': 'ground_tank_b',
+  // fixedId → element ID prefix di HTML (tank-water-XXX, tank-pct-XXX, dst)
+  'air_proses':    'air_proses',    // s1 = Process Water → FILTER WATER section
+  'feed_slury':    'feed_slury_tw1',    // s2 = Feed Slurry Water → TREAT WATER 1 section
+  'tanu_edi':      'tanu_edi',      // s3 = Chiller In → Chiller in & out section
+  'feed_edi':      'feed_edi',      // s4 = Chiller Out → Chiller in & out section
+  'solar':         'solar',         // s5 = Tangki Solar → Diesel/Solar section
+  'slury_1':       'slury_1_tw1',       // s7 = Slurry 1 → TREAT WATER 1 section
+  'slury_2':       'slury_2_tw1',       // s8 = Slurry 2 → TREAT WATER 1 section
+  'boiler_fw':     'boiler_fw-tw2', // s6 = Tank Aroma → suffix -tw2 sesuai HTML
+  'ground_tank_a': 'ground_tank_a', // s9 = Ground Tank A → FILTER WATER section
+  'ground_tank_b': 'ground_tank_b', // s10 = Ground Tank B → WWTP section
 };
 
 function applyWLToNewUI(wl, sensors) {
   if (!wl) return;
   sensors.forEach(s => {
-    if (s.active === false) return;
     const elId = _NEW_UI_ID_MAP[s.fixedId];
     if (!elId) return;
 
-    let rawCm = wl[s.key + '_cm'] ?? wl[s.key] ?? null;
+    // Sensor tidak aktif → tampilkan --% dan kosongkan tangki
+    if (s.active === false) {
+      const pctEl  = document.getElementById('tank-pct-'     + elId);
+      const waterEl= document.getElementById('tank-water-'   + elId);
+      const offEl  = document.getElementById('tank-offline-' + elId);
+      const barEl  = document.getElementById('tank-bar-'     + elId);
+      if (pctEl)   pctEl.textContent = '--%';
+      if (waterEl) waterEl.style.height = '0%';
+      if (offEl)   { offEl.style.display = 'inline-flex'; offEl.textContent = 'TIDAK AKTIF'; }
+      if (barEl)   { barEl.style.display = 'none'; if (barEl.parentElement) barEl.parentElement.style.display = 'none'; }
+      return;
+    }
+
+    // Gunakan getSensorValueWithFallback agar konsisten dengan applyWL
+    const dataResult = getSensorValueWithFallback(wl, s.key, s.fixedId);
+    if (dataResult.source === 'fresh') setCachedSensorValue(s.key, dataResult.value);
+    // Cache/none = offline → tampilkan —%
+    let rawCm = (dataResult.source === 'fresh') ? dataResult.value : null;
+    // Nilai -1 dari ESP = tidak ada data
+    if (rawCm !== null && (parseFloat(rawCm) < 0 || !isFinite(parseFloat(rawCm)))) rawCm = null;
 
     if (rawCm === null) {
       // Offline — tampilkan —% dan sembunyikan badge
@@ -992,8 +1278,21 @@ function applyWLToNewUI(wl, sensors) {
       if (cmEl)    cmEl.textContent  = '— cm';
       if (volEl)   volEl.textContent = '— / — L';
       if (waterEl) waterEl.style.height = '0%';
-      if (barEl)   barEl.style.width    = '0%';
+      if (barEl)   { barEl.style.display = 'none'; if (barEl.parentElement) barEl.parentElement.style.display = 'none'; }
       if (offEl)   offEl.style.display  = 'inline-flex';
+      // Sync _tw2
+      const pctElTW2  = document.getElementById('tank-pct-'     + elId + '_tw2');
+      const cmElTW2   = document.getElementById('tank-cm-'      + elId + '_tw2');
+      const volElTW2  = document.getElementById('tank-vol-'     + elId + '_tw2');
+      const waterElTW2= document.getElementById('tank-water-'   + elId + '_tw2');
+      const offElTW2  = document.getElementById('tank-offline-' + elId + '_tw2');
+      const barElTW2  = document.getElementById('tank-bar-'     + elId + '_tw2');
+      if (pctElTW2)   pctElTW2.textContent = '—%';
+      if (cmElTW2)    cmElTW2.textContent  = '— cm';
+      if (volElTW2)   volElTW2.textContent = '— / — L';
+      if (waterElTW2) waterElTW2.style.height = '0%';
+      if (offElTW2)   offElTW2.style.display  = 'inline-flex';
+      if (barElTW2)   { barElTW2.style.display = 'none'; if (barElTW2.parentElement) barElTW2.parentElement.style.display = 'none'; }
       return;
     }
 
@@ -1004,10 +1303,13 @@ function applyWLToNewUI(wl, sensors) {
     const info      = cmToInfo(s, rawCm);
     const pct       = info.pct;
     const pctLinear = info.pctLinear;
-    const waterCm   = +info.h.toFixed(1);
-    const col       = getTankColorByPct(pct);
+    const waterCm   = +Math.max(0, info.h - +(s.sensorZeroCm ?? 0)).toFixed(1);
+    const col       = (s.fixedId === 'solar') ? getTankColorSolar(pct) : getTankColorByPct(pct);
     const vol       = Math.round(calcVolumeLiter(s, rawCm));
     const maxVol    = Math.round(calcMaxVolumeLiter(s));
+    
+    // Determine text color: BLACK for warm colors (orange/red), WHITE for cool colors (green)
+    const textColor = (pct <= 50) ? '#000000' : '#ffffff';
 
     // Fill air
     const waterEl = document.getElementById('tank-water-' + elId);
@@ -1016,14 +1318,17 @@ function applyWLToNewUI(wl, sensors) {
       waterEl.style.background = col.water;
     }
     // Body border & bg
+    // Untuk slury_2_tw1: jangan override background (dark card theme)
     const bodyEl = document.getElementById('tank-body-' + elId);
     if (bodyEl) {
-      bodyEl.style.borderColor = col.border;
-      bodyEl.style.background  = col.bg;
+      if (elId !== 'slury_2_tw1') {
+        bodyEl.style.borderColor = col.border;
+        bodyEl.style.background  = col.bg;
+      }
     }
     // Persentase
     const pctEl = document.getElementById('tank-pct-' + elId);
-    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.color = '#ffffff'; }
+    if (pctEl) { pctEl.textContent = pct + '%'; pctEl.style.color = textColor; }
     // cm
     const cmEl = document.getElementById('tank-cm-' + elId);
     if (cmEl) cmEl.textContent = waterCm + ' cm air';
@@ -1033,9 +1338,28 @@ function applyWLToNewUI(wl, sensors) {
       volEl.textContent = vol.toLocaleString('id-ID') + 'lt / ' + maxVol.toLocaleString('id-ID') + 'lt';
       volEl.style.color = col.label;
     }
-    // Progress bar
+    // Progress bar — disembunyikan, tidak perlu diupdate
     const barEl = document.getElementById('tank-bar-' + elId);
-    if (barEl) { barEl.style.width = pctLinear + '%'; barEl.style.background = col.border; }
+    if (barEl) {
+      barEl.style.display = 'none';
+      if (barEl.parentElement) barEl.parentElement.style.display = 'none';
+    }
+
+    // Sync ke elemen _tw2 (section TREAT WATER 2 lama yang masih tampil)
+    const waterElTW2 = document.getElementById('tank-water-' + elId + '_tw2');
+    if (waterElTW2) { waterElTW2.style.height = pctLinear + '%'; waterElTW2.style.background = col.water; }
+    const bodyElTW2 = document.getElementById('tank-body-' + elId + '_tw2');
+    if (bodyElTW2) { bodyElTW2.style.borderColor = col.border; bodyElTW2.style.background = col.bg; }
+    const pctElTW2 = document.getElementById('tank-pct-' + elId + '_tw2');
+    if (pctElTW2) { pctElTW2.textContent = pct + '%'; pctElTW2.style.color = textColor; }
+    const cmElTW2 = document.getElementById('tank-cm-' + elId + '_tw2');
+    if (cmElTW2) cmElTW2.textContent = waterCm + ' cm air';
+    const volElTW2 = document.getElementById('tank-vol-' + elId + '_tw2');
+    if (volElTW2) { volElTW2.textContent = vol.toLocaleString('id-ID') + 'lt / ' + maxVol.toLocaleString('id-ID') + 'lt'; volElTW2.style.color = col.label; }
+    const offElTW2 = document.getElementById('tank-offline-' + elId + '_tw2');
+    if (offElTW2) offElTW2.style.display = 'none';
+    const barElTW2 = document.getElementById('tank-bar-' + elId + '_tw2');
+    if (barElTW2) { barElTW2.style.display = 'none'; if (barElTW2.parentElement) barElTW2.parentElement.style.display = 'none'; }
   });
 }
 
@@ -1177,7 +1501,7 @@ function applyDiesel(data) {
     if (!s || s.active === false) return;
     const rc   = Math.max(0, parseFloat(rawCm));
     const info = cmToInfo(s, rc);
-    const col  = getTankColorByPct(info.pct);
+    const col  = (s.fixedId === 'solar') ? getTankColorSolar(info.pct) : getTankColorByPct(info.pct);
     const vol  = Math.round(calcVolumeLiter(s, rc));
     const maxV = Math.round(calcMaxVolumeLiter(s));
 
@@ -1190,7 +1514,7 @@ function applyDiesel(data) {
     const tv = document.getElementById('tank-vol-' + tankId);
     if (tv) { tv.textContent = vol.toLocaleString('id-ID') + ' of ' + maxV.toLocaleString('id-ID') + ' L'; tv.style.color = col.label; }
     const tcm = document.getElementById('tank-cm-' + tankId);
-    if (tcm) tcm.textContent = (+info.h.toFixed(1)) + ' cm air';
+    if (tcm) { const _zeroCm = +(s.sensorZeroCm ?? 0); tcm.textContent = Math.max(0, +info.h.toFixed(1) - _zeroCm) + ' cm air'; }
     const tbar = document.getElementById('tank-bar-' + tankId);
     if (tbar) { tbar.style.width = info.pctLinear + '%'; tbar.style.background = col.border; }
     const off = document.getElementById('tank-offline-' + tankId);
@@ -1217,6 +1541,40 @@ function applyDiesel(data) {
   if (lt && data.created_at) lt.textContent = fmtT(data.created_at);
 }
 
+// ── applyFuelGenset: update TANK GENSET (diesel_genset) dari tabel laporan_fuel_level ──
+// Data dari API: { percent, liters, created_at } — datang langsung dalam %, BUKAN cm,
+// jadi tidak lewat cmToInfo/dimensi tangki seperti sensor s1-s11.
+const FUEL_TANK_CAPACITY_LITERS = 721; // harus sama dengan FUEL_TANK_CAPACITY_LITERS di bridge.py
+
+function applyFuelGenset(data) {
+  const pctEl  = document.getElementById('tank-pct-diesel_genset');
+  const waterEl= document.getElementById('tank-water-diesel_genset');
+  const bodyEl = document.getElementById('tank-body-diesel_genset');
+  const volEl  = document.getElementById('tank-vol-diesel_genset');
+  const cmEl   = document.getElementById('tank-cm-diesel_genset');
+  const offEl  = document.getElementById('tank-offline-diesel_genset');
+
+  if (!data || data.percent === null || data.percent === undefined) {
+    if (pctEl)   pctEl.textContent = '—%';
+    if (waterEl) waterEl.style.width = '0%';
+    if (volEl)   volEl.textContent = '— / ' + FUEL_TANK_CAPACITY_LITERS.toLocaleString('id-ID') + ' lt';
+    if (cmEl)    cmEl.style.display = 'none';
+    if (offEl)   offEl.style.display = 'flex';
+    return;
+  }
+
+  const pct    = Math.round(Number(data.percent));
+  const liters = data.liters != null ? Math.round(Number(data.liters)) : Math.round(pct / 100 * FUEL_TANK_CAPACITY_LITERS);
+  const col    = getTankColorByPct(pct);
+
+  if (offEl)   offEl.style.display = 'none';
+  if (pctEl)   { pctEl.textContent = pct + '%'; pctEl.style.color = '#000000'; }
+  if (waterEl) { waterEl.style.width = pct + '%'; waterEl.style.height = '100%'; waterEl.style.background = col.water; }
+  if (bodyEl)  { bodyEl.style.borderColor = col.border; bodyEl.style.background = col.bg; }
+  if (volEl)   { volEl.textContent = liters.toLocaleString('id-ID') + ' / ' + FUEL_TANK_CAPACITY_LITERS.toLocaleString('id-ID') + ' lt'; volEl.style.color = col.label; }
+  if (cmEl)    cmEl.style.display = 'none'; // fuel tidak punya data cm, sembunyikan baris ini
+}
+
 // ── Window Exports for global access ──────────────────────────
 if (typeof window !== 'undefined') {
   window.getSensors = getSensors;
@@ -1225,6 +1583,11 @@ if (typeof window !== 'undefined') {
   window.cmToInfo = cmToInfo;
   window.calcVolumeLiter = calcVolumeLiter;
   window.calcMaxVolumeLiter = calcMaxVolumeLiter;
+  window.fetchSummary = fetchSummary;
+  window.applyWL = applyWL;
+  window.applyWF = applyWF;
+  window.applyEnv = applyEnv;
+  window.applyFuelGenset = applyFuelGenset;
 }
 
 // ══ TABLE ══════════════════════════════════════════

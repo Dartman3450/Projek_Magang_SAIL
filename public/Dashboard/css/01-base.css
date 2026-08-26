@@ -46,6 +46,14 @@ body {
   overflow: hidden;
 }
 
+/* For mobile: allow body to scroll */
+@media (max-width: 768px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+  }
+}
+
 /* ─── Main Area ──────────────────────────────────── */
 .main {
   flex: 1;

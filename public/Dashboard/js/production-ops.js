@@ -80,9 +80,24 @@ async function saveUpdEntry(type) {
 }
 function showQuickToast(msg) {
   let t = document.getElementById('_toast');
-  if(!t){t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1a202c;color:#fff;padding:10px 22px;border-radius:100px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none;transition:opacity .3s';document.body.appendChild(t);}
-  t.textContent=msg;t.style.opacity='1';
-  clearTimeout(t._hide);t._hide=setTimeout(()=>{t.style.opacity='0';},2500);
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1a202c;color:#fff;padding:10px 22px;border-radius:100px;font-size:13px;font-weight:600;z-index:99999;pointer-events:none;transition:opacity .4s;display:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = 'block';
+  // Force reflow agar transition opacity berjalan setelah display:block
+  void t.offsetWidth;
+  t.style.opacity = '1';
+  clearTimeout(t._hide);
+  clearTimeout(t._remove);
+  t._hide = setTimeout(() => {
+    t.style.opacity = '0';
+    // Sembunyikan total setelah transition selesai (400ms)
+    t._remove = setTimeout(() => { t.style.display = 'none'; }, 450);
+  }, 2800);
 }
 
 // ── Summary drawer ────────────────────────────────────────
@@ -103,7 +118,7 @@ function openSumm(type, idx) {
 
   nmEl.textContent = p.name;
   dtEl.textContent =
-    '📅 '+(p.start||'—')+' → 🏁 '+(p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—');
+    '📅 '+(p.start ? new Date(p.start).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '—')+' → 🏁 '+((p.completed_at||p.end) ? new Date(p.completed_at||p.end).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '—');
 
   const tblStyle    = 'width:100%;border-collapse:collapse;font-size:12px;';
   const thStyle     = 'text-align:left;padding:8px 12px;font-size:10px;font-weight:700;color:var(--txt3);background:var(--bg);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;';
@@ -126,10 +141,9 @@ function openSumm(type, idx) {
     </tr></thead>
     <tbody>
       <tr><td style="${tdStyle}">Nama Project</td><td style="${tdMonoStyle}">${p.name||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Tanggal Mulai</td><td style="${tdStyle}">${p.start||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Tanggal Selesai</td><td style="${tdStyle}">${p.completed_at ? new Date(p.completed_at).toLocaleDateString('id-ID') : p.end||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Materials</td><td style="${tdStyle}">${p.materials||'—'}</td></tr>
-      <tr><td style="${tdStyle}">Tools</td><td style="${tdStyle}">${p.tools||'—'}</td></tr>
+      <tr><td style="${tdStyle}">Tanggal Mulai</td><td style="${tdStyle}">${p.start ? new Date(p.start).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td></tr>
+      <tr><td style="${tdStyle}">Tanggal Selesai</td><td style="${tdStyle}">${(p.completed_at||p.end) ? new Date(p.completed_at||p.end).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '—'}</td></tr>
+      <tr><td style="${tdStyle}">Method</td><td style="${tdStyle}">${p.tools||'—'}</td></tr>
       <tr><td style="${tdStyle}">Notes</td><td style="${tdStyle}">${p.notes||'—'}</td></tr>
     </tbody>`);
 
@@ -286,6 +300,9 @@ function openSumm(type, idx) {
 
   document.getElementById('summ-overlay-'+type)?.classList.add('show');
   document.getElementById('summ-drawer-'+type)?.classList.add('show');
+  // Sembunyikan alert banner di belakang drawer
+  const banner = document.getElementById('alert-banner-strip');
+  if (banner) { banner.style.zIndex = '-1'; banner.style.filter = 'blur(2px)'; banner.style.opacity = '0.4'; }
   document.body.style.overflow = 'hidden';
 }
 
@@ -333,9 +350,10 @@ function switchSummTab(type, tabId) {
 window.switchSummTab = switchSummTab;
 
 // ── Tab content renderer ──────────────────────────────────
-function renderSummTabContent(type, tabId, p) {
+function renderSummTabContent(type, tabId, p, opts) {
   const wrap = document.getElementById('summ-sec-'+type+'-'+tabId);
   if (!wrap) return;
+  const hideTahapanCIP = !!(opts && opts.hideTahapanCIP);
 
   // Base Styles yang lebih compact/rapat
   const tblStyle = 'width:100%;border-collapse:collapse;font-size:11px;';
@@ -344,9 +362,24 @@ function renderSummTabContent(type, tabId, p) {
   
   const emptyMsg = (msg) => `<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;background:var(--bg);border-radius:8px;border:1px dashed var(--border)">${msg}</div>`;
 
+  // Format angka: selalu 2 desimal kalau numerik, teks/non-numerik dibiarkan apa adanya
+  const fmt2 = (val) => {
+    if (val === null || val === undefined || String(val).trim() === '' || String(val).trim() === '—') return val;
+    const n = parseFloat(String(val).replace(',', '.'));
+    if (isNaN(n)) return val;
+    return n.toFixed(2);
+  };
+
   const tableHeaderUI = (title) => `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
       <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">${title}</div>
+      <div style="font-size:9px;color:var(--blue);background:#ebf2fd;padding:3px 8px;border-radius:4px;font-weight:600">↔ Geser kanan untuk melihat update</div>
+    </div>`;
+
+  // Versi bold hitam (khusus Parameter CT & Finish Production, sesuai request)
+  const boldHeaderUI = (title) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="font-size:12px;font-weight:700;color:#111">${title}</div>
       <div style="font-size:9px;color:var(--blue);background:#ebf2fd;padding:3px 8px;border-radius:4px;font-weight:600">↔ Geser kanan untuk melihat update</div>
     </div>`;
 
@@ -375,18 +408,18 @@ function renderSummTabContent(type, tabId, p) {
           'sp-offset':          'sp_offset',
           'sp-chilled':         'sp_chill',
           'sp-condenser-water': 'sp_cond_water',
-          'sp-system-vacuum':   'sp_vacuum',
-          'sp-steam-flow':      'sp_press_steam',
+          'sp-system-vacuum':   'sp_sys_vacuum',
+          'sp-steam-flow':      'sp_steam_flow',
           // PAGE 2
           'sp-temp-feed':       'sp_temp_feed',
           'sp-temp-heater':     'sp_temp_heater',
           'sp-temp-top':        'sp_temp_top',
-          'sp-Condensate1':     'sp_cond1',
-          'sp-Condensate2':     'sp_cond2',
+          'sp-Condensate1':     'sp_cond_temp1',
+          'sp-Condensate2':     'sp_cond_temp2',
           'sp-temp-bot':        'sp_temp_bot',
-          // sp-add1~8: belum ada kolom DB → null (hanya tampil di SP Awal)
-          'sp-add1': null, 'sp-add2': null, 'sp-add3': null, 'sp-add4': null,
-          'sp-add5': null, 'sp-add6': null, 'sp-add7': null, 'sp-add8': null,
+          // sp-add1~8: kolom CT parameter di de_production_history
+          'sp-add1': 'sp_add1', 'sp-add2': 'sp_add2', 'sp-add3': 'sp_add3', 'sp-add4': 'sp_add4',
+          'sp-add5': 'sp_add5', 'sp-add6': 'sp_add6', 'sp-add7': 'sp_add7', 'sp-add8': 'sp_add8',
         };
         // Mapping SP Awal dari set_point project (keys bisa pakai dash atau underscore)
         const SP_AWAL_MAP = {
@@ -405,13 +438,13 @@ function renderSummTabContent(type, tabId, p) {
           'sp-offset':          ['sp-offset','sp_offset'],
           'sp-chilled':         ['sp-chilled','sp_chill'],
           'sp-condenser-water': ['sp-condenser-water','sp_cond_water'],
-          'sp-system-vacuum':   ['sp-system-vacuum','sp_vacuum'],
-          'sp-steam-flow':      ['sp-steam-flow','sp_press_steam'],
+          'sp-system-vacuum':   ['sp-system-vacuum','sp_sys_vacuum'],
+          'sp-steam-flow':      ['sp-steam-flow','sp_steam_flow'],
           'sp-temp-feed':       ['sp-temp-feed','sp_temp_feed'],
           'sp-temp-heater':     ['sp-temp-heater','sp_temp_heater'],
           'sp-temp-top':        ['sp-temp-top','sp_temp_top'],
-          'sp-Condensate1':     ['sp-Condensate1','sp_cond1'],
-          'sp-Condensate2':     ['sp-Condensate2','sp_cond2'],
+          'sp-Condensate1':     ['sp-Condensate1','sp_cond_temp1'],
+          'sp-Condensate2':     ['sp-Condensate2','sp_cond_temp2'],
           'sp-temp-bot':        ['sp-temp-bot','sp_temp_bot'],
           'sp-add1':            ['sp-add1','sp_add1'],
           'sp-add2':            ['sp-add2','sp_add2'],
@@ -432,10 +465,49 @@ function renderSummTabContent(type, tabId, p) {
           : [];
 
         // Hanya kolom UPDATE yang tampil sebagai Update #1, #2, ...
-        const dbRows = histAsc.filter(r => String(r.action || '').toLowerCase() === 'update');
+        const allUpdateRows = histAsc.filter(r => String(r.action || '').toLowerCase() === 'update');
 
-        // Snapshot awal: prefer baris INSERT pertama, fallback ke row history paling awal, lalu project set_point
-        const initialRow = histAsc.find(r => String(r.action || '').toLowerCase() === 'insert') || histAsc[0] || null;
+        const SP_DB_COLS_ARR = Object.entries(SP_TO_DB)
+          .filter(([id]) => !id.startsWith('sp-add'))
+          .map(([, col]) => col);
+        const CT_DB_COLS_ARR = ['sp_add1','sp_add2','sp_add3','sp_add4','sp_add5','sp_add6','sp_add7','sp_add8'];
+
+        const insertRow = histAsc.find(r => String(r.action || '').toLowerCase() === 'insert') || histAsc[0] || null;
+
+        // Pisahkan SP rows dan CT rows:
+        // Jika row punya flag _ct_only = true → CT save
+        // Jika tidak ada flag → gunakan deteksi perubahan vs row sebelumnya
+        function hasChangedCols(row, prevRow, cols) {
+          if (!prevRow) return cols.some(col => row[col] !== null && row[col] !== undefined && String(row[col]).trim() !== '');
+          return cols.some(col => {
+            const curr = row[col] !== null && row[col] !== undefined ? String(row[col]).trim() : '';
+            const prev = prevRow[col] !== null && prevRow[col] !== undefined ? String(prevRow[col]).trim() : '';
+            return curr !== prev && curr !== '';
+          });
+        }
+
+        const dbRows   = [];
+        const dbRowsCT = [];
+        let prevRow = insertRow;
+        for (const row of allUpdateRows) {
+          const isCTOnly = row._ct_only === true || row._ct_only === 'true' || row._ct_only === 1;
+          if (isCTOnly) {
+            // Flag eksplisit: pasti CT save
+            dbRowsCT.push(row);
+          } else {
+            // Tidak ada flag: deteksi berdasarkan perubahan
+            const spChanged = hasChangedCols(row, prevRow, SP_DB_COLS_ARR);
+            const ctChanged = hasChangedCols(row, prevRow, CT_DB_COLS_ARR);
+            // FIX: CT masuk dbRowsCT setiap ada perubahan CT — tidak peduli SP
+            // juga berubah di row yang sama (saveSP() simpan SP+CT dalam 1 row).
+            if (spChanged) dbRows.push(row);
+            if (ctChanged) dbRowsCT.push(row);
+          }
+          prevRow = row;
+        }
+
+        // Snapshot awal
+        const initialRow = insertRow;
         const spProject = p.set_point || p.setPoint || {};
 
         // Cek apakah ada data sama sekali
@@ -446,7 +518,7 @@ function renderSummTabContent(type, tabId, p) {
           return;
         }
 
-        // Build header
+        // Build header SP (pakai dbRows = SP-only updates)
         let thead = `<tr>
           <th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>
           <th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">SP Awal</th>`;
@@ -469,23 +541,67 @@ function renderSummTabContent(type, tabId, p) {
         });
         thead += `</tr>`;
 
-        let tbody = ''; let visibleRows = 0;
+        // Build header CT (pakai dbRowsCT = CT-only updates)
+        let theadCT = `<tr>
+          <th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>
+          <th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">SP Awal</th>`;
+        dbRowsCT.forEach((row, i) => {
+          const _tglRaw = row.tanggal || row.recorded_at || null;
+          const _tglDate = _tglRaw
+            ? new Date(_tglRaw.includes('T') ? _tglRaw : _tglRaw + 'T00:00:00')
+            : null;
+          const tgl = _tglDate && !isNaN(_tglDate)
+            ? _tglDate.toLocaleDateString('id-ID', {day:'2-digit',month:'short',year:'2-digit'})
+            : '—';
+          const time = row.recorded_at
+            ? (() => { const d = new Date(row.recorded_at); return isNaN(d) ? '' : d.toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'}); })()
+            : '';
+          theadCT += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">
+            Update #${i+1}<br>
+            <span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl} ${time}</span>
+          </th>`;
+        });
+        theadCT += `</tr>`;
+
+        let tbody = ''; let tbodyCT = ''; let visibleRows = 0; let visibleCTRows = 0;
+        const CT_IDS = new Set(['sp-add1','sp-add2','sp-add3','sp-add4','sp-add5','sp-add6','sp-add7','sp-add8']);
+
+        // Grouping baris SP (sama seperti kertas Form Data Trial/Setpoint):
+        // Slurry / Flow / Strip Rate / Temperature / Coolants / Pressure
+        const SP_GROUPS = [
+          { title: '🧪 Slurry',       fields: ['sp-slurry','sp-hopper','sp-density'] },
+          { title: '💧 Flow',         fields: ['sp-feed','sp-aroma','sp-steam','sp-prod-out','sp-cond1','sp-cond2'] },
+          { title: '📊 Strip Rate',   fields: ['sp-ext','sp-int','sp-cond-rate','sp-offset'] },
+          { title: '🧊 Coolants',     fields: ['sp-chilled','sp-condenser-water'] },
+          { title: '⚙️ Pressure',     fields: ['sp-system-vacuum','sp-steam-flow'] },
+          { title: '🌡️ Temperature', fields: ['sp-temp-feed','sp-temp-heater','sp-temp-top','sp-Condensate1','sp-Condensate2','sp-temp-bot'] },
+        ];
+        const SP_GROUP_MAP = {};
+        SP_GROUPS.forEach(g => g.fields.forEach(id => { SP_GROUP_MAP[id] = g.title; }));
+        let lastGroupRendered = null;
+
         SP_FIELDS.forEach(f => {
           // Ambil SP Awal dari set_point project
           const awalKeys = SP_AWAL_MAP[f.id] || [f.id];
 
-          // Base value dari snapshot insert/history agar tidak ikut berubah saat set_point project diupdate
+          // Base value:
+          // - SP fields (non-CT): dari initialRow history (snapshot insert = Receipt awal)
+          // - CT fields: JUGA dari initialRow (sp_add1-8 di row INSERT = nilai Receipt CT)
+          //   JANGAN pakai spProject karena set_point project tertimpa setiap kali CT disave
           let baseVal = '';
           const dbColForBase = SP_TO_DB[f.id];
           if (initialRow && dbColForBase && initialRow[dbColForBase] !== null && initialRow[dbColForBase] !== undefined && String(initialRow[dbColForBase]).trim() !== '') {
             baseVal = initialRow[dbColForBase];
           } else {
+            // Fallback ke spProject kalau tidak ada initialRow (project lama tanpa history insert)
             baseVal = awalKeys.reduce((v, k) => (v !== '' && v != null) ? v : (spProject[k] || ''), '') || '';
           }
 
           // Ambil nilai dari history rows pakai kolom DB yang tepat
+          // SP fields pakai dbRows, CT fields pakai dbRowsCT
           const dbCol   = SP_TO_DB[f.id];
-          const dbCells = dbRows.map(row => {
+          const activeRows = CT_IDS.has(f.id) ? dbRowsCT : dbRows;
+          const dbCells = activeRows.map(row => {
             if (!dbCol) return null;
             const v = row[dbCol];
             return (v !== null && v !== undefined && String(v).trim() !== '') ? v : null;
@@ -495,7 +611,7 @@ function renderSummTabContent(type, tabId, p) {
           if (!rowHasData) return;
 
           const unitHtml    = f.unit ? ` <span style="font-size:8px;color:var(--txt3);font-weight:400">${f.unit}</span>` : '';
-          const baseDisplay = baseVal ? `${baseVal}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
+          const baseDisplay = baseVal ? `${fmt2(baseVal)}${unitHtml}` : `<span style="color:var(--txt3)">—</span>`;
           const rowBg       = visibleRows % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
           visibleRows++;
 
@@ -531,21 +647,41 @@ function renderSummTabContent(type, tabId, p) {
               return;
             }
 
-            // Warna: oranye = berubah, biru = sama tapi tersimpan eksplisit, abu = carry-forward
-            const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt3)');
-            const weight = changed ? '700' : (isExplicit ? '600' : '400');
-            const italic = isExplicit ? '' : 'font-style:italic;';
-            cellParts.push(`<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};${italic}white-space:nowrap;background:inherit;">${displayRaw}${unitHtml}</td>`);
+            // Warna: oranye = berubah, biru = sama tapi tersimpan eksplisit, txt2 = carry-forward
+            const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt2)');
+            const weight = changed ? '700' : (isExplicit ? '600' : '500');
+            const italic = '';
+            cellParts.push(`<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};${italic}white-space:nowrap;background:inherit;">${fmt2(displayRaw)}${unitHtml}</td>`);
           });
 
           const baseIsHistorical = hasAnyChange && baseVal !== '';
           const cells = cellParts;
 
-          tbody += `<tr style="background:${rowBg};">
+          // Sisipkan header grup (Slurry / Flow / Strip Rate / dst) sebelum baris pertama grup ini
+          if (!CT_IDS.has(f.id)) {
+            const grp = SP_GROUP_MAP[f.id];
+            if (grp && grp !== lastGroupRendered) {
+              const totalCols = 2 + dbRows.length; // Parameter + SP Awal + tiap Update
+              tbody += `<tr>
+                <td colspan="${totalCols}" style="padding:6px 10px;background:var(--bg);font-size:12px;font-weight:700;color:#111;border-bottom:1px solid var(--border);">${grp}</td>
+              </tr>`;
+              lastGroupRendered = grp;
+            }
+          }
+
+          const rowHtml = `<tr style="background:${rowBg};">
             <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${f.label}</td>
             <td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:${baseIsHistorical ? 'var(--blue)' : 'var(--txt)'};white-space:nowrap;background:inherit;">${baseDisplay}</td>
             ${cells.join('')}
           </tr>`;
+
+          if (CT_IDS.has(f.id)) {
+            tbodyCT += rowHtml;
+            visibleCTRows++;
+          } else {
+            tbody += rowHtml;
+            visibleRows++;
+          }
         });
 
         // -- Finish Production --
@@ -559,94 +695,87 @@ function renderSummTabContent(type, tabId, p) {
           const productList = fpEntries.filter(e => e.type !== 'aroma').length
             ? fpEntries.filter(e => e.type !== 'aroma') : (p.fpItems2 || p.fpItems || []);
 
-          // === PRODUCT TABLE (HORIZONTAL) ===
+          // === PRODUCT TABLE (kolom di atas, entry jadi baris — seperti Formsheet Ekstract) ===
           if (productList.length) {
-            // Build header dengan nomor entry
-            let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;background:var(--bg);">Parameter</th>`;
-            productList.forEach((item, i) => {
-              thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;">Entry #${i+1}</th>`;
-            });
-            thead += `</tr>`;
-
-            // Build rows untuk setiap parameter
-            const params = [
-              { label: 'Tanggal', key: 'date', unit: '' },
-              { label: 'Nama Produk', key: 'name', unit: '' },
-              { label: 'Kode', key: 'code', unit: '' },
-              { label: 'Brix', key: 'brix', unit: '°Bx' },
-              { label: 'Berat', key: 'berat', unit: 'kg' }
-            ];
-
-            let tbody = '';
-            params.forEach((param, idx) => {
-              const rowBg = idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-              tbody += `<tr style="background:${rowBg};">
-                <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;font-weight:600;">${param.label}</td>`;
-              
-              productList.forEach(item => {
-                const value = item[param.key] || '—';
-                const unitHtml = param.unit && value !== '—' ? ` <span style="font-size:9px;color:var(--txt3);">${param.unit}</span>` : '';
-                const isNumeric = param.key === 'brix' || param.key === 'berat';
-                const cellStyle = isNumeric 
-                  ? `${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);`
-                  : `${tdLabel}text-align:center;`;
-                tbody += `<td style="${cellStyle}">${value}${unitHtml}</td>`;
-              });
-              tbody += `</tr>`;
-            });
+            let totalBeratP = 0;
+            const rowsHtml = productList.map((item, i) => {
+              const beratNum = parseFloat(item.berat);
+              if (!isNaN(beratNum)) totalBeratP += beratNum;
+              const rowBg = i % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+              return `<tr style="background:${rowBg};">
+                <td style="${tdLabel}text-align:center;width:32px;">${i+1}</td>
+                <td style="${tdLabel}">${item.date || '—'}</td>
+                <td style="${tdLabel}">${item.name || '—'}</td>
+                <td style="${tdLabel}">${item.code || '—'}</td>
+                <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;">${item.brix !== undefined && item.brix !== '' ? fmt2(item.brix) : '—'}</td>
+                <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);">${item.berat !== undefined && item.berat !== '' ? fmt2(item.berat) : '—'}</td>
+                <td style="${tdLabel}">${item.keterangan || '—'}</td>
+              </tr>`;
+            }).join('');
 
             fpHtml += `<div style="margin-bottom:16px">
-              ${tableHeaderUI('🏭 Finish Production — Product')}
+              ${boldHeaderUI('🏭 Finish Production — Product')}
               <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
                 <table style="${tblStyle}">
-                  <thead>${thead}</thead>
-                  <tbody>${tbody}</tbody>
+                  <thead><tr>
+                    <th style="${thStyle}width:32px;text-align:center;">No</th>
+                    <th style="${thStyle}text-align:left;">Tanggal</th>
+                    <th style="${thStyle}text-align:left;">Nama Produk</th>
+                    <th style="${thStyle}text-align:left;">Kode</th>
+                    <th style="${thStyle}text-align:center;">Brix</th>
+                    <th style="${thStyle}text-align:center;">Berat Bersih (Kg)</th>
+                    <th style="${thStyle}text-align:left;">Keterangan</th>
+                  </tr></thead>
+                  <tbody>${rowsHtml}
+                    <tr style="background:var(--bg);font-weight:700;">
+                      <td style="${tdLabel}" colspan="5">TOTAL (Kg)</td>
+                      <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;color:var(--blue);">${totalBeratP.toFixed(2)}</td>
+                      <td style="${tdLabel}"></td>
+                    </tr>
+                  </tbody>
                 </table>
               </div>
             </div>`;
           }
 
-          // === AROMA TABLE (HORIZONTAL) - DI BAWAH PRODUCT ===
+          // === AROMA TABLE (kolom di atas, entry jadi baris — seperti Formsheet Aroma) ===
           if (aromaList.length) {
-            // Build header dengan nomor entry
-            let thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;background:var(--bg);">Parameter</th>`;
-            aromaList.forEach((item, i) => {
-              thead += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;">Entry #${i+1}</th>`;
-            });
-            thead += `</tr>`;
-
-            // Build rows untuk setiap parameter
-            const params = [
-              { label: 'Tanggal', key: 'date', unit: '' },
-              { label: 'Nama Aroma', key: 'name', unit: '' },
-              { label: 'Kode', key: 'code', unit: '' },
-              { label: 'Berat', key: 'berat', unit: 'kg' }
-            ];
-
-            let tbody = '';
-            params.forEach((param, idx) => {
-              const rowBg = idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-              tbody += `<tr style="background:${rowBg};">
-                <td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;font-weight:600;">${param.label}</td>`;
-              
-              aromaList.forEach(item => {
-                const value = item[param.key] || '—';
-                const unitHtml = param.unit && value !== '—' ? ` <span style="font-size:9px;color:var(--txt3);">${param.unit}</span>` : '';
-                const isNumeric = param.key === 'berat';
-                const cellStyle = isNumeric 
-                  ? `${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);`
-                  : `${tdLabel}text-align:center;`;
-                tbody += `<td style="${cellStyle}">${value}${unitHtml}</td>`;
-              });
-              tbody += `</tr>`;
-            });
+            let totalBeratA = 0;
+            const rowsHtml = aromaList.map((item, i) => {
+              const beratNum = parseFloat(item.berat);
+              if (!isNaN(beratNum)) totalBeratA += beratNum;
+              const rowBg = i % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+              return `<tr style="background:${rowBg};">
+                <td style="${tdLabel}text-align:center;width:32px;">${i+1}</td>
+                <td style="${tdLabel}">${item.date || '—'}</td>
+                <td style="${tdLabel}">${item.name || '—'}</td>
+                <td style="${tdLabel}">${item.code || '—'}</td>
+                <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;">${item.kondensat !== undefined && item.kondensat !== '' ? fmt2(item.kondensat) : '—'}</td>
+                <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--blue);">${item.berat !== undefined && item.berat !== '' ? fmt2(item.berat) : '—'}</td>
+                <td style="${tdLabel}">${item.keterangan || '—'}</td>
+              </tr>`;
+            }).join('');
 
             fpHtml += `<div style="margin-bottom:16px">
-              ${tableHeaderUI('🌸 Finish Production — Aroma')}
+              ${boldHeaderUI('🌸 Finish Production — Aroma')}
               <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px">
                 <table style="${tblStyle}">
-                  <thead>${thead}</thead>
-                  <tbody>${tbody}</tbody>
+                  <thead><tr>
+                    <th style="${thStyle}width:32px;text-align:center;">No</th>
+                    <th style="${thStyle}text-align:left;">Tanggal</th>
+                    <th style="${thStyle}text-align:left;">Nama Aroma</th>
+                    <th style="${thStyle}text-align:left;">Kode</th>
+                    <th style="${thStyle}text-align:center;">Kondensat</th>
+                    <th style="${thStyle}text-align:center;">Berat Bersih (Kg)</th>
+                    <th style="${thStyle}text-align:left;">Keterangan</th>
+                  </tr></thead>
+                  <tbody>${rowsHtml}
+                    <tr style="background:var(--bg);font-weight:700;">
+                      <td style="${tdLabel}" colspan="5">TOTAL (Kg)</td>
+                      <td style="${tdLabel}text-align:center;font-family:'DM Mono',monospace;color:var(--blue);">${totalBeratA.toFixed(2)}</td>
+                      <td style="${tdLabel}"></td>
+                    </tr>
+                  </tbody>
                 </table>
               </div>
             </div>`;
@@ -656,7 +785,7 @@ function renderSummTabContent(type, tabId, p) {
         // -- Tahapan Produksi (prod_stages) --
         let tahapanHtml = '';
         const stages = p.prod_stages || p.prod_stages || {};
-        if (Object.keys(stages).length > 0) {
+        if (!hideTahapanCIP && Object.keys(stages).length > 0) {
           const PROD_STAGES_ORDER = [
             'Sirkulasi SCC','Set suhu SCC','Decanter start','Slury (Raw)',
             'Aroma','MIT','To raw extract tank','Centrifuge (stand by)',
@@ -690,7 +819,7 @@ function renderSummTabContent(type, tabId, p) {
 
         // -- CIP Production checklist --
         let cipProdHtml = '';
-        if (p.cipProdDone === true || p.cip_prod_done === true) {
+        if (!hideTahapanCIP && (p.cipProdDone === true || p.cip_prod_done === true)) {
           const checks = p.cip_prod_checks || p.cipProdChecks || {};
           const timestamps = p.cip_prod_timestamps || p.cipProdTimestamps || {};
           const cl = CIP_CHECKLISTS.production;
@@ -706,36 +835,36 @@ function renderSummTabContent(type, tabId, p) {
             });
           });
           // ── Hitung Total Caustic & Total Citric dari centang ──
-          // Bobot per section (gram): sIdx → { caustic, citric }
+          // sIdx sesuai urutan sections di CIP_CHECKLISTS.production:
+          // 0 = SSC + Decanter, 1 = Centri + Raw Tank, 2 = Filter,
+          // 3 = CT, 4 = Clarified Tank, 5 = Concentrate Tank, 6 = Aroma Tank
           const CIP_WEIGHTS = {
-            1: { causticG: 1000,  citricG: 4000,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // SSC + Decanter
-            2: { causticG: 800,   citricG: 3200,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Centri + Raw Tank
-            3: { causticG: 7500,  citricG: 15000, causticItem: 'Caustic + Rinsing', citricItem: 'Citric + Rinsing' }, // Filter
-            4: { causticG: 600,   citricG: 2400,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // CT
-            5: { causticG: 800,   citricG: 3200,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Clarified Tank
-            6: { causticG: 700,   citricG: 2800,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Concentrate Tank
+            0: { causticKg: 1,    citricKg: 4,    causticItem: 'Caustic',           citricItem: 'Citric'           }, // SSC + Decanter
+            1: { causticKg: 0.8,  citricKg: 3.2,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Centri + Raw Tank
+            2: { causticKg: 7.5,  citricKg: 15,   causticItem: 'Caustic + Rinsing', citricItem: 'Citric + Rinsing' }, // Filter
+            3: { causticKg: 0.6,  citricKg: 2.4,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // CT
+            4: { causticKg: 0.8,  citricKg: 3.2,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Clarified Tank
+            5: { causticKg: 0.7,  citricKg: 2.8,  causticItem: 'Caustic',           citricItem: 'Citric'           }, // Concentrate Tank
           };
-          let totalCausticG = 0, totalCitricG = 0;
+          let totalCausticKg = 0, totalCitricKg = 0;
           Object.entries(CIP_WEIGHTS).forEach(([si, w]) => {
             const causticKey = `${si}__${w.causticItem}`;
             const citricKey  = `${si}__${w.citricItem}`;
-            if (checks[causticKey] === true || checks[w.causticItem] === true) totalCausticG += w.causticG;
-            if (checks[citricKey]  === true || checks[w.citricItem]  === true) totalCitricG  += w.citricG;
+            if (checks[causticKey] === true || checks[w.causticItem] === true) totalCausticKg += w.causticKg;
+            if (checks[citricKey]  === true || checks[w.citricItem]  === true) totalCitricKg  += w.citricKg;
           });
-          const fmtWt = (g) => {
-            if (g === 0) return '0 Gr';
-            if (g >= 1000) {
-              const kg = g / 1000;
-              return (Number.isInteger(kg) ? kg : kg.toFixed(1)).toString().replace('.', ',') + ' Kg';
-            }
-            return g + ' Gr';
+          const fmtWt = (kg) => {
+            if (kg === 0) return '0 Kg';
+            // Tampilkan dengan desimal yang rapi
+            const val = Number.isInteger(kg) ? kg.toString() : kg.toFixed(1).replace('.', ',');
+            return val + ' Kg';
           };
           const totalRow = (label, val, bg) => `
             <tr style="background:${bg}">
               <td style="${tdLabel};font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:.5px;border-top:2px solid var(--border);" colspan="1">${label}</td>
               <td colspan="3" style="${tdLabel};font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--blue);border-top:2px solid var(--border);">${val}</td>
             </tr>`;
-          const fieldRows = totalRow('🧪 Total Caustic', fmtWt(totalCausticG), 'var(--surface)') + totalRow('🍋 Total Citric', fmtWt(totalCitricG), 'var(--bg)');
+          const fieldRows = totalRow('🧪 Total Caustic', fmtWt(totalCausticKg), 'var(--surface)') + totalRow('🍋 Total Citric', fmtWt(totalCitricKg), 'var(--bg)');
           cipProdHtml = `<div style="margin-bottom:16px">${tableHeaderUI('🧼 CIP Production — Checklist')}<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden"><table style="${tblStyle}"><thead><tr><th style="${thStyle};width:32px">✓</th><th style="${thStyle}">Item</th><th style="${thStyle}">Status</th><th style="${thStyle}">Tanggal Centang</th></tr></thead><tbody>${checkRows}${fieldRows}</tbody></table></div></div>`;
         }
 
@@ -755,9 +884,24 @@ function renderSummTabContent(type, tabId, p) {
               </table>
             </div>
           </div>
+          ${visibleCTRows > 0 ? `<div style="margin-bottom:16px" id="summ-section-ct">
+            <div onclick="toggleSummSection('ct')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;padding:8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
+              <div style="font-size:12px;font-weight:700;color:#111">📝 Parameter CT</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font-size:9px;color:var(--blue);background:#ebf2fd;padding:3px 8px;border-radius:4px;font-weight:600">↔ Geser kanan untuk melihat update</div>
+                <svg id="summ-toggle-ct" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;transform:rotate(0deg)"><path d="M3 5 L7 9 L11 5" stroke="var(--txt3)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </div>
+            <div id="summ-content-ct" style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:60vh;">
+              <table style="${tblStyle}">
+                <thead>${theadCT}</thead>
+                <tbody>${tbodyCT}</tbody>
+              </table>
+            </div>
+          </div>` : ''}
           ${fpHtml ? `<div style="margin-bottom:16px" id="summ-section-fp">
             <div onclick="toggleSummSection('fp')" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;cursor:pointer;user-select:none;padding:8px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='transparent'">
-              <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase">🏭 Finish Production</div>
+              <div style="font-size:12px;font-weight:700;color:#111">🏭 Finish Production</div>
               <svg id="summ-toggle-fp" width="14" height="14" viewBox="0 0 14 14" style="transition:transform .2s;transform:rotate(0deg)"><path d="M3 5 L7 9 L11 5" stroke="var(--txt3)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </div>
             <div id="summ-content-fp">${fpHtml}</div>
@@ -823,6 +967,7 @@ function renderSummTabContent(type, tabId, p) {
               <td style="${tdLabel}">${e.sample||'—'}</td>
               <td style="${tdLabel}">${e.kode||'—'}</td>
               <td style="${tdLabel};font-family:'DM Mono',monospace;font-weight:700;color:var(--blue)">${e.brix||'—'}</td>
+              <td style="${tdLabel};color:var(--txt2)">${e.location||'—'}</td>
               <td style="${tdLabel};color:var(--txt3)">${e.notes||'—'}</td>
             </tr>`).join('');
             brixHtml = `
@@ -835,6 +980,7 @@ function renderSummTabContent(type, tabId, p) {
                       <th style="${thStyle}">Nama Sample</th>
                       <th style="${thStyle}">Kode Pile</th>
                       <th style="${thStyle}">Brix</th>
+                      <th style="${thStyle}">Sample Location</th>
                       <th style="${thStyle}">Catatan</th>
                     </tr></thead>
                     <tbody>${brixRows}</tbody>
@@ -907,9 +1053,10 @@ function renderSummTabContent(type, tabId, p) {
                 <td style="${tdLabel};text-align:center;width:40px;font-weight:700;color:var(--txt3)">${i+1}</td>
                 <td style="${tdLabel};font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--blue)">${e.ph||'—'}</td>
                 <td style="${tdLabel};color:var(--txt2)">${e.keterangan||'—'}</td>
+                <td style="${tdLabel};font-family:'DM Mono',monospace;font-size:11px;color:var(--txt2);white-space:nowrap;">${e.timestamp||'—'}</td>
               </tr>`).join('');
           } else {
-            entryRows = `<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--txt3);font-size:12px">Belum ada data PH CIP</td></tr>`;
+            entryRows = `<tr><td colspan="4" style="padding:12px;text-align:center;color:var(--txt3);font-size:12px">Belum ada data PH CIP</td></tr>`;
           }
 
           const badgeColor = hasCIPLab ? 'var(--green)' : 'var(--orange)';
@@ -932,6 +1079,7 @@ function renderSummTabContent(type, tabId, p) {
                       <th style="${thStyle};width:40px;text-align:center">#</th>
                       <th style="${thStyle}">PH</th>
                       <th style="${thStyle}">Keterangan</th>
+                      <th style="${thStyle}">Waktu</th>
                     </tr>
                   </thead>
                   <tbody>${entryRows}</tbody>
@@ -959,10 +1107,16 @@ function renderSummTabContent(type, tabId, p) {
 
     (async () => {
       try {
-        // ── 1. Fetch dari database ──────────────────────────────────
-        const res  = await fetch('/api/dataentry/utility?project_name=' + encodeURIComponent(p.name) + '&limit=50');
-        const json = await res.json();
-        const dbRows = (json.success && json.data?.length) ? json.data : [];
+        // ── 1. Fetch history per-update dari de_utility_history ─────
+        const [resHist, resCur] = await Promise.all([
+          fetch('/api/dataentry/utility/history?project_name=' + encodeURIComponent(p.name) + '&limit=200'),
+          fetch('/api/dataentry/utility?project_name=' + encodeURIComponent(p.name) + '&limit=1'),
+        ]);
+        const jsonHist = await resHist.json();
+        const jsonCur  = await resCur.json();
+        const dbRows = (jsonHist.success && jsonHist.data?.length)
+          ? jsonHist.data
+          : (jsonCur.success && jsonCur.data?.length ? jsonCur.data : []);
 
         // ── 2. Fallback: utilityHistory dari localStorage (legacy) ──
         const localHist = p.utilityHistory || [];
@@ -1014,67 +1168,172 @@ function renderSummTabContent(type, tabId, p) {
 
         // Filter hanya rows project (ada kolom boiler/chiller), urutkan lama→baru
         const projectRows = dbRows
-          .filter(r => r.tipe === 'project' || r.b1_steam_press !== undefined || r.c1_set_point !== undefined)
-          .sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
+          .filter(r => r.b1_steam_press !== null || r.c1_set_point !== null)
+          .sort((a, b) => new Date(a.recorded_at || a.tanggal) - new Date(b.recorded_at || b.tanggal));
 
         let boilerHtml = '', chillerHtml = '';
 
         if (projectRows.length) {
-          // Build header
-          let theadCols = '';
-          projectRows.forEach((row, i) => {
-            // FIX: cek apakah sudah ISO string (ada 'T') sebelum tambah T00:00:00
-            const _raw = row.tanggal || row.recorded_at || null;
-            const _d   = _raw ? new Date(_raw.includes('T') ? _raw : _raw + 'T00:00:00') : null;
-            const tgl  = (_d && !isNaN(_d))
-              ? _d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'2-digit'})
-              : '—';
-            const _rt  = row.recorded_at ? new Date(row.recorded_at) : null;
-            const time = (_rt && !isNaN(_rt))
-              ? _rt.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})
-              : '';
-            theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl} ${time}</span></th>`;
-          });
-          const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
+          // Pisahkan rows: Boiler hanya row yang ada perubahan field boiler,
+          // Chiller hanya row yang ada perubahan field chiller
+          const BOILER_COLS = Object.values(boilerDbMap);
+          const CHILLER_COLS = Object.values(chillerDbMap);
 
-          // Build tbody — baca dari kolom flat DB
-          const buildApiTbody = (labelMap, dbMap) => {
+          function hasChangedUtility(row, prevRow, cols) {
+            if (!prevRow) return cols.some(col => row[col] !== null && row[col] !== undefined && String(row[col]).trim() !== '');
+            return cols.some(col => {
+              const curr = row[col] !== null && row[col] !== undefined ? String(row[col]).trim() : '';
+              const prev = prevRow[col] !== null && prevRow[col] !== undefined ? String(prevRow[col]).trim() : '';
+              return curr !== prev && curr !== '';
+            });
+          }
+
+          const boilerRows  = [];
+          const chillerRows = [];
+          let prevBoilerRow = null;
+          let prevChillerRow = null;
+          for (const row of projectRows) {
+            if (hasChangedUtility(row, prevBoilerRow, BOILER_COLS)) {
+              boilerRows.push(row);
+              prevBoilerRow = row;
+            }
+            if (hasChangedUtility(row, prevChillerRow, CHILLER_COLS)) {
+              chillerRows.push(row);
+              prevChillerRow = row;
+            }
+          }
+
+          // Tentukan apakah section ini punya baseline sungguhan: cek row PALING
+          // AWAL, apakah ada field yang changed_fields-nya punya `old` beneran
+          // (bukan null). Kalau ADA -> baseline itu jadi Update #1 tersendiri,
+          // dan row-row yang ada jadi geser ke Update #2, #3, dst.
+          // Kalau TIDAK ADA (semua field pertama kali diisi tanpa nilai lama,
+          // spt kasus Chiller) -> nggak perlu kolom tambahan, row pertama itu
+          // sendiri sudah otomatis jadi Update #1.
+          function hasRealBaseline(rows, dbMap) {
+            if (!rows.length) return false;
+            const firstRow = rows[0];
+            return Object.values(dbMap).some(dbCol => {
+              const cf = firstRow.changed_fields && firstRow.changed_fields[dbCol];
+              return cf && cf.old !== null && cf.old !== undefined && String(cf.old).trim() !== '';
+            });
+          }
+
+          const boilerHasBaseline  = hasRealBaseline(boilerRows,  boilerDbMap);
+          const chillerHasBaseline = hasRealBaseline(chillerRows, chillerDbMap);
+
+          // Build thead — kolom cuma "Update #1, #2, ..." (nggak ada SP Awal lagi).
+          // Kalau hasBaseline true, ditambah 1 kolom di depan (tanpa tanggal spesifik,
+          // karena itu representasi kondisi SEBELUM update pertama tercatat).
+          const buildThead = (rows, hasBaseline) => {
+            let theadCols = '';
+            let colIdx = 1;
+            if (hasBaseline && rows.length) {
+              const _fr  = rows[0];
+              const _raw = _fr.recorded_at || _fr.tanggal || null;
+              const _d   = _raw ? new Date(_raw) : null;
+              const tgl  = (_d && !isNaN(_d))
+                ? _d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'2-digit'})
+                : '—';
+              const _rt  = _fr.recorded_at ? new Date(_fr.recorded_at) : null;
+              const time = (_rt && !isNaN(_rt))
+                ? _rt.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})
+                : '';
+              theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${colIdx}<br><span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl} ${time}</span></th>`;
+              colIdx++;
+            }
+            rows.forEach((row) => {
+              const _raw = row.recorded_at || row.tanggal || null;
+              const _d   = _raw ? new Date(_raw) : null;
+              const tgl  = (_d && !isNaN(_d))
+                ? _d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'2-digit'})
+                : '—';
+              const _rt  = row.recorded_at ? new Date(row.recorded_at) : null;
+              const time = (_rt && !isNaN(_rt))
+                ? _rt.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'})
+                : '';
+              theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);">Update #${colIdx}<br><span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl} ${time}</span></th>`;
+              colIdx++;
+            });
+            return `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
+          };
+
+          const theadBoiler  = buildThead(boilerRows,  boilerHasBaseline);
+          const theadChiller = buildThead(chillerRows, chillerHasBaseline);
+
+          // Build tbody — baca dari kolom flat DB. Kalau section-nya hasBaseline,
+          // tiap field ambil `changed_fields[dbCol].old` dari row pertama sebagai
+          // nilai Update #1 (baseline), lalu semua row disambung jadi Update #2, #3, ...
+          // Kalau nggak ada baseline, row-row langsung jadi Update #1, #2, ... apa adanya.
+          const buildApiTbody = (labelMap, dbMap, rows, hasBaseline) => {
+            if (!rows.length) return '';
+            const firstRow = rows[0];
             let tbody = '';
             Object.entries(labelMap).forEach(([k, lbl], rIdx) => {
               const dbCol = dbMap[k];
-              const vals = projectRows.map(row => {
+
+              let baselineVal = null, hasBaselineVal = false;
+              if (hasBaseline) {
+                const cf = firstRow.changed_fields && firstRow.changed_fields[dbCol];
+                if (cf && cf.old !== null && cf.old !== undefined && String(cf.old).trim() !== '') {
+                  baselineVal = cf.old;
+                  hasBaselineVal = true;
+                } else {
+                  // FIX: field ini nggak tercatat berubah di changed_fields row
+                  // pertama (artinya nilainya belum berubah SAAT row pertama itu
+                  // disave — bukan berarti datanya nggak ada). Sebelumnya ini
+                  // dibiarkan null → tampil "—", padahal field lain yang KEBETULAN
+                  // berubah di row yang sama malah dapat baseline valid — bikin
+                  // tampilan nggak konsisten (sebagian field "—", sebagian angka).
+                  // Fallback: pakai raw value row pertama itu sendiri sebagai
+                  // baseline (karena belum berubah, before == after == raw value).
+                  const raw = firstRow[dbCol];
+                  if (raw !== null && raw !== undefined && String(raw).trim() !== '') {
+                    baselineVal = raw;
+                    hasBaselineVal = true;
+                  }
+                }
+              }
+
+              const vals = rows.map(row => {
                 const v = row[dbCol];
                 return (v !== null && v !== undefined && String(v).trim() !== '') ? v : null;
               });
-              if (!vals.some(v => v !== null)) return;
+              if (!hasBaselineVal && !vals.some(v => v !== null)) return;
+
               const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
-              let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${lbl}</td>`;
-              // Delta logic: oranye=berubah, biru=sama eksplisit, abu=carry-forward
+              const isOilFuel = lbl.toLowerCase().includes('oil fuel') || lbl.toLowerCase().includes('fuel consumption');
+              const lblStyle = isOilFuel ? `${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);color:#dc2626;font-weight:700;` : `${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);`;
+              let rowHtml = `<td style="${lblStyle}">${isOilFuel ? '🔴 '+lbl : lbl}</td>`;
+
+              // Gabungkan baseline (kalau section ini punya) + values row² jadi satu
+              // deret Update #N. Kolom pertama dalam deret ini TIDAK PERNAH dianggap
+              // "berubah" (dia referensi awal), baru kolom ke-2 dst dibandingkan.
+              const seq = hasBaseline ? [hasBaselineVal ? baselineVal : null, ...vals] : vals;
+
               let prevVal = null;
-              vals.forEach(v => {
+              seq.forEach((v, i) => {
                 const isExplicit = v !== null;
                 const displayRaw = isExplicit ? v : prevVal;
                 const hasDisplay = displayRaw !== null && String(displayRaw).trim() !== '';
-                const changed = isExplicit && String(v) !== (prevVal !== null ? String(prevVal) : null);
-                if (changed) prevVal = v;
-                else if (isExplicit) prevVal = v;
+                const changed = isExplicit && i > 0 && String(v) !== (prevVal !== null ? String(prevVal) : null);
+                if (isExplicit) prevVal = v;
 
                 if (!hasDisplay) {
                   rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
                   return;
                 }
-                const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt3)');
-                const weight = changed ? '700' : (isExplicit ? '600' : '400');
-                const italic = isExplicit ? '' : 'font-style:italic;';
-                rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};${italic}white-space:nowrap;background:inherit;">${displayRaw}</td>`;
+                const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt2)');
+                const weight = changed ? '700' : (isExplicit ? '600' : '500');
+                rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};white-space:nowrap;background:inherit;">${fmt2(displayRaw)}</td>`;
               });
               tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
             });
             return tbody;
           };
 
-          const boilerTbody  = buildApiTbody(boilerLabels,  boilerDbMap);
-          const chillerTbody = buildApiTbody(chillerLabels, chillerDbMap);
+          const boilerTbody  = buildApiTbody(boilerLabels,  boilerDbMap,  boilerRows,  boilerHasBaseline);
+          const chillerTbody = buildApiTbody(chillerLabels, chillerDbMap, chillerRows, chillerHasBaseline);
 
           if (boilerTbody) {
             boilerHtml = `
@@ -1082,7 +1341,7 @@ function renderSummTabContent(type, tabId, p) {
                 <span style="font-size:14px;">🔥</span><span style="font-size:12px;font-weight:700;color:var(--txt);">PARAMETER BOILER</span>
               </div>
               <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;margin-bottom:20px;">
-                <table style="${tblStyle}"><thead>${thead}</thead><tbody>${boilerTbody}</tbody></table>
+                <table style="${tblStyle}"><thead>${theadBoiler}</thead><tbody>${boilerTbody}</tbody></table>
               </div>`;
           }
           if (chillerTbody) {
@@ -1091,7 +1350,7 @@ function renderSummTabContent(type, tabId, p) {
                 <span style="font-size:14px;">⚙️</span><span style="font-size:12px;font-weight:700;color:var(--txt);">PARAMETER CHILLER</span>
               </div>
               <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:40vh;">
-                <table style="${tblStyle}"><thead>${thead}</thead><tbody>${chillerTbody}</tbody></table>
+                <table style="${tblStyle}"><thead>${theadChiller}</thead><tbody>${chillerTbody}</tbody></table>
               </div>`;
           }
         }
@@ -1175,11 +1434,23 @@ function renderSummTabContent(type, tabId, p) {
       try {
         // 2. FETCH data dari database berdasarkan nama project
         const res = await fetch('/api/dataentry/limbah?project_name=' + encodeURIComponent(p.name));
-        const json = await res.json();
+        let json = { success: false, data: [] };
+        try {
+          const text = await res.text();
+          json = text ? JSON.parse(text) : { success: false, data: [] };
+        } catch (parseErr) {
+          console.error('❌ Limbah JSON parse error:', parseErr);
+        }
 
         // Ambil data dari DB, jika kosong gunakan data lokal sebagai cadangan
+        // Sort kronologis pakai created_at (presisi detik) — 'tanggal' saja tidak cukup
+        // karena beberapa entry bisa di-save di hari yang sama (jam berbeda)
         const dbRows = (json.success && json.data?.length)
-          ? [...json.data].sort((a,b) => new Date(a.tanggal||a.created_at) - new Date(b.tanggal||b.created_at))
+          ? [...json.data].sort((a,b) => {
+              const ta = new Date(a.created_at || a.tanggal).getTime();
+              const tb = new Date(b.created_at || b.tanggal).getTime();
+              return ta - tb;
+            })
           : [];
         const localHist = p.limbahHistory || [];
 
@@ -1189,6 +1460,7 @@ function renderSummTabContent(type, tabId, p) {
         }
 
         // 3. Kolom mapping DB → label tampilan
+        // jar_alum & jar_total TIDAK ditampilkan di sini — sudah ada di tabel Detail Jar Test di bawah
         const colMap = [
           { col:'tanggal',   label:'Tanggal'              },
           { col:'awal',      label:'Awal (m³)'            },
@@ -1198,22 +1470,30 @@ function renderSummTabContent(type, tabId, p) {
           { col:'bod',       label:'BOD (mg/L)'           },
           { col:'tss',       label:'TSS (mg/L)'           },
           { col:'ph',        label:'pH'                   },
-          { col:'jar_alum',  label:'Jar Test Alum (PPM)'  },
-          { col:'jar_total', label:'Jar Test Total (PPM)' },
           { col:'notes',     label:'Catatan'              },
         ];
 
+        // Filter baris yang HANYA berisi data Jar Test (notes='Jar Test' tanpa data lain)
+        // agar tidak muncul sebagai update kosong di tabel Data & History Limbah
+        const filteredDbRows = dbRows.filter(row => {
+          const isJarOnly = (row.notes === 'Jar Test' || row.notes === 'jar test') &&
+            row.awal == null && row.akhir == null && row.volume == null &&
+            row.cod  == null && row.bod  == null && row.tss    == null && row.ph == null;
+          return !isJarOnly;
+        });
+
         const useApi  = dbRows.length > 0;
-        const entries = useApi ? dbRows : localHist;
+        const entries = useApi ? filteredDbRows : localHist;
 
         // 4. Build header
         let theadCols = '';
         entries.forEach((entry, i) => {
-          // FIX: jangan tambah T00:00:00 kalau tanggal sudah ISO (ada 'T')
-          const _lraw = entry.tanggal || entry.saved_at || entry.recorded_at || null;
+          // FIX: dukung berbagai field timestamp — created_at (API) atau saved_at/recorded_at (lokal)
+          const _lraw = entry.created_at || entry.saved_at || entry.recorded_at || entry.tanggal || null;
           const d = _lraw ? new Date(_lraw.includes('T') ? _lraw : _lraw + 'T00:00:00') : new Date('invalid');
           const dateStr = d.toLocaleDateString('id-ID', {day:'2-digit', month:'2-digit', year:'2-digit'});
-          const timeStr = useApi ? '' : ' ' + d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+          // Tampilkan jam untuk semua sumber data (API maupun lokal)
+          const timeStr = !isNaN(d.getTime()) ? ' ' + d.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) : '';
           theadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--border);min-width:100px;">Update #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3);text-transform:none">${dateStr}${timeStr}</span></th>`;
         });
         const thead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;box-shadow:inset -1px -1px 0 var(--border);">Parameter</th>${theadCols}</tr>`;
@@ -1222,14 +1502,14 @@ function renderSummTabContent(type, tabId, p) {
         let tbody = '';
         if (useApi) {
           colMap.forEach(({ col, label }, rIdx) => {
-            const vals = dbRows.map(row => {
+            const vals = filteredDbRows.map(row => {
               const v = row[col];
               return (v !== null && v !== undefined && String(v).trim() !== '') ? v : null;
             });
             if (!vals.some(v => v !== null)) return;
             const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
             let rowHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);font-weight:600;">${label}</td>`;
-            // Delta logic: oranye=berubah, biru=sama eksplisit, abu=carry-forward
+            // Delta logic: oranye=berubah, biru=sama eksplisit, txt2=carry-forward
             let prevVal = null;
             vals.forEach(v => {
               const isExplicit = v !== null;
@@ -1242,10 +1522,20 @@ function renderSummTabContent(type, tabId, p) {
                 rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
                 return;
               }
-              const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt3)');
-              const weight = changed ? '700' : (isExplicit ? '600' : '400');
-              const italic = isExplicit ? '' : 'font-style:italic;';
-              rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};${italic}white-space:nowrap;background:inherit;">${displayRaw}</td>`;
+              const color  = changed ? 'var(--orange)' : (isExplicit ? 'var(--blue)' : 'var(--txt2)');
+              const weight = changed ? '700' : (isExplicit ? '600' : '500');
+              const italic = '';
+              // Kolom 'tanggal' adalah string tanggal, bukan angka — jangan lewat fmt2 (parseFloat
+              // akan memotong "2026-06-22" jadi 2026.00). Format sebagai tanggal id-ID.
+              let cellText;
+              if (col === 'tanggal') {
+                const dRaw = String(displayRaw);
+                const dObj = new Date(dRaw.includes('T') ? dRaw : dRaw + 'T00:00:00');
+                cellText = isNaN(dObj) ? dRaw : dObj.toLocaleDateString('id-ID', {day:'2-digit', month:'2-digit', year:'numeric'});
+              } else {
+                cellText = fmt2(displayRaw);
+              }
+              rowHtml += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:${weight};color:${color};${italic}white-space:nowrap;background:inherit;">${cellText}</td>`;
             });
             tbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
           });
@@ -1271,6 +1561,168 @@ function renderSummTabContent(type, tabId, p) {
           return;
         }
 
+        // ── Build Jar Test detail per sampel ─────────────────────────────────
+        let jarHtml = '';
+        // Helper: parse jar_entries aman — bisa string JSON atau object (jsonb PostgreSQL)
+        const safeParseJar = (val) => {
+          if (!val) return [];
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'object') return [];
+          try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; }
+        };
+
+        const jarRows = useApi
+          ? dbRows.filter(r => {
+              const e = safeParseJar(r.jar_entries);
+              return e.length > 0 || r.jar_alum != null || r.jar_total != null;
+            })
+          : localHist.filter(r => {
+              // localHist entry bisa simpan jar di properti langsung ATAU di fields array
+              const hasDirectJar = r.jar_alum != null || r.jar_total != null;
+              const hasEntries   = safeParseJar(r.jar_entries || r.entries).length > 0;
+              const hasFieldJar  = (r.fields || []).some(f =>
+                (f.label === 'Jar Test PAC (L/h)' || f.label === 'Jar Test Polimer (L/h)') &&
+                f.newVal !== '' && f.newVal != null
+              );
+              return hasDirectJar || hasEntries || hasFieldJar;
+            });
+
+        // FIX: kalau localHist tidak punya jar sama sekali, cek _jarByProj / localStorage
+        // (data jar disimpan di sana oleh submitJarTestModal sebelum user klik Save Data)
+        const _resolvedJarRows = jarRows.length > 0 ? jarRows : (() => {
+          if (useApi) return [];
+          const projName = p.name || p.project_name || p.nama || '';
+          if (!projName) return [];
+          const lsKey = 'jartest__' + projName;
+          let jarData = (window._jarByProj || {})[lsKey] || null;
+          if (!jarData) {
+            try { jarData = JSON.parse(localStorage.getItem(lsKey) || 'null'); } catch {}
+          }
+          if (!jarData) return [];
+          // Bungkus jadi satu synthetic row agar dirender sama seperti row biasa
+          return [{
+            jar_alum:    jarData.jar_alum,
+            jar_total:   jarData.jar_total,
+            jar_entries: jarData.jar_entries || jarData.entries || [],
+            tanggal:     jarData.tanggal || new Date().toISOString().split('T')[0],
+            created_at:  jarData.saved_at || null,
+          }];
+        })();
+
+        if (_resolvedJarRows.length) {
+          // Cari max jumlah sampel di semua entry
+          let maxSampel = 0;
+          const parsedJarRows = _resolvedJarRows.map(r => {
+            // Format DB: jar_entries langsung di r
+            // Format localHist: jar_entries / entries langsung di r, atau nilai di r.fields[]
+            const ents = safeParseJar(r.jar_entries || r.entries);
+            if (ents.length > maxSampel) maxSampel = ents.length;
+
+            // Normalkan jar_alum / jar_total dari fields array kalau belum ada langsung
+            let jar_alum  = r.jar_alum  != null ? r.jar_alum  : null;
+            let jar_total = r.jar_total != null ? r.jar_total : null;
+            if (jar_alum == null || jar_total == null) {
+              (r.fields || []).forEach(f => {
+                if (f.label === 'Jar Test PAC (L/h)'    && f.newVal !== '' && f.newVal != null) jar_alum  = f.newVal;
+                if (f.label === 'Jar Test Polimer (L/h)' && f.newVal !== '' && f.newVal != null) jar_total = f.newVal;
+              });
+            }
+            return { row: { ...r, jar_alum, jar_total }, ents };
+          });
+
+          if (maxSampel > 0) {
+            // Build header: tanggal setiap entry
+            let jarTheadCols = '';
+            parsedJarRows.forEach(({ row }, i) => {
+              const _raw = row.tanggal || row.created_at || null;
+              const _d   = _raw ? new Date(_raw.includes('T') ? _raw : _raw + 'T00:00:00') : null;
+              const tgl  = (_d && !isNaN(_d)) ? _d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'2-digit'}) : '—';
+              jarTheadCols += `<th style="${thStyle}text-align:center;position:sticky;top:0;z-index:3;min-width:90px;">Entry #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl}</span></th>`;
+            });
+            const jarThead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;">Sampel / Parameter</th>${jarTheadCols}</tr>`;
+
+            // Build tbody: per sampel, per field
+            const jarFields = [
+              { key: 'ph',     label: 'pH'              },
+              { key: 'pac',    label: 'PAC (ml)'        },
+              { key: 'dozPac', label: 'Dozing PAC (L/h)'},
+              { key: 'pol',    label: 'Polimer (ml)'    },
+              { key: 'dozPol', label: 'Dozing Polimer (L/h)'},
+            ];
+
+            let jarTbody = '';
+            for (let sIdx = 0; sIdx < maxSampel; sIdx++) {
+              jarTbody += `<tr><td colspan="${parsedJarRows.length + 1}" style="padding:6px 10px;background:var(--bg);font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);">🧪 Sampel ${sIdx + 1}</td></tr>`;
+              jarFields.forEach(({ key, label }, fIdx) => {
+                const rowBg = fIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+                let rowHtml = `<td style="${tdLabel}padding-left:20px;position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);">${label}</td>`;
+                parsedJarRows.forEach(({ ents }) => {
+                  const v = ents[sIdx]?.[key];
+                  const hasVal = v !== null && v !== undefined && String(v).trim() !== '';
+                  rowHtml += hasVal
+                    ? `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--blue);background:inherit;">${v}</td>`
+                    : `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+                });
+                jarTbody += `<tr style="background:${rowBg}">${rowHtml}</tr>`;
+              });
+            }
+
+            jarHtml = `
+              <div style="margin-top:20px;">
+                <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">🧪 Detail Jar Test Per Sampel</div>
+                <div style="overflow-x:auto;overflow-y:auto;border:1px solid var(--border);border-radius:10px;max-height:50vh;">
+                  <table style="${tblStyle}">
+                    <thead>${jarThead}</thead>
+                    <tbody>${jarTbody}</tbody>
+                  </table>
+                </div>
+              </div>`;
+          } else {
+            // Tidak ada detail per sampel — tampilkan ringkasan PAC avg dan Polimer avg saja
+            const hasAvg = parsedJarRows.some(r => r.row.jar_alum != null || r.row.jar_total != null);
+            if (hasAvg) {
+              let sumThead = `<tr><th style="${thStyle}text-align:left;position:sticky;left:0;top:0;z-index:4;">Parameter</th>`;
+              parsedJarRows.forEach(({ row }, i) => {
+                const _raw = row.tanggal || row.created_at || null;
+                const _d = _raw ? new Date(_raw.includes('T') ? _raw : _raw + 'T00:00:00') : null;
+                const tgl = (_d && !isNaN(_d)) ? _d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'2-digit'}) : '—';
+                sumThead += `<th style="${thStyle}text-align:center;min-width:90px;">Entry #${i+1}<br><span style="font-size:8px;font-weight:400;color:var(--txt3)">${tgl}</span></th>`;
+              });
+              sumThead += `</tr>`;
+
+              const sumRows = [
+                { key: 'jar_alum',  label: 'PAC avg (L/h)'     },
+                { key: 'jar_total', label: 'Polimer avg (L/h)'  },
+                { key: 'notes',     label: 'Catatan'            },
+              ];
+              let sumBody = '';
+              sumRows.forEach(({ key, label }, rIdx) => {
+                const rowBg = rIdx % 2 === 0 ? 'var(--surface)' : 'var(--bg)';
+                let rHtml = `<td style="${tdLabel}position:sticky;left:0;background:${rowBg};z-index:2;box-shadow:inset -1px 0 0 var(--border);font-weight:600;">${label}</td>`;
+                parsedJarRows.forEach(({ row }) => {
+                  const v = row[key];
+                  const hasVal = v != null && String(v).trim() !== '';
+                  rHtml += hasVal
+                    ? `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--blue);background:inherit;">${fmt2 ? fmt2(v) : v}</td>`
+                    : `<td style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:center;color:var(--txt3);font-size:11px;background:inherit;">—</td>`;
+                });
+                sumBody += `<tr style="background:${rowBg}">${rHtml}</tr>`;
+              });
+
+              jarHtml = `
+                <div style="margin-top:20px;">
+                  <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;">🧪 Ringkasan Jar Test</div>
+                  <div style="overflow-x:auto;border:1px solid var(--border);border-radius:10px;">
+                    <table style="${tblStyle}">
+                      <thead>${sumThead}</thead>
+                      <tbody>${sumBody}</tbody>
+                    </table>
+                  </div>
+                </div>`;
+            }
+          }
+        }
+
         wrap.innerHTML = `
           <div style="margin-bottom:16px">
             ${tableHeaderUI('♻️ Data & History Limbah')}
@@ -1280,6 +1732,7 @@ function renderSummTabContent(type, tabId, p) {
                 <tbody>${tbody}</tbody>
               </table>
             </div>
+            ${jarHtml}
           </div>`;
 
       } catch (err) {
@@ -1319,6 +1772,16 @@ function toggleSummSection(sectionId) {
 window.toggleSummSection = toggleSummSection;
 
 function closeSumm(type) {
+  // Restore alert banner — bersihkan SEMUA kemungkinan sumber blur:
+  // 1) inline style yang disetel openSumm(), 2) class 'behind-drawer' (jika ada kode lain yang pakai class ini)
+  const banner = document.getElementById('alert-banner-strip');
+  if (banner) {
+    banner.style.removeProperty('z-index');
+    banner.style.removeProperty('filter');
+    banner.style.removeProperty('opacity');
+    banner.style.removeProperty('pointer-events');
+    banner.classList.remove('behind-drawer');
+  }
   document.getElementById('summ-overlay-'+type)?.classList.remove('show');
   document.getElementById('summ-drawer-'+type)?.classList.remove('show');
   document.body.style.overflow = '';
@@ -1335,7 +1798,7 @@ function openPD(type,idx){
       <div><div class="proj-info-lbl">EXPECTED END</div><div class="proj-info-val">${p.end||'—'}</div></div>
     </div>
     <div><div class="proj-info-lbl">MATERIALS</div><div class="proj-info-val">${p.materials||'—'}</div></div>
-    <div><div class="proj-info-lbl">TOOLS</div><div class="proj-info-val">${p.tools||'—'}</div></div>
+    <div><div class="proj-info-lbl">Methods</div><div class="proj-info-val">${p.tools||'—'}</div></div>
     ${p.notes?`<div><div class="proj-info-lbl">NOTES</div><div class="proj-info-val">${p.notes}</div></div>`:''}
     <div><div class="proj-info-lbl">STATUS CIP</div><div class="proj-info-val">${p.cipDone?'✅ Selesai':'⏳ Belum'}</div></div>
     <div><div class="proj-info-lbl">SET POINT</div><div class="proj-info-val">${(p.setPoint&&Object.keys(p.setPoint).length)?'✅ Sudah diisi':'⏳ Belum'}</div></div>

@@ -1,3 +1,37 @@
+// ── Helper: set value with grey style (placeholder-like) ──────
+function _greyFill(el, val) {
+  if (!el || val == null || val === '') return;
+  el.value = String(val);
+  el.style.color = '#999';
+  el.dataset.prevValue = String(val);
+
+  // Reset flag agar listener selalu dipasang ulang (fix: nilai baru setelah Save/Reset tidak mau terganti)
+  el.dataset.greyFillBound = '';
+
+  if (!el.dataset.greyFillBound) {
+    el.dataset.greyFillBound = '1';
+    el.addEventListener('focus', function() {
+      // Kosongkan saat focus agar langsung bisa ketik tanpa backspace
+      if (this.value === this.dataset.prevValue) {
+        this._savedVal = this.value;
+        this.value = '';
+        this.style.color = 'var(--txt, #111)';
+      }
+    });
+    el.addEventListener('blur', function() {
+      if (this.value === '' && this.dataset.prevValue) {
+        // Tidak ada perubahan → kembalikan nilai abu
+        this.value = this.dataset.prevValue;
+        this.style.color = '#999';
+      } else if (this.value !== '') {
+        // Ada perubahan → simpan sebagai prevValue baru, warna normal
+        this.style.color = 'var(--txt, #111)';
+        this.dataset.prevValue = this.value;
+      }
+    });
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MISSING FUNCTIONS — tambahkan ke file yang sesuai
 // Semua fungsi ini hilang dan menyebabkan ReferenceError
@@ -16,11 +50,20 @@ window.setActive = setActive;
 // 2. FUNGSI UNTUK reports.js — switchReportTab, changeReportSort,
 //    clearDateFilters, getTabLabel
 // ─────────────────────────────────────────────────────────────
-function switchReportTab(tab, el) {
-  _activeReportTab = tab;
-  document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
-  if (el) el.classList.add('active');
+function switchReportTab(tab) {
+  window._activeReportTab = tab;
+  window._rHarianTab      = tab;
+  window._rHarianUtilSub  = null;
+  window._rHarianMonth    = null;
   renderHarianReports();
+  // Update tab active styles
+  requestAnimationFrame(() => {
+    ['lab','utility','limbah'].forEach(id => {
+      const btn = document.getElementById('htab-' + id);
+      if (!btn) return;
+      btn.classList.toggle('active', id === tab);
+    });
+  });
 }
 window.switchReportTab = switchReportTab;
 
@@ -46,32 +89,17 @@ function getTabLabel(tab) {
 window.getTabLabel = getTabLabel;
 
 // ─────────────────────────────────────────────────────────────
-// 3. FUNGSI UNTUK surat-jalan.js — editSuratJalan, deleteSuratJalan
+// 3. FUNGSI UNTUK surat-jalan.js — editSuratJalan
 // ─────────────────────────────────────────────────────────────
 function editSuratJalan(idx) {
   openSuratJalanForm(idx);
 }
 window.editSuratJalan = editSuratJalan;
 
-function deleteSuratJalan(idx) {
-  if (!confirm('Hapus surat jalan ini?')) return;
-  const data = gSJ();
+// ⚠️  deleteSuratJalan TIDAK didefinisikan di sini.
+// Versi yang benar (pakai API DELETE /api/surat-jalan/:id) ada di surat-jalan.js.
+// Jangan definisikan ulang di sini — akan menimpa versi yang benar.
 
-  // Hapus auto-debit kartu stok jika ada
-  if (typeof gSCTxn === 'function' && typeof sSCTxn === 'function') {
-    const sj = data[idx];
-    const autoIds = sj?._autoDebitIds || [];
-    if (autoIds.length) {
-      const txns = gSCTxn().filter(t => !autoIds.includes(t.id));
-      sSCTxn(txns);
-    }
-  }
-
-  data.splice(idx, 1);
-  sSJ(data);
-  renderSuratJalan();
-}
-window.deleteSuratJalan = deleteSuratJalan;
 
 // ─────────────────────────────────────────────────────────────
 // 4. FUNGSI UNTUK surat-jalan.js — checkVacuum, handlePhotoUpload
@@ -145,107 +173,334 @@ function initDataEntryForm(key) {
   if (dtEl) dtEl.textContent = new Date().toLocaleString('id-ID');
 
   if (key === 'limbah') {
+    // ── HELPER: baca/tulis state ke sessionStorage agar survive refresh ──
+    const SS_KEY = 'limbah_form_state';
+    const _readSS  = () => { try { return JSON.parse(sessionStorage.getItem(SS_KEY) || 'null') || {}; } catch { return {}; } };
+    const _writeSS = (st) => { try { sessionStorage.setItem(SS_KEY, JSON.stringify(st)); } catch {} };
+    // Inisialisasi window._limbahState dari sessionStorage kalau belum ada
+    if (!window._limbahState || Object.keys(window._limbahState).length === 0) {
+      window._limbahState = _readSS();
+    }
+
     const sel = document.getElementById('limbah-proj-sel');
     if (sel) {
-      const projs = gPJ('ongoing');
+      sel.disabled = true;
+      sel.innerHTML = '<option value="">⏳ Memuat project...</option>';
 
-      // Simpan state yang sudah ada (kalau form sudah pernah diisi)
-      const st = window._limbahState || {};
+      const _populateLimbahDropdown = (allProjs) => {
+        // Bangun mapping index → nama (name-based, bukan index-based)
+        window._limbahProjMap = {};
+        sel.innerHTML = '<option value="">-- Tidak ditautkan ke project (Simpan ke Laporan Harian) --</option>';
+        allProjs
+          .filter(p => p.setPoint && Object.keys(p.setPoint).length > 0)
+          .forEach((p, i) => {
+            const realIdx = allProjs.indexOf(p);
+            window._limbahProjMap[String(realIdx)] = p.name;
+            sel.innerHTML += `<option value="${realIdx}">${p.name}</option>`;
+          });
+        sel.disabled = false;
 
-      sel.innerHTML = '<option value="">-- Tidak ditautkan ke project (Simpan ke Laporan Harian) --</option>';
-      projs.forEach((p, i) => {
-        sel.innerHTML += `<option value="${i}">${p.name}</option>`;
-      });
+        // Baca state terbaru (mungkin sudah di-update dari sessionStorage)
+        const st = window._limbahState || {};
 
-      // Restore project pilihan
-      if (st.proj) sel.value = st.proj;
-
-      // Restore semua nilai field
-      const sv = (id, val) => {
-        const el = document.getElementById(id);
-        if (el && val !== undefined && val !== null && val !== '') el.value = val;
-      };
-      sv(key+'-date',  st.date  || new Date().toISOString().split('T')[0]);
-      sv(key+'-awal',  st.awal);
-      sv(key+'-akhir', st.akhir);
-      sv(key+'-cod',   st.cod);
-      sv(key+'-bod',   st.bod);
-      sv(key+'-tss',   st.tss);
-      sv(key+'-ph',    st.ph);
-      sv(key+'-notes', st.notes);
-
-      // Toggle display awal/akhir/vol
-      const awalWrap  = document.getElementById(key+'-awal-wrap');
-      const akhirWrap = document.getElementById(key+'-akhir-wrap');
-      const volEl     = document.getElementById(key+'-vol');
-      if (sel.value !== '') {
-        if (awalWrap)  awalWrap.style.display  = '';
-        if (akhirWrap) akhirWrap.style.display = '';
-        if (volEl) { volEl.readOnly = true; volEl.style.background = '#f3f4f6'; volEl.placeholder = 'Auto (Akhir - Awal)'; }
-        calcLimbahTotal(key);
-      } else {
-        if (awalWrap)  awalWrap.style.display  = 'none';
-        if (akhirWrap) akhirWrap.style.display = 'none';
-        if (volEl) { volEl.readOnly = false; volEl.style.background = '#fff'; volEl.placeholder = 'Input manual...'; }
-        sv(key+'-vol', st.vol);
-      }
-
-      // Saat ganti project → JANGAN langsung clear, biarkan toggleLimbahVolumeMode yang handle
-      sel.onchange = () => {
-        // Update state dengan project baru
-        window._limbahState = { proj: sel.value };
-        // Trigger toggle untuk restore/clear data sesuai project yang dipilih
-        toggleLimbahVolumeMode(key);
-      };
-
-      // Simpan state ke window setiap kali ada perubahan
-      const saveState = () => {
-        window._limbahState = {
-          proj:  sel.value,
-          date:  document.getElementById(key+'-date')?.value  || '',
-          awal:  document.getElementById(key+'-awal')?.value  || '',
-          akhir: document.getElementById(key+'-akhir')?.value || '',
-          vol:   document.getElementById(key+'-vol')?.value   || '',
-          cod:   document.getElementById(key+'-cod')?.value   || '',
-          bod:   document.getElementById(key+'-bod')?.value   || '',
-          tss:   document.getElementById(key+'-tss')?.value   || '',
-          ph:    document.getElementById(key+'-ph')?.value    || '',
-          notes: document.getElementById(key+'-notes')?.value || '',
-        };
-        console.log('💾 State saved:', window._limbahState);
-      };
-      const fields = ['date','awal','akhir','vol','cod','bod','tss','ph','notes'];
-      fields.forEach(f => {
-        const el = document.getElementById(key+'-'+f);
-        if (el) {
-          el.addEventListener('input',  saveState);
-          el.addEventListener('change', saveState);
-          el.addEventListener('blur',   saveState);
+        // Restore project — validasi nama supaya tidak salah index
+        if (st.projName) {
+          const matchIdx = allProjs.findIndex(p => p.name === st.projName);
+          if (matchIdx >= 0) {
+            sel.value = String(matchIdx);
+          } else {
+            sel.value = '';
+            window._limbahState = { ...st, proj: '', projName: '' };
+            _writeSS(window._limbahState);
+          }
+        } else if (st.proj === '') {
+          sel.value = '';
         }
-      });
-      // Simpan juga saat project dropdown berubah
-      sel.addEventListener('change', saveState);
+
+        // Restore semua nilai field
+        const sv = (id, val) => {
+          const el = document.getElementById(id);
+          if (id.endsWith('-date') || id.endsWith('-notes')) {
+            if (el && val != null && val !== '') el.value = val;
+          } else {
+            _greyFill(el, val);
+          }
+        };
+        
+        // Special handling untuk tanggal — pastikan format YYYY-MM-DD
+        const dateTgl = st.date || new Date().toISOString().split('T')[0];
+        const dateFormatted = (() => {
+          if (dateTgl.includes('T')) {
+            return dateTgl.split('T')[0];
+          }
+          return dateTgl;
+        })();
+        sv(key+'-date',  dateFormatted);
+        
+        sv(key+'-awal',  st.awal);
+        sv(key+'-akhir', st.akhir);
+        sv(key+'-cod',   st.cod);
+        sv(key+'-bod',   st.bod);
+        sv(key+'-tss',   st.tss);
+        sv(key+'-ph',    st.ph);
+        sv(key+'-notes', st.notes);
+
+        // Toggle display awal/akhir/vol
+        const awalWrap  = document.getElementById(key+'-awal-wrap');
+        const akhirWrap = document.getElementById(key+'-akhir-wrap');
+        const volEl     = document.getElementById(key+'-vol');
+        if (sel.value !== '') {
+          if (awalWrap)  awalWrap.style.display  = '';
+          if (akhirWrap) akhirWrap.style.display = '';
+          if (volEl) { volEl.readOnly = true; volEl.style.background = '#f3f4f6'; volEl.placeholder = 'Auto (Akhir - Awal)'; }
+          calcLimbahTotal(key);
+        } else {
+          if (awalWrap)  awalWrap.style.display  = 'none';
+          if (akhirWrap) akhirWrap.style.display = 'none';
+          if (volEl) { volEl.readOnly = false; volEl.style.background = '#fff'; volEl.placeholder = 'Input manual...'; }
+          sv(key+'-vol', st.vol);
+        }
+
+        // onchange: Load data limbah terakhir dari database untuk project yang dipilih
+        sel.onchange = async () => {
+          const selectedProj     = sel.value;
+          const selectedProjName = selectedProj !== '' ? (allProjs[+selectedProj]?.name || '') : '';
+          
+          // Simpan state project baru
+          window._limbahState = {
+            proj:     selectedProj,
+            projName: selectedProjName,
+          };
+          _writeSS(window._limbahState);
+          
+          // Trigger display toggle (awal/akhir visible untuk project, hidden untuk harian)
+          toggleLimbahVolumeMode(key);
+          
+          // STEP 1: Clear form dulu
+          ['date', 'awal', 'akhir', 'vol', 'cod', 'bod', 'tss', 'ph', 'notes'].forEach(f => {
+            const el = document.getElementById(key + '-' + f);
+            if (el) el.value = '';
+          });
+          
+          // STEP 2: Load data limbah terakhir dari DB jika project dipilih
+          if (selectedProj !== '') {
+            try {
+              const res = await fetch(`/api/dataentry/limbah?project_name=${encodeURIComponent(selectedProjName)}&limit=1`);
+              const json = await res.json();
+              
+              if (json.success && json.data && json.data.length > 0) {
+                const lastRecord = json.data[0];
+                console.log('📥 Loaded last limbah record dari DB:', lastRecord);
+                
+                // Populate form dengan data terakhir dari DB
+                const populate = (fieldName, dbColumnName) => {
+                  const el = document.getElementById(key + '-' + fieldName);
+                  let val = lastRecord[dbColumnName];
+                  if (el && val !== null && val !== undefined && val !== '') {
+                    if (fieldName === 'date' && val) {
+                      const dateObj = new Date(val);
+                      if (!isNaN(dateObj.getTime())) {
+                        val = dateObj.toISOString().split('T')[0];
+                      }
+                    }
+                    el.value = val;
+                  }
+                };
+                
+                populate('date',  'tanggal');
+                populate('awal',  'awal');
+                populate('akhir', 'akhir');
+                populate('cod',   'cod');
+                populate('bod',   'bod');
+                populate('tss',   'tss');
+                populate('ph',    'ph');
+                populate('notes', 'notes');
+                
+                // ✅ RESTORE JAR TEST DATA — cari record yang punya jar data
+                // (tidak harus record terakhir, karena bisa saja record terakhir tidak punya jar data)
+                const jarRecord = json.data.find(r => r.jar_alum !== null || r.jar_total !== null || 
+                  (r.jar_entries && r.jar_entries !== '[]' && r.jar_entries !== null));
+                if (jarRecord) {
+                  let jarEntriesData = [];
+                  try {
+                    if (Array.isArray(jarRecord.jar_entries)) jarEntriesData = jarRecord.jar_entries;
+                    else if (typeof jarRecord.jar_entries === 'string' && jarRecord.jar_entries) {
+                      jarEntriesData = JSON.parse(jarRecord.jar_entries);
+                    }
+                  } catch {}
+                  window._jarTestData = {
+                    saved_at: new Date().toISOString(),
+                    tanggal: jarRecord.tanggal,
+                    jar_alum: jarRecord.jar_alum,
+                    jar_total: jarRecord.jar_total,
+                    jar_entries: jarEntriesData,
+                    entries: jarEntriesData,
+                  };
+                  console.log('🏺 Jar Test data restored dari DB:', window._jarTestData);
+                  const jarStatusEl = document.getElementById('jar-status-' + key);
+                  if (jarStatusEl) {
+                    jarStatusEl.style.display = 'flex';
+                    jarStatusEl.innerHTML = `✅ Jar: ${jarRecord.jar_alum || '—'} L/h PAC, ${jarRecord.jar_total || '—'} L/h Polimer`;
+                  }
+                } else {
+                  window._jarTestData = null;
+                  const jarStatusEl = document.getElementById('jar-status-' + key);
+                  if (jarStatusEl) jarStatusEl.style.display = 'none';
+                }
+                
+                // Hitung total volume
+                calcLimbahTotal(key);
+                
+                // Update state dengan field data dari DB — pastikan tanggal dalam format YYYY-MM-DD
+                const dbTanggal = lastRecord.tanggal;
+                let stateTanggal = '';
+                if (dbTanggal) {
+                  const dateObj = new Date(dbTanggal);
+                  if (!isNaN(dateObj.getTime())) {
+                    stateTanggal = dateObj.toISOString().split('T')[0];
+                  } else {
+                    stateTanggal = dbTanggal;
+                  }
+                }
+                
+                window._limbahState = {
+                  proj:     selectedProj,
+                  projName: selectedProjName,
+                  date:     stateTanggal,
+                  awal:     lastRecord.awal || '',
+                  akhir:    lastRecord.akhir || '',
+                  vol:      lastRecord.volume || '',
+                  cod:      lastRecord.cod || '',
+                  bod:      lastRecord.bod || '',
+                  tss:      lastRecord.tss || '',
+                  ph:       lastRecord.ph || '',
+                  notes:    lastRecord.notes || '',
+                };
+                _writeSS(window._limbahState);
+                
+                console.log('✅ Form di-populate dari data terakhir di DB, tanggal:', stateTanggal);
+              } else {
+                // Tidak ada data sebelumnya untuk project ini — set tanggal ke hari ini
+                const todayDate = new Date().toISOString().split('T')[0];
+                const dateEl = document.getElementById(key + '-date');
+                if (dateEl) {
+                  dateEl.value = todayDate;
+                }
+                
+                window._limbahState = {
+                  proj:     selectedProj,
+                  projName: selectedProjName,
+                  date:     todayDate,
+                  awal:     '',
+                  akhir:    '',
+                  vol:      '',
+                  cod:      '',
+                  bod:      '',
+                  tss:      '',
+                  ph:       '',
+                  notes:    '',
+                };
+                _writeSS(window._limbahState);
+                
+                console.log('ℹ️ Tidak ada data limbah sebelumnya, form reset dengan tanggal hari ini:', todayDate);
+              }
+            } catch (err) {
+              console.error('❌ Gagal load data limbah dari DB:', err.message);
+            }
+          }
+        };
+
+        // saveState: tulis ke window DAN sessionStorage saja (tidak perlu localStorage)
+        const saveState = () => {
+          const currentProj = sel.value;
+          const newSt = {
+            proj:     currentProj,
+            projName: currentProj !== '' ? (allProjs[+currentProj]?.name || '') : '',
+            date:  document.getElementById(key+'-date')?.value  || '',
+            awal:  document.getElementById(key+'-awal')?.value  || '',
+            akhir: document.getElementById(key+'-akhir')?.value || '',
+            vol:   document.getElementById(key+'-vol')?.value   || '',
+            cod:   document.getElementById(key+'-cod')?.value   || '',
+            bod:   document.getElementById(key+'-bod')?.value   || '',
+            tss:   document.getElementById(key+'-tss')?.value   || '',
+            ph:    document.getElementById(key+'-ph')?.value    || '',
+            notes: document.getElementById(key+'-notes')?.value || '',
+          };
+          window._limbahState = newSt;
+          _writeSS(newSt);
+        };
+        const fields = ['date','awal','akhir','vol','cod','bod','tss','ph','notes'];
+        fields.forEach(f => {
+          const el = document.getElementById(key+'-'+f);
+          if (el) {
+            el.addEventListener('input',  saveState);
+            el.addEventListener('change', saveState);
+            el.addEventListener('blur',   saveState);
+          }
+        });
+        sel.addEventListener('change', saveState);
+
+        // ── BLOKIR _loadLastLimbahFromDB jika state sudah ada ──────────
+        // Jangan auto-fill dari DB kalau user sudah punya data di form
+        const hasExistingState = st.awal || st.akhir || st.vol || st.cod || st.bod || st.tss || st.ph || st.notes;
+        if (!hasExistingState) {
+          // Form kosong — boleh load dari DB sebagai referensi
+          // tapi hanya jika projName cocok persis
+          window._limbahAutoFillAllowed = true;
+        } else {
+          // Ada data di state → jangan auto-fill
+          window._limbahAutoFillAllowed = false;
+        }
+      };
+
+      // Load fresh dari API — bukan cache
+      (typeof loadPJ === 'function' ? loadPJ('ongoing') : Promise.resolve(gPJ('ongoing')))
+        .then(_populateLimbahDropdown)
+        .catch(() => {
+          // Fallback ke cache kalau API gagal
+          _populateLimbahDropdown(gPJ('ongoing'));
+        });
     }
   } else {
-    // Non-limbah (production, utility, laboratorium): auto-load first project
+    // Non-limbah (production, utility, laboratorium): populate dropdown saja, JANGAN auto-select
     const sel = document.getElementById('dep-proj-sel-'+key);
     if (sel) {
-      const projs = gPJ('ongoing');
-      const projOpts = projs.map((p,i)=>`<option value="${i}">${p.name}</option>`).join('');
-      sel.innerHTML = `<option value="">-- Pilih project ongoing --</option>${projOpts}`;
-      
-      // Auto-load project pertama jika ada
-      if (projs.length > 0) {
-        sel.value = '0';
-        // Trigger loadDEProjForm untuk load form data
-        setTimeout(() => {
-          if (typeof loadDEProjForm === 'function') {
-            loadDEProjForm(key);
-          }
-        }, 100);
-      }
+      // Reset form & stage panel dulu agar tidak ada sisa dari sesi sebelumnya
+      window._currentDEProj = null;
+      const formWrap = document.getElementById('dep-form-'+key);
+      if (formWrap) formWrap.innerHTML = '';
+      const floatWrap = document.getElementById('dep-stage-float-'+key);
+      if (floatWrap) floatWrap.innerHTML = '';
+      const spacer = document.getElementById('dep-stage-spacer-'+key);
+      if (spacer) spacer.style.height = '0';
+      const reopen = document.getElementById('dep-stage-reopen-'+key);
+      if (reopen) reopen.style.display = 'none';
+
+      // Load fresh dari API (dengan filter role) — JANGAN pakai cache gPJ
+      loadPJ('ongoing').then(allProjs => {
+        const currentRole = localStorage.getItem('role') || '';
+        const isAdmin = ['admin','superadmin'].includes(currentRole);
+        const roleFiltered = isAdmin ? allProjs : allProjs.filter(p => {
+          if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+          return p.allowed_roles.includes(currentRole);
+        });
+        const visibleProjs = roleFiltered.filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
+        sel.innerHTML = '<option value="">-- Pilih project ongoing --</option>';
+        visibleProjs.forEach(p => {
+          const realIdx = allProjs.indexOf(p);
+          const opt = document.createElement('option');
+          opt.value = realIdx;
+          opt.textContent = p.name;
+          sel.appendChild(opt);
+        });
+        sel.disabled = false;
+      }).catch(() => {
+        sel.innerHTML = '<option value="">-- Gagal memuat project --</option>';
+        sel.disabled = false;
+      });
+      // TIDAK ada auto-select — user harus pilih project sendiri
     }
-    
+
     // Set date kalau kosong
     const dateEl = document.getElementById(key+'-date');
     if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
@@ -256,15 +511,24 @@ window.initDataEntryForm = initDataEntryForm;
 // Load data limbah terakhir dari DB dan pre-fill form
 // mode: 'full' = isi semua field, 'minimal' = hanya awal/akhir/vol/project
 async function _loadLastLimbahFromDB(key, mode = 'full') {
+  // ── GUARD: jangan auto-fill kalau user sudah punya data di form ──
+  // Flag ini di-set oleh initDataEntryForm setelah cek state
+  if (window._limbahAutoFillAllowed === false) {
+    console.log('⛔ _loadLastLimbahFromDB diblokir — form sudah ada data');
+    return;
+  }
+
   try {
-    // Gunakan tanggal yang ada di form, bukan selalu hari ini
     const dateEl  = document.getElementById(key + '-date');
     const today   = dateEl?.value || new Date().toISOString().split('T')[0];
 
     const sel      = document.getElementById('limbah-proj-sel');
     const projIdx  = sel?.value ?? '';
-    const projs    = gPJ('ongoing');
-    const projName = projIdx !== '' ? (projs[+projIdx]?.name || null) : null;
+
+    // Ambil projName dari map (name-based) — bukan dari gPJ cache yang bisa beda index
+    const projName = projIdx !== ''
+      ? ((window._limbahProjMap || {})[projIdx] || window._limbahState?.projName || null)
+      : null;
 
     let url = `/api/dataentry/limbah?tanggal=${today}&limit=5`;
     if (projName) {
@@ -275,9 +539,14 @@ async function _loadLastLimbahFromDB(key, mode = 'full') {
     const json = await res.json();
     if (!json.success || !json.data?.length) return;
 
+    // ── FILTER KETAT: harus cocok project_name persis ──────────────
     const rows = json.data.filter(r => {
-      if (projName) return r.project_name === projName;
-      return !r.project_name || r.tipe === 'harian';
+      if (projName) {
+        // Hanya ambil row yang project_name-nya SAMA PERSIS
+        return r.project_name === projName;
+      }
+      // Mode harian: hanya row tanpa project
+      return r.project_name === null || r.project_name === '' || r.tipe === 'harian';
     });
     if (!rows.length) return;
 
@@ -285,10 +554,15 @@ async function _loadLastLimbahFromDB(key, mode = 'full') {
 
     const fill = (id, val) => {
       const el = document.getElementById(id);
-      // Hanya fill kalau field masih kosong
-      if (el && val != null && val !== '' && el.value === '') el.value = val;
+      if (!el || val == null || val === '') return;
+      if (id.endsWith('-date') || id.endsWith('-notes')) {
+        // Hanya isi kalau field masih kosong (tanggal & notes tidak perlu override)
+        if (el.value === '') el.value = val;
+      } else {
+        // Untuk field numerik: selalu update _greyFill (termasuk setelah Save/Reset)
+        _greyFill(el, val);
+      }
     };
-    // Tanggal: selalu format YYYY-MM-DD
     const tgl = last.tanggal ? last.tanggal.substring(0, 10) : '';
     fill(key + '-date',  tgl);
     fill(key + '-awal',  last.awal);
@@ -309,9 +583,9 @@ async function _loadLastLimbahFromDB(key, mode = 'full') {
       if (awalWrap)  awalWrap.style.display  = '';
       if (akhirWrap) akhirWrap.style.display = '';
       calcLimbahTotal(key);
-    } else if (last.volume != null) {
+    } else if (last.vol_m3 != null) {
       const volEl = document.getElementById(key + '-vol');
-      if (volEl) { volEl.removeAttribute('readonly'); volEl.value = last.volume; }
+      if (volEl && volEl.value === '') { volEl.removeAttribute('readonly'); volEl.value = last.vol_m3; }
     }
 
     if (mode === 'full') {
@@ -330,7 +604,7 @@ window._loadLastLimbahFromDB = _loadLastLimbahFromDB;
 
 async function submitLimbah(key) {
   const g = id => document.getElementById(id)?.value?.trim() ?? '';
-  const date    = g(key + '-date');
+  let date    = g(key + '-date');
   const awal    = g(key + '-awal');
   const akhir   = g(key + '-akhir');
   const vol     = g(key + '-vol');
@@ -340,10 +614,33 @@ async function submitLimbah(key) {
   const ph      = g(key + '-ph');
   const notes   = g(key + '-notes');
 
+  // Validasi dan fix format tanggal — pastikan YYYY-MM-DD
+  if (date) {
+    const dateObj = new Date(date);
+    if (!isNaN(dateObj.getTime())) {
+      // Convert ke YYYY-MM-DD format untuk consistency
+      date = dateObj.toISOString().split('T')[0];
+    }
+  }
+
   const projSel  = document.getElementById('limbah-proj-sel');
   const projIdx  = projSel?.value ?? '';
-  const projs    = gPJ('ongoing');
-  const projName = projIdx !== '' ? (projs[+projIdx]?.name || null) : null;
+
+  // ── FIX 3: Ambil projName dari _limbahProjMap (name-based) ──────
+  // Sebelumnya: gPJ('ongoing')[+projIdx]?.name — bisa salah kalau index cache ≠ API
+  // Sekarang: pakai map yang sudah dibangun saat dropdown di-populate dari API
+  let projName = null;
+  if (projIdx !== '') {
+    projName = (window._limbahProjMap || {})[projIdx] || null;
+    if (!projName) {
+      // Fallback — ambil dari state kalau map belum ready
+      projName = window._limbahState?.projName || null;
+    }
+    if (!projName) {
+      showDESt(key, 'error', '❌ Project tidak valid — coba reload halaman lalu pilih project lagi.');
+      return;
+    }
+  }
 
   // VALIDASI TANGGAL
   if (!date) { 
@@ -364,13 +661,18 @@ async function submitLimbah(key) {
   
   const hasData = hasAwal || hasAkhir || hasVol || hasCod || hasBod || hasTss || hasPh || hasNotes;
   
-  if (!hasData) {
-    showDESt(key, 'error', '⚠️ Isi minimal satu field data (awal/akhir/volume/COD/BOD/TSS/pH/notes)!');
+  // Izinkan submit kalau ada jar test data meski field lain kosong
+  const hasJarData = !!(window._jarTestData?.jar_alum || window._jarTestData?.jar_total ||
+                        (window._jarTestData?.entries || []).length > 0);
+
+  if (!hasData && !hasJarData) {
+    showDESt(key, 'error', '⚠️ Isi minimal satu field data atau tambahkan data Jar Test terlebih dahulu!');
     return;
   }
 
   // SIMPAN STATE sebelum submit (untuk recovery jika error)
-  window._limbahState = { proj: projIdx, date, awal, akhir, vol, cod, bod, tss, ph, notes };
+  window._limbahState = { proj: projIdx, projName: projName || '', date, awal, akhir, vol, cod, bod, tss, ph, notes };
+  try { sessionStorage.setItem('limbah_form_state', JSON.stringify(window._limbahState)); } catch {}
 
   showDESt(key, 'loading', '⏳ Menyimpan data limbah...');
 
@@ -387,11 +689,59 @@ async function submitLimbah(key) {
       tss:          tss   || null,
       ph:           ph    || null,
       notes:        notes || null,
+      jar_alum:     null,
+      jar_total:    null,
     };
 
-    console.log('📤 Sending to /api/dataentry/limbah:', body);
+    // Include jar test data jika tersedia
+    let jarEntries = [];
+    // Coba baca dari _jarTestData (global, diset oleh submitJarTestModal)
+    let _jarData = window._jarTestData || null;
 
-    const fetchRes = await fetch('/api/dataentry/limbah', {
+    // FIX: kalau projName kosong (dropdown form limbah hanya tampil ongoing),
+    // cek apakah _jarTestData punya proj_name sendiri (mis. completed project
+    // yang di-link langsung dari modal jar test) dan pakai itu sebagai projName.
+    let _effectiveProjName = projName;
+    if (!_effectiveProjName && _jarData?.proj_name) {
+      _effectiveProjName = _jarData.proj_name;
+      // Juga update body agar data tersimpan ke project yang benar di DB
+      body.project_name = _effectiveProjName;
+      body.tipe = 'project';
+    }
+
+    // Juga coba dari _jarByProj dengan key project name (lebih spesifik)
+    if (_effectiveProjName) {
+      const _jKey = 'jartest__' + _effectiveProjName;
+      const _jFromProj = (window._jarByProj||{})[_jKey] || null;
+      const _jFromLS = (() => { try { return JSON.parse(localStorage.getItem(_jKey)||'null'); } catch { return null; } })();
+      _jarData = _jFromProj || _jFromLS || _jarData;
+    } else {
+      // Mode harian — baca dari key harian
+      const _jFromHarian = (window._jarByProj||{})['jartest__harian'] || null;
+      const _jFromLS = (() => { try { return JSON.parse(localStorage.getItem('jartest__harian')||'null'); } catch { return null; } })();
+      _jarData = _jarData || _jFromHarian || _jFromLS;
+    }
+
+    if (_jarData) {
+      body.jar_alum  = _jarData.jar_alum  || null;
+      body.jar_total = _jarData.jar_total || null;
+      jarEntries     = _jarData.jar_entries || _jarData.entries || [];
+      console.log('📦 Jar Test data included:', { jar_alum: body.jar_alum, jar_total: body.jar_total, entries: jarEntries.length });
+    } else {
+      console.log('⚠️  No jar test data available');
+    }
+    body.jar_entries = jarEntries;
+
+    // ✅ FIX: pilih endpoint sesuai mode.
+    // Pakai _effectiveProjName (bisa dari dropdown ATAU dari _jarTestData.proj_name)
+    // supaya completed project yang di-link via modal jar test juga ke endpoint yang benar.
+    const apiUrl = _effectiveProjName
+      ? '/api/dataentry/limbah'
+      : '/api/dataentry/limbah-harian';
+
+    console.log('📤 Sending to ' + apiUrl + ':', body);
+
+    const fetchRes = await fetch(apiUrl, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(body),
@@ -408,15 +758,26 @@ async function submitLimbah(key) {
 
     // ✅ SUKSES — Tampilkan pesan sukses dengan ID
     const successMsg = json.id 
-      ? `✅ Data limbah ID #${json.id} berhasil disimpan!`
+      ? `✅ Data limbah berhasil disimpan!`
       : `✅ Data limbah berhasil disimpan!`;
     
     showDESt(key, 'success', successMsg);
-    
     console.log('✅ Submit limbah SUKSES, ID:', json.id);
 
-    // JANGAN AUTO-CLEAR — Biarkan user lihat data yang disimpan
-    // User bisa manual klik tombol Reset kalau mau input baru
+    // Setelah sukses: hapus sessionStorage
+    try { sessionStorage.removeItem('limbah_form_state'); } catch {}
+    window._limbahState = {};
+    window._limbahAutoFillAllowed = true;
+
+    // ✅ Refill field dengan abu agar user bisa langsung klik untuk ubah
+    const fieldsToRefill = ['awal','akhir','cod','bod','tss','ph'];
+    fieldsToRefill.forEach(f => {
+      const el = document.getElementById(key + '-' + f);
+      if (el && el.value !== '') {
+        el.dataset.prevValue = el.value;
+        el.style.color = '#999';
+      }
+    });
     
   } catch (err) {
     console.error('❌ submitLimbah ERROR:', err.message);
@@ -514,3 +875,160 @@ function showQuickToast(msg) {
   toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2800);
 }
 window.showQuickToast = showQuickToast;
+// ═══════════════════════════════════════════════════════════════
+// JAR TEST MODAL — PAC & Polimer dosing input
+// openJarTestModal, closeJarTestModal, submitJarTestModal
+// → Sudah ada di data-entry.js, dihapus dari sini agar tidak override
+
+
+// ═══════════════════════════════════════════════════════════════
+// JAR TEST BUTTON INJECTOR
+// Inject tombol "🧪 Jar Test" ke form limbah setelah DOM ready
+// ═══════════════════════════════════════════════════════════════
+function injectJarTestButton(key) {
+  // Cek apakah tombol sudah ada
+  if (document.getElementById('jar-test-btn-' + key)) return;
+
+  // Cari container yang tepat — setelah field notes atau sebelum submit
+  const notesEl = document.getElementById(key + '-notes');
+  if (!notesEl) return;
+
+  // Buat wrapper jar test
+  const jarWrap = document.createElement('div');
+  jarWrap.style.cssText = 'margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  jarWrap.innerHTML = `
+    <button id="jar-test-btn-${key}" type="button"
+      onclick="openJarTestModal('${key}')"
+    </button>
+    <div id="jar-status-${key}" style="display:none;font-size:11px;
+      color:var(--blue,#3b82f6);font-weight:600;padding:6px 10px;
+      background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;"></div>
+  `;
+
+  // Insert setelah parent dari notesEl
+  const notesParent = notesEl.closest('.de-field') || notesEl.parentElement;
+  if (notesParent?.parentElement) {
+    notesParent.parentElement.insertBefore(jarWrap, notesParent.nextSibling);
+  }
+
+  // Restore badge kalau ada data jar
+  if (window._jarTestData) {
+    const jarStatusEl = document.getElementById('jar-status-' + key);
+    if (jarStatusEl) {
+      jarStatusEl.style.display = 'flex';
+      jarStatusEl.innerHTML = `✅ Jar: ${window._jarTestData.jar_alum ?? '—'} L/h PAC, ${window._jarTestData.jar_total ?? '—'} L/h Polimer`;
+    }
+  }
+}
+window.injectJarTestButton = injectJarTestButton;
+
+// Auto-inject saat halaman limbah dimuat
+document.addEventListener('DOMContentLoaded', () => {
+  // Observer untuk inject tombol saat form limbah muncul di DOM
+  const observer = new MutationObserver(() => {
+    const notesEl = document.getElementById('limbah-notes');
+    if (notesEl && !document.getElementById('jar-test-btn-limbah')) {
+      injectJarTestButton('limbah');
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+});
+// ═══════════════════════════════════════════════════════════════
+// MODAL OPEN → BLUR FIXED ELEMENTS
+// Blur semua elemen fixed/sticky di luar modal saat modal terbuka.
+// ═══════════════════════════════════════════════════════════════
+(function watchModalsAndBlurFixed() {
+  let _blurred = [];
+
+  function _isAnyModalOpen() {
+    // sp-overlay pakai inline style display:flex
+    const spOpen = !!document.querySelector('.proj-modal-overlay[id^="sp-overlay-"][style*="flex"]');
+    // summ-overlay pakai class .show
+    const summOpen = !!document.querySelector('[id^="summ-overlay-"].show, [id^="summ-drawer-"].show');
+    // modal lain
+    const otherOpen = !!document.querySelector(
+      '.proj-modal-overlay[id^="pmo-"][style*="flex"],' +
+      '.proj-modal-overlay[id^="edit-overlay-"][style*="flex"],' +
+      '#extraction-modal-overlay[style*="flex"],' +
+      '#cip-modal-overlay[style*="flex"],' +
+      '[id^="upd-overlay-"].show,' +
+      '[id^="pdo-"].show'
+    );
+    return spOpen || summOpen || otherOpen;
+  }
+
+  function _getModalContainers() {
+    return [
+      ...document.querySelectorAll('.proj-modal-overlay, .proj-modal, #extraction-modal, #cip-modal, [id^="summ-drawer-"], [id^="pdd-"]')
+    ];
+  }
+
+  function _applyBlur() {
+    if (_blurred.length) return;
+    const modalEls = _getModalContainers();
+
+    document.querySelectorAll('*').forEach(el => {
+      // Skip kalau el ini adalah/dalam modal
+      if (modalEls.some(m => m === el || m.contains(el) || el.contains(m))) return;
+
+      // Skip alert-banner-strip — elemen ini sudah dikelola manual oleh
+      // openSumm()/closeSumm() di production-ops.js. Kalau ikut di-blur di sini,
+      // dua mekanisme akan rebutan kontrol filter/opacity dan banner bisa
+      // tersangkut blur permanen setelah modal ditutup.
+      if (el.id === 'alert-banner-strip' || el.closest?.('#alert-banner-strip')) return;
+
+      const cs = window.getComputedStyle(el);
+      const isFixed   = cs.position === 'fixed';
+      const isSticky  = cs.position === 'sticky';
+      const isTopBar  = isFixed && parseInt(cs.top || '99') < 10;
+
+      if (!isFixed && !isSticky) return;
+
+      // Hanya blur elemen yang benar-benar visible
+      if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return;
+
+      _blurred.push({
+        el,
+        filter:        el.style.filter,
+        pointerEvents: el.style.pointerEvents,
+        zIndex:        el.style.zIndex,
+        opacity:       el.style.opacity,
+      });
+      el.style.filter        = 'blur(4px)';
+      el.style.pointerEvents = 'none';
+    });
+  }
+
+  function _removeBlur() {
+    _blurred.forEach(({ el, filter, pointerEvents, zIndex, opacity }) => {
+      el.style.filter        = filter;
+      el.style.pointerEvents = pointerEvents;
+      el.style.zIndex        = zIndex;
+      el.style.opacity       = opacity;
+    });
+    _blurred = [];
+  }
+
+  let _ticking = false;
+  const observer = new MutationObserver(() => {
+    if (_ticking) return;
+    _ticking = true;
+    requestAnimationFrame(() => {
+      _ticking = false;
+      if (_isAnyModalOpen()) {
+        _applyBlur();
+      } else {
+        _removeBlur();
+      }
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    observer.observe(document.body, {
+      childList:       true,
+      subtree:         true,
+      attributes:      true,
+      attributeFilter: ['style', 'class'],
+    });
+  });
+})();

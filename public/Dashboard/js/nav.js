@@ -9,14 +9,52 @@ const ROLE_ACCESS = {
   admin:      null, // null = all pages allowed
   superadmin: null,
   PPIC:       null, // sama seperti admin — akses semua halaman
-  scientist:  ['iot', 'laboratorium', 'reporting', 'change-password'],
-  utility:    ['iot', 'utility',      'reporting', 'change-password'],
-  limbah:     ['iot', 'limbah',       'reporting', 'change-password'],
-  Produksi:   ['iot', 'production',   'reporting', 'change-password'],
+  scientist:  ['iot', 'laboratorium', 'organoleptic', 'reporting', 'change-password'],
+  utility:    ['iot', 'utility',      'organoleptic', 'reporting', 'change-password'],
+  limbah:     ['iot', 'limbah',       'organoleptic', 'reporting', 'change-password'],
+  Produksi:   ['iot', 'production', 'ongoing', 'organoleptic', 'reporting', 'change-password'],
+  display:    ['iot'],  // hanya dashboard IoT
 };
 // ───────────────────────────────────────────────────────────────────
 
+// ── Display mode: hide semua nav kecuali IoT, sidebar collapsed ──
+function applyDisplayMode() {
+  const role = window.SAIL_USER?.role || localStorage.getItem('role') || '';
+  if (role !== 'display') return;
+
+  // Sembunyikan semua section label dan nav group kecuali Main Menu + IoT
+  document.querySelectorAll('.nav-section-label').forEach(el => {
+    if (el.textContent.trim() === 'Main Menu') return;
+    el.style.display = 'none';
+  });
+  document.querySelectorAll('.nav-group, .nav-item').forEach(el => {
+    if (el.dataset.page === 'iot' || el.classList.contains('active')) return;
+    // Sembunyikan semua nav-item dan nav-group selain IoT
+    if (!el.querySelector('[data-page="iot"]') && el.dataset.page !== 'iot') {
+      el.style.display = 'none';
+    }
+  });
+  // Sembunyikan logout button
+  const footer = document.querySelector('.sidebar-footer');
+  if (footer) footer.style.display = 'none';
+
+  // Collapse sidebar by default
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle-btn');
+  if (sidebar) sidebar.classList.add('collapsed');
+  if (btn) btn.textContent = '▶';
+  document.body.classList.add('sidebar-collapsed');
+  console.log('📺 Display mode aktif — sidebar collapsed, menu disembunyikan');
+}
+
 function loadPage(page) {
+  // Cek role-based access
+  const role = window.SAIL_USER?.role || localStorage.getItem('role') || '';
+  const allowed = ROLE_ACCESS[role];
+  if (allowed && !allowed.includes(page)) {
+    console.warn(`🚫 Role "${role}" tidak punya akses ke "${page}"`);
+    return;
+  }
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const map = {
     iot:['Dashboard IoT','SAIL / Dashboard / Monitor IoT'],
@@ -53,6 +91,9 @@ function loadPage(page) {
   } else if (page === 'utility') {
     content.innerHTML = getDataEntryUtility('utility','Data Entry Utility','Record daily utility data','⚡'); initDataEntryForm('utility');
   } else if (page === 'laboratorium') {
+    // ── Simpan state form lab KE sessionStorage SEBELUM DOM dihancurkan ──
+    // Ini satu-satunya tempat yang PASTI jalan sebelum content.innerHTML di-replace
+    Object.values(window._labCollectState || {}).forEach(fn => { try { fn(); } catch {} });
     content.innerHTML = getDataEntryLaboratorium('laboratorium','Data Entry Laboratory','Record daily laboratory data','🧪'); initDataEntryForm('laboratorium');
   } else if (page === 'limbah') {
     content.innerHTML = getDataEntryLimbah('limbah','Data Entry Waste','Record daily waste data','♻️'); initDataEntryForm('limbah');
@@ -93,13 +134,13 @@ function getReporting() {
 
         <!-- Tab Navigation -->
         <div class="report-tabs" style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--border);padding-bottom:0;overflow-x:auto">
-            <button class="report-tab active" data-tab="lab" onclick="switchReportTab('lab', this)">
+            <button class="report-tab active" id="htab-lab" data-tab="lab" onclick="if(window.switchReportTab)switchReportTab('lab')">
                 <span style="font-size:16px">🧪</span> Lab
             </button>
-            <button class="report-tab" data-tab="utility" onclick="switchReportTab('utility', this)">
+            <button class="report-tab" id="htab-utility" data-tab="utility" onclick="if(window.switchReportTab)switchReportTab('utility')">
                 <span style="font-size:16px">⚡</span> Utility
             </button>
-            <button class="report-tab" data-tab="limbah" onclick="switchReportTab('limbah', this)">
+            <button class="report-tab" id="htab-limbah" data-tab="limbah" onclick="if(window.switchReportTab)switchReportTab('limbah')">
                 <span style="font-size:16px">♻️</span> Limbah
             </button>
         </div>

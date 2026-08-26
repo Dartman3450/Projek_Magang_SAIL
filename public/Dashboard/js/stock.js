@@ -434,14 +434,14 @@ function openSCProductForm(idx = -1) {
     document.getElementById('sc-p-pic').value  = p.pic  || '';
     
     // Injeksi dropdown dengan value lama
-    document.getElementById('loc-dropdown-container').innerHTML = buildLocationDropdown('sc-p-loc', p.loc || '');
+    document.getElementById('loc-dropdown-container').innerHTML = buildStockLocationDropdown('sc-p-loc', p.loc || '');
   } else {
     document.getElementById('sc-prod-modal-title').textContent = '📦 Tambah Produk';
     ['sc-p-name','sc-p-unit','sc-p-pic'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     // Injeksi dropdown kosong
-    document.getElementById('loc-dropdown-container').innerHTML = buildLocationDropdown('sc-p-loc', '');
+    document.getElementById('loc-dropdown-container').innerHTML = buildStockLocationDropdown('sc-p-loc', '');
   }
   const sb = document.getElementById('sc-p-sb'); if (sb) sb.style.display = 'none';
   const m  = document.getElementById('sc-prod-modal');
@@ -855,7 +855,7 @@ window.loadSCLocationsFromAPI = async function() {
   return _scLocationsCache;
 };
 
-window.buildLocationDropdown = function(id, value) {
+window.buildStockLocationDropdown = function(id, value) {
     const locations = _scLocationsCache;
     let opts = '<option value="">-- Pilih Lokasi --</option>';
     opts += '<option value="__ADD_NEW__" style="font-weight:bold;color:var(--blue);">＋ Tambah Lokasi Baru...</option>';
@@ -936,7 +936,7 @@ window.saveNewLocation = async function(id) {
     document.getElementById(id + '-custom-wrap').style.display = 'none';
     document.querySelectorAll('.loc-dropdown').forEach(dropdown => {
         const currentVal = dropdown.id === id ? newVal : dropdown.value;
-        dropdown.outerHTML = buildLocationDropdown(dropdown.id, currentVal);
+        dropdown.outerHTML = buildStockLocationDropdown(dropdown.id, currentVal);
     });
 };
 
@@ -978,7 +978,7 @@ window.deleteLocation = async function(id) {
     
     document.querySelectorAll('.loc-dropdown').forEach(dropdown => {
         const currentVal = dropdown.value === val ? '' : dropdown.value;
-        dropdown.outerHTML = buildLocationDropdown(dropdown.id, currentVal);
+        dropdown.outerHTML = buildStockLocationDropdown(dropdown.id, currentVal);
     });
 };
 

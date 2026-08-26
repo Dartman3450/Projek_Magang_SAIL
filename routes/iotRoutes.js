@@ -156,6 +156,8 @@ const {
   getLatestWaterFlow,
   getLingkungan,
   getLatestLingkungan,
+  getFuelLevel,
+  getLatestFuelLevel,
   getPatroli,
   getSensorSettings,
   saveSensorSettings,
@@ -176,6 +178,10 @@ router.get('/water-flow/latest',  getLatestWaterFlow);
 router.get('/lingkungan',         getLingkungan);
 router.get('/lingkungan/latest',  getLatestLingkungan);
 
+// Fuel Genset (persen + liter, tabel laporan_fuel_level)
+router.get('/fuel-level',         getFuelLevel);
+router.get('/fuel-level/latest',  getLatestFuelLevel);
+
 // Patroli
 router.get('/patroli',            getPatroli);
 
@@ -184,5 +190,10 @@ router.get('/patroli',            getPatroli);
 // POST /api/iot/sensor-settings → Save/update sensor configs to DB
 router.get('/sensor-settings',  getSensorSettings);
 router.post('/sensor-settings', saveSensorSettings);
+
+// ══ SETUP (One-time initialization) ═════════════════════════════════
+// POST /api/iot/setup-default-sensors → Setup 10 default sensor configs
+const { setupDefaultSensors } = require('../controllers/iotController');
+router.post('/setup-default-sensors', setupDefaultSensors);
 
 module.exports = router;

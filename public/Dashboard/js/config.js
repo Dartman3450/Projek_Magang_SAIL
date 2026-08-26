@@ -46,8 +46,8 @@ const SP_FIELDS_PAGE2 = [
   {id:'sp-temp-feed',  label:'Product Feed',         type:'number', unit:'°C'},
   {id:'sp-temp-heater',label:'Product Heater',       type:'number', unit:'°C',      calculated:true, formula:'Top of Column + Offset'},
   {id:'sp-temp-top',   label:'Top of Column',        type:'number', unit:'°C'},
-  {id:'sp-Condensate1', label:'Condensate #1',         type:'number', unit:'°C'},
-  {id:'sp-Condensate2', label:'Condensate #2',         type:'number', unit:'°C'},
+  {id:'sp-Condensate1', label:'Condensate Temp #1',    type:'number', unit:'°C'},
+  {id:'sp-Condensate2', label:'Condensate Temp #2',    type:'number', unit:'°C'},
   {id:'sp-temp-bot',   label:'Bottom of Column',     type:'number', unit:'°C'},
   {id:'sp-add1',       label:'Product Flowrate',                    type:'text',   unit:'L/H'},
   {id:'sp-add2',       label:'Product Flow Control Valve Position', type:'text',   unit:'%'},
@@ -120,7 +120,7 @@ const DE_SECTIONS = [
 ];
 
 // ═══════════════════════════════════════════════════════════════
-// CIP MODAL SYSTEM - Checklist definitions (MUST BE BEFORE openCIPModal)
+// CIP MODAL SYSTEM - Checklist definitions
 // ═══════════════════════════════════════════════════════════════
 const CIP_CHECKLISTS = {
   production: {
@@ -183,5 +183,3 @@ const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
 
 // ══ CLOCK ══════════════════════════════════════════
 setInterval(() => set('clock', new Date().toLocaleTimeString('id-ID')), 1000);
-
-// ══ SIDEBAR ════════════════════════════════════════

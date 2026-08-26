@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cross-Device Sensor Settings Sync - Setup</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #1a1a1a; color: #fff; }
+    .container { background: #2d2d2d; border-radius: 8px; padding: 20px; margin: 20px 0; }
+    h1 { color: #4fc3f7; margin-bottom: 20px; }
+    button { background: #4fc3f7; color: #000; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; margin-right: 10px; }
+    button:hover { background: #29b6f6; }
+    #status { margin: 20px 0; padding: 15px; border-radius: 4px; }
+    #status.success { background: #1b5e20; border-left: 4px solid #4caf50; }
+    #status.error { background: #b71c1c; border-left: 4px solid #f44336; }
+    #status.loading { background: #424242; border-left: 4px solid #4fc3f7; }
+    .table-container { overflow-x: auto; margin: 20px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #444; }
+    th { background: #3f3f3f; font-weight: bold; color: #4fc3f7; }
+    tr:hover { background: #383838; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+    .badge.active { background: #4caf50; color: white; }
+    .badge.inactive { background: #f44336; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Cross-Device Sensor Settings Sync - Setup</h1>
+    <p>Setup 10 default sensor configurations in database for automatic sync across all devices.</p>
+    
+    <button onclick="setupSensors()">1️⃣  Setup Default Sensors</button>
+    <button onclick="loadSensors()">2️⃣  Load Sensors from DB</button>
+    <button onclick="clearConsole()">🗑️  Clear Console</button>
+  </div>
+
+  <div id="status"></div>
+  <div class="table-container" id="tableContainer"></div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const tableContainer = document.getElementById('tableContainer');
+
+    function showStatus(msg, type = 'loading') {
+      statusEl.textContent = msg;
+      statusEl.className = type;
+      statusEl.style.display = 'block';
+    }
+
+    function clearConsole() {
+      tableContainer.innerHTML = '';
+      statusEl.innerHTML = '';
+    }
+
+    async function setupSensors() {
+      showStatus('⏳ Calling setup endpoint...', 'loading');
+      try {
+        const res = await fetch('/api/iot/setup-default-sensors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const json = await res.json();
+        
+        if (json.success) {
+          showStatus(`✅ ${json.message} | Timestamp: ${json.timestamp}`, 'success');
+          setTimeout(() => loadSensors(), 1000);
+        } else {
+          showStatus(`❌ ${json.message}`, 'error');
+        }
+      } catch (err) {
+        showStatus(`❌ Error: ${err.message}`, 'error');
+      }
+    }
+
+    async function loadSensors() {
+      showStatus('⏳ Loading sensors from API...', 'loading');
+      try {
+        const res = await fetch('/api/iot/sensor-settings');
+        const json = await res.json();
+        
+        if (!json.success || !json.data) {
+          showStatus('❌ No sensor data in API', 'error');
+          return;
+        }
+
+        showStatus(`✅ Loaded ${json.data.length} sensors from database`, 'success');
+
+        if (json.data.length === 0) {
+          tableContainer.innerHTML = '<p style="color: #aaa;">No sensors in database yet. Click "Setup Default Sensors" first.</p>';
+          return;
+        }
+
+        // Build table
+        let html = '<table><tr><th>Fixed ID</th><th>Key</th><th>Name</th><th>Shape</th><th>Tinggi (m)</th><th>Panjang (m)</th><th>Lebar (m)</th><th>Diameter (m)</th><th>Warn%</th><th>Crit%</th><th>Status</th></tr>';
+        json.data.forEach(s => {
+          const statusBadge = s.is_active ? '<span class="badge active">Active</span>' : '<span class="badge inactive">Inactive</span>';
+          html += `<tr>
+            <td><strong>${s.fixed_id}</strong></td>
+            <td>${s.key || '-'}</td>
+            <td>${s.name}</td>
+            <td>${s.shape || '-'}</td>
+            <td>${s.tinggi ? parseFloat(s.tinggi).toFixed(2) : '-'}</td>
+            <td>${s.panjang ? parseFloat(s.panjang).toFixed(2) : '-'}</td>
+            <td>${s.lebar ? parseFloat(s.lebar).toFixed(2) : '-'}</td>
+            <td>${s.diameter ? parseFloat(s.diameter).toFixed(2) : '-'}</td>
+            <td>${s.warn_pct || 40}%</td>
+            <td>${s.crit_pct || 15}%</td>
+            <td>${statusBadge}</td>
+          </tr>`;
+        });
+        html += '</table>';
+        tableContainer.innerHTML = html;
+
+      } catch (err) {
+        showStatus(`❌ Error loading sensors: ${err.message}`, 'error');
+      }
+    }
+
+    // Auto-load on page load
+    window.addEventListener('load', () => {
+      setTimeout(loadSensors, 500);
+    });
+  </script>
+</body>
+</html>

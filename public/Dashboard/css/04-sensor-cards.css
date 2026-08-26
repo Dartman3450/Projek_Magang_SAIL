@@ -109,6 +109,12 @@
 .st-warn { background: #fef9ec; color: #9a7200; border-color: #f0d078; }
 .st-crit { background: #fef2f2; color: #b91c1c; border-color: #f0a0a0; }
 .st-wait { background: var(--bg); color: var(--txt3); border-color: var(--border2); }
+.st-offline { background: #fef2f2; color: #dc2626; border-color: #f87171; animation: pulse-offline 2s ease-in-out infinite; }
+
+@keyframes pulse-offline {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
 
 /* ─── Info Rows inside cards ─────────────────────── */
 .s-rows { display: flex; flex-direction: column; gap: 4px; }

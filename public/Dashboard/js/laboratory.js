@@ -23,33 +23,72 @@ function getDataEntryLaboratorium(key, title, sub, icon) {
         <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:16px;">🧪 Analisa Air — Entry Harian</div>
         <div class="de-grid">
           <div class="de-field de-full">
+            <label class="de-label" style="color:#111;">TANGGAL</label>
+            <input class="de-input" type="date" id="lab-h-${key}-tanggal" value="${new Date().toISOString().split('T')[0]}" style="cursor:pointer;">
+          </div>
+          <div class="de-field de-full">
             <label class="de-label" style="color:#111;">SECTION / AREA</label>
-            <select class="de-input de-select" id="lab-h-${key}-section">
+            <select class="de-input de-select" id="lab-h-${key}-section" onchange="labHarianToggleFields('${key}')">
               <option value="">-- Pilih section --</option>
               <option value="tw1">Treat Water 1 (TW1)</option>
               <option value="tw2">Treat Water 2 (TW2)</option>
               <option value="filter">Filter Water</option>
+              <option value="chiller">Chiller In &amp; Out</option>
+              <option value="cooling">Cooling Water</option>
+              <option value="process">Process Water</option>
+              <option value="soft">Soft Water</option>
+              <option value="boiler_feed">Boiler Feed Water</option>
+              <option value="raw_sb1">Raw Water (SB-1)</option>
+              <option value="wwtp">WWTP / Limbah</option>
+              <option value="other">Lain-lain</option>
             </select>
           </div>
-          <div class="de-field de-full">
-            <label class="de-label" style="color:#111;">NAMA SAMPLE</label>
-            <input class="de-input" type="text" id="lab-h-${key}-sample" placeholder="Nama sample...">
+          <!-- Field nama khusus untuk "Lain-lain" -->
+          <div id="lab-h-${key}-other-name-field" style="display:none;grid-column:1/-1;">
+            <div class="de-field de-full">
+              <label class="de-label" style="color:#111;">NAMA SECTION</label>
+              <input class="de-input" type="text" id="lab-h-${key}-other-name" placeholder="Tulis nama section...">
+            </div>
           </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">pH</label>
-            <input class="de-input" type="number" step="0.01" id="lab-h-${key}-ph" placeholder="—">
+          <!-- Fields standar: TW1/TW2/Filter/Chiller/Cooling/dll -->
+          <div id="lab-h-${key}-std-fields" style="display:contents">
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">pH</label>
+              <input class="de-input" type="number" step="0.01" id="lab-h-${key}-ph" placeholder="—">
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">TDS</label>
+              <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-tds" placeholder="—"><span class="group-unit">mg/L</span></div>
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">HARDNESS</label>
+              <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-hardness" placeholder="—"><span class="group-unit">mg/L</span></div>
+            </div>
+            <div class="de-field">
+              <label class="de-label" style="color:#111;">ALKALI</label>
+              <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-alkali" placeholder="—"><span class="group-unit">mg/L</span></div>
+            </div>
           </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">TDS</label>
-            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-tds" placeholder="—"><span class="group-unit">mg/L</span></div>
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">HARDNESS</label>
-            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-hardness" placeholder="—"><span class="group-unit">mg/L</span></div>
-          </div>
-          <div class="de-field">
-            <label class="de-label" style="color:#111;">ALKALI</label>
-            <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-alkali" placeholder="—"><span class="group-unit">mg/L</span></div>
+          <!-- Fields khusus WWTP: COD/BOD/PH/TDS -->
+          <div id="lab-h-${key}-wwtp-fields" style="display:none;grid-column:1/-1;display:none">
+            <div class="de-grid">
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">COD</label>
+                <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-cod" placeholder="—"><span class="group-unit">ppm</span></div>
+              </div>
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">BOD</label>
+                <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-bod" placeholder="—"><span class="group-unit">ppm</span></div>
+              </div>
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">pH</label>
+                <input class="de-input" type="number" step="0.01" id="lab-h-${key}-wwtp-ph" placeholder="—">
+              </div>
+              <div class="de-field">
+                <label class="de-label" style="color:#111;">TDS</label>
+                <div class="input-group"><input class="de-input" type="number" step="0.01" id="lab-h-${key}-wwtp-tds" placeholder="—"><span class="group-unit">ppm</span></div>
+              </div>
+            </div>
           </div>
           <div class="de-field de-full">
             <label class="de-label" style="color:#111;">NOTES</label>
@@ -82,6 +121,8 @@ window.getDataEntryLaboratorium = getDataEntryLaboratorium;
 
 // ── 2. FUNGSI SWITCH TIPE LAB (Anti Ngebug) ──
 function labSwitchType(key, type) {
+  // Paksa simpan state form project sebelum switch tab
+  Object.values(window._labCollectState || {}).forEach(fn => { try { fn(); } catch {} });
   const harianSub = document.getElementById('lab-harian-sub-' + key);
   const projectSub = document.getElementById('lab-project-sub-' + key);
   
@@ -126,39 +167,57 @@ function labSwitchType(key, type) {
     if (!window._labSamplesCache) {
       loadLabSamplesFromAPI().catch(() => {});
     }
+    // Load locations dari API (selalu fresh, terpisah dari samples)
+    loadLabLocationsFromAPI().then(() => {
+      // Setelah cache terisi, refresh semua location dropdown yang sudah dirender
+      document.querySelectorAll('.location-dropdown').forEach(dropdown => {
+        const currentVal = dropdown.value && dropdown.value !== '__ADD_LOC__' ? dropdown.value : (dropdown.dataset.prevValue || '');
+        const wrapper = dropdown.closest('div.de-field') || dropdown.parentElement?.parentElement;
+        if (wrapper) wrapper.innerHTML = buildLocationDropdown(dropdown.id, currentVal);
+      });
+    }).catch(() => {});
 
     // Muat daftar project ke dropdown Project
     const projSel = document.getElementById('lab-proj-sel-' + key);
     if (projSel) {
-      const currentRole = localStorage.getItem('role') || 'scientist';
-      const isAdmin     = ['admin','superadmin'].includes(currentRole);
-      const allProjs    = gPJ('ongoing');
-      const projs = isAdmin ? allProjs : allProjs.filter(p => {
-        if (currentRole === 'scientist' || currentRole === 'utility') return true;
-        if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
-        return p.allowed_roles.includes(currentRole);
-      });
-
-      // Simpan nilai sebelum rebuild
-      const savedValue = projSel.value;
-
-      projSel.innerHTML = '<option value="">-- Pilih project --</option>';
-      projs.forEach(p => {
-        const realIdx = allProjs.indexOf(p);
-        const o = document.createElement('option');
-        o.value = realIdx; o.textContent = p.name;
-        projSel.appendChild(o);
-      });
-
-      // Restore pilihan sebelumnya
-      if (savedValue !== '') projSel.value = savedValue;
-
-      // Render form hanya kalau form area masih kosong atau belum ter-render untuk project ini
-      const formArea = document.getElementById('lab-proj-form-' + key);
-      const uid = key + '_proj_' + projSel.value;
-      const alreadyRendered = formArea && formArea.dataset.renderedUid === uid && formArea.innerHTML.trim() !== '';
-      if (projSel.value !== '' && !alreadyRendered && typeof labRenderProject === 'function') {
-        labRenderProject(key);
+      const _fillProjDropdown = (allProjs) => {
+        const currentRole = localStorage.getItem('role') || 'scientist';
+        const isAdmin     = ['admin','superadmin'].includes(currentRole);
+        const projs = isAdmin ? allProjs : allProjs.filter(p => {
+          if (currentRole === 'scientist' || currentRole === 'utility') return true;
+          if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
+          return p.allowed_roles.includes(currentRole);
+        });
+        const savedValue = projSel.value;
+        projSel.innerHTML = '<option value="">-- Pilih project --</option>';
+        projs.filter(p => p.setPoint && Object.keys(p.setPoint).length > 0).forEach(p => {
+          const realIdx = allProjs.indexOf(p);
+          const o = document.createElement('option');
+          o.value = realIdx; o.textContent = p.name;
+          projSel.appendChild(o);
+        });
+        if (savedValue !== '') projSel.value = savedValue;
+        const formArea = document.getElementById('lab-proj-form-' + key);
+        const uid = key + '_proj_' + projSel.value;
+        const alreadyRendered = formArea && formArea.dataset.renderedUid === uid && formArea.innerHTML.trim() !== '';
+        if (projSel.value !== '' && !alreadyRendered && typeof labRenderProject === 'function') {
+          labRenderProject(key);
+        }
+      };
+      // Pakai cache kalau ada, kalau tidak fetch dari API
+      const cached = gPJ('ongoing');
+      if (cached && cached.length > 0) {
+        _fillProjDropdown(cached);
+      } else {
+        projSel.innerHTML = '<option value="">⏳ Memuat project...</option>';
+        fetch('/api/projects?type=ongoing')
+          .then(r => r.json())
+          .then(json => {
+            const projs = json.data || json || [];
+            if (projs.length) { sPJ('ongoing', projs); _fillProjDropdown(projs); }
+            else projSel.innerHTML = '<option value="">-- Tidak ada project aktif --</option>';
+          })
+          .catch(() => { projSel.innerHTML = '<option value="">-- Gagal load project --</option>'; });
       }
     }
   }
@@ -175,16 +234,18 @@ window.labSwitchType = labSwitchType;
 
 // Helper untuk membuat input number field dengan unit
 function makeNumberInputWithUnit(id, val, unit) {
-  const v = (val !== undefined && val !== null) ? val : '';
-  // Jika tidak ada satuan, render input biasa
-  if (!unit) return `<input class="de-input" id="${id}" type="number" step="any" value="${v}" placeholder="0">`;
-  
-  // Jika ada satuan, render menggunakan gaya menempel
-  return `
-  <div class="input-group">
-    <input class="de-input" id="${id}" type="number" step="any" value="${v}" placeholder="0">
-    <span class="group-unit">${unit}</span>
-  </div>`;
+  const hasValue = (val !== undefined && val !== null && val !== '');
+  const v = hasValue ? val : '';
+  const style = hasValue ? 'color:#999;' : '';
+  const inputHtml = `<input class="de-input" id="${id}" type="number" step="any"
+    value="${v}" placeholder="0"
+    data-prev-value="${v}"
+    style="${style}"
+    onfocus="if(this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onblur="if(this.value===''&&this.dataset.prevValue!=''){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value!=''){this.style.color='#111';this.dataset.prevValue=this.value;}"
+  >`;
+  if (!unit) return inputHtml;
+  return `<div class="input-group">${inputHtml}<span class="group-unit">${unit}</span></div>`;
 }
 window.makeNumberInputWithUnit = makeNumberInputWithUnit;
 
@@ -196,7 +257,7 @@ function makeInputFieldWithUnit(id, value, unit='') {
   const prevValue = v;
   const style = hasValue ? 'color:#999;' : '';
   const inputHtml = `<input class="de-input" type="text" id="${id}" placeholder="—" value="${v}" data-prev-value="${prevValue}" style="${style}"
-    onfocus="if(this.value===this.dataset.prevValue&&this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onfocus="if(this.dataset.prevValue){this.value='';this.style.color='#111';}"
     onblur="if(!this.value&&this.dataset.prevValue){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value){this.style.color='#111';}"
   >`;
   if (!unit) return inputHtml;
@@ -209,21 +270,9 @@ function makeNumberInput(id, value, placeholder='—') {
   const hasValue = value && value !== '';
   const style = hasValue ? 'color:#999;' : '';
   const prevValue = value || '';
-  return `<input class="de-input" type="number" step="0.01" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}" 
-    onfocus="
-      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
-        this.value='';
-        this.style.color='#111';
-      }
-    "
-    onblur="
-      if(!this.value && this.dataset.prevValue){
-        this.value=this.dataset.prevValue;
-        this.style.color='#999';
-      } else if(this.value) {
-        this.style.color='#111';
-      }
-    "
+  return `<input class="de-input" type="number" step="0.01" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}"
+    onfocus="if(this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onblur="if(!this.value&&this.dataset.prevValue){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value){this.style.color='#111';this.dataset.prevValue=this.value;}"
   >`;
 }
 
@@ -233,20 +282,8 @@ function makeTextareaField(id, value, placeholder='Catatan tambahan...') {
   const style = hasValue ? 'color:#999;' : '';
   const prevValue = value || '';
   return `<textarea class="de-input de-textarea" id="${id}" placeholder="${placeholder}" style="min-height:60px;${style}" data-prev-value="${prevValue}"
-    onfocus="
-      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
-        this.value='';
-        this.style.color='#111';
-      }
-    "
-    onblur="
-      if(!this.value && this.dataset.prevValue){
-        this.value=this.dataset.prevValue;
-        this.style.color='#999';
-      } else if(this.value) {
-        this.style.color='#111';
-      }
-    "
+    onfocus="if(this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onblur="if(!this.value&&this.dataset.prevValue){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value){this.style.color='#111';this.dataset.prevValue=this.value;}"
   >${hasValue ? value : ''}</textarea>`;
 }
 
@@ -255,21 +292,9 @@ function makeInputField(id, value, type='text', placeholder='—') {
   const hasValue = value && value !== '';
   const style = hasValue ? 'color:#999;' : '';
   const prevValue = value || '';
-  return `<input class="de-input" type="${type}" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}" 
-    onfocus="
-      if(this.value===this.dataset.prevValue && this.dataset.prevValue){
-        this.value='';
-        this.style.color='#111';
-      }
-    "
-    onblur="
-      if(!this.value && this.dataset.prevValue){
-        this.value=this.dataset.prevValue;
-        this.style.color='#999';
-      } else if(this.value) {
-        this.style.color='#111';
-      }
-    "
+  return `<input class="de-input" type="${type}" id="${id}" placeholder="${placeholder}" value="${hasValue ? value : ''}" data-prev-value="${prevValue}" style="${style}"
+    onfocus="if(this.dataset.prevValue){this.value='';this.style.color='#111';}"
+    onblur="if(!this.value&&this.dataset.prevValue){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value){this.style.color='#111';this.dataset.prevValue=this.value;}"
   >`;
 }
 
@@ -293,19 +318,17 @@ function labRenderProject(key) {
   // Tampilkan loading dulu
   area.innerHTML = `<div style="padding:40px;text-align:center;color:var(--txt3)">⏳ Memuat data lab...</div>`;
 
-  // Fetch data terbaru dari DB
+  // ── Baca state dari sessionStorage (survive navigasi antar halaman) ──
+  const _ssKey     = (u) => 'lab_form_' + encodeURIComponent(u);
+  const _readSS    = (u) => { try { return JSON.parse(sessionStorage.getItem(_ssKey(u)) || 'null') || null; } catch { return null; } };
+
+  // Fetch data terbaru dari DB (untuk CIP entries)
   fetch('/api/dataentry/laboratorium?project_name=' + encodeURIComponent(proj.name) + '&limit=1')
     .then(r => r.json())
     .then(json => {
-      // Ambil data terbaru dari DB kalau ada, fallback ke localStorage
-      const dbRow   = json.success && json.data?.length ? json.data[0] : null;
-      const prevBrix  = dbRow?.brix_entries     || [];
-      const prevMoist = dbRow?.moisture_entries || [];
-
-      // Ambil cip_lab_entries dari DB jika ada — override cache yang mungkin kosong
+      const dbRow        = json.success && json.data?.length ? json.data[0] : null;
       const dbCipEntries = dbRow?.cip_lab_entries || null;
       if (dbCipEntries && dbCipEntries.length > 0) {
-        // Update cache project dengan data dari DB
         const allProjs = gPJ('ongoing');
         const projIdx  = parseInt(uid.split('_proj_')[1]);
         if (allProjs[projIdx]) {
@@ -315,16 +338,134 @@ function labRenderProject(key) {
       }
       const cipEntries = dbCipEntries || existing;
 
-      // Build form dengan data dari DB
+      // Restore state: prioritas sessionStorage → DB → kosong
+      const savedState = _readSS(uid);
+      // DB sudah diambil dari fetch di atas (dbRow)
+      const prevBrix  = savedState?.brixEntries  || dbRow?.brix_entries     || [];
+      const prevMoist = savedState?.moistEntries || dbRow?.moisture_entries || [];
+
       _renderLabForm(area, uid, proj, key, cipEntries, prevBrix, prevMoist);
       area.dataset.renderedUid = uid;
+
+      // Pasang auto-save ke sessionStorage setiap perubahan input
+      _labAttachAutoSave(uid);
     })
     .catch(() => {
-      // Fallback ke localStorage kalau API gagal
-      _renderLabForm(area, uid, proj, key, existing, [], []);
+      const savedState = _readSS(uid);
+      const prevBrix   = savedState?.brixEntries  || [];
+      const prevMoist  = savedState?.moistEntries || [];
+      _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist);
       area.dataset.renderedUid = uid;
+      _labAttachAutoSave(uid);
     });
 }
+
+// ── Auto-save form state ke sessionStorage setiap input ──────────────
+function _labAttachAutoSave(uid) {
+  const _ssKey   = (u) => 'lab_form_' + encodeURIComponent(u);
+  const _writeSS = (u, data) => { try { sessionStorage.setItem(_ssKey(u), JSON.stringify(data)); } catch {} };
+
+  const _collectState = () => {
+    const brixEntries  = [];
+    const moistEntries = [];
+
+    const brixCont = document.getElementById('lab-'+uid+'-brix-form-entries');
+    if (brixCont) {
+      Array.from(brixCont.children).forEach((entryDiv, i) => {
+        const entryId  = entryDiv.id || '';
+        const idxMatch = entryId.match(/brix-entry-(?:new-)?(\d+)$/);
+        const eIdx     = idxMatch ? idxMatch[1] : i;
+        const sampleEl   = entryDiv.querySelector(`select[id$="-tlv-${eIdx}"], select[id$="-tlv-new-${eIdx}"]`);
+        const kodeEl     = entryDiv.querySelector(`input[id$="-lab-code-${eIdx}"], input[id$="-lab-code-new-${eIdx}"]`);
+        const brixEl     = entryDiv.querySelector(`input[id$="-air-test-${eIdx}"], input[id$="-air-test-new-${eIdx}"]`);
+        const locationEl = entryDiv.querySelector(`select.location-dropdown`);
+        const notesEl    = entryDiv.querySelector(`textarea[id*="-notes-brix-"]`);
+        brixEntries.push({
+          sample:   sampleEl?.value?.trim()   || '',
+          kode:     kodeEl?.value?.trim()     || '',
+          brix:     brixEl?.value?.trim()     || '',
+          location: locationEl?.value?.trim() || '',
+          notes:    notesEl?.value?.trim()    || '',
+        });
+      });
+    }
+
+    const moistCont = document.getElementById('lab-'+uid+'-moisture-form-entries');
+    if (moistCont) {
+      Array.from(moistCont.children).forEach((entryDiv, i) => {
+        const entryId  = entryDiv.id || '';
+        const idxMatch = entryId.match(/moisture-entry-(?:new-)?(\d+)$/);
+        const eIdx     = idxMatch ? idxMatch[1] : i;
+        const sampleEl = entryDiv.querySelector(`select[id$="-moist-tlv-${eIdx}"], select[id$="-moist-new-${eIdx}"]`);
+        const mcEl     = entryDiv.querySelector(`input[id$="-sampling-point-${eIdx}"], input[id$="-sampling-point-new-${eIdx}"]`);
+        const notesEl  = entryDiv.querySelector(`textarea[id*="-notes-moisture-"]`);
+        moistEntries.push({
+          sample: sampleEl?.value?.trim() || '',
+          mc:     mcEl?.value?.trim()     || '',
+          notes:  notesEl?.value?.trim()  || '',
+        });
+      });
+    }
+
+    // ── Hanya tulis ke sessionStorage kalau ada data yang diisi ──
+    // Jangan timpa state yang sudah ada dengan state kosong
+    const hasAnyData =
+      brixEntries.some(e  => e.sample || e.kode || e.brix || e.location || e.notes) ||
+      moistEntries.some(e => e.sample || e.mc   || e.notes);
+
+    if (hasAnyData) {
+      _writeSS(uid, { brixEntries, moistEntries });
+      console.log('💾 Lab state saved:', uid, brixEntries.length, 'brix,', moistEntries.length, 'moist');
+    }
+    // Kalau kosong semua — tidak menulis (jaga state yang sudah ada)
+  };
+
+  // Expose agar bisa dipanggil dari luar (misal sebelum navigasi)
+  window._labCollectState = window._labCollectState || {};
+  window._labCollectState[uid] = _collectState;
+
+  const _attachListeners = (cont) => {
+    if (!cont) return;
+    cont.querySelectorAll('input, select, textarea').forEach(el => {
+      if (!el.dataset.labAutoSave) {
+        el.dataset.labAutoSave = '1';
+        el.addEventListener('input',  _collectState);
+        el.addEventListener('change', _collectState);
+      }
+    });
+    // MutationObserver untuk entry baru (Add Entry)
+    if (!cont._labObserver) {
+      cont._labObserver = new MutationObserver(() => {
+        _attachListeners(cont);
+        _collectState(); // simpan segera saat ada perubahan struktur
+      });
+      cont._labObserver.observe(cont, { childList: true, subtree: false });
+    }
+  };
+
+  // Langsung pasang tanpa delay
+  _attachListeners(document.getElementById('lab-'+uid+'-brix-form-entries'));
+  _attachListeners(document.getElementById('lab-'+uid+'-moisture-form-entries'));
+  // TIDAK memanggil _collectState() di sini — form baru render masih kosong,
+  // jangan timpa state yang sudah ada di sessionStorage
+
+  // Hook navigasi: simpan state sebelum halaman/tab diganti
+  // Pakai visibilitychange (tab background) dan beforeunload (close/refresh)
+  const _saveOnLeave = () => _collectState();
+  if (!window._labLeaveHooked) {
+    window._labLeaveHooked = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        // Simpan semua uid yang aktif
+        Object.values(window._labCollectState || {}).forEach(fn => fn());
+      }
+    });
+    window.addEventListener('beforeunload', () => {
+      Object.values(window._labCollectState || {}).forEach(fn => fn());
+    });
+  }
+}
+window._labAttachAutoSave = _labAttachAutoSave;
 
 function _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist) {
   // Helper untuk pre-fill brix entries
@@ -341,7 +482,7 @@ function _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
           <div class="de-field"><label class="de-label" style="color:#111;">Brix</label>${makeInputField('lab-'+uid+'-air-test-0', '')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Location</label>${makeInputField('lab-'+uid+'-location-0', '')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Sample Location</label>${buildLocationDropdown('lab-'+uid+'-location-0', '')}</div>
         </div>
         <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-brix-0', '')}</div>
       </div>`;
@@ -358,7 +499,7 @@ function _renderLabForm(area, uid, proj, key, existing, prevBrix, prevMoist) {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
           <div class="de-field"><label class="de-label" style="color:#111;">Brix</label>${makeInputField('lab-'+uid+'-air-test-'+i, e.brix||'')}</div>
-          <div class="de-field"><label class="de-label" style="color:#111;">Location</label>${makeInputField('lab-'+uid+'-location-'+i, e.location||'')}</div>
+          <div class="de-field"><label class="de-label" style="color:#111;">Sample Location</label>${buildLocationDropdown('lab-'+uid+'-location-'+i, e.location||'')}</div>
         </div>
         <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label>${makeTextareaField('lab-'+uid+'-notes-brix-'+i, e.notes||'')}</div>
       </div>`).join('');
@@ -563,23 +704,22 @@ function labAddBrixFormEntry(uid) {
       </div>
       <div class="de-field">
         <label class="de-label" style="color:#111;">Kode Pile</label>
-        <input class="de-input" type="text" placeholder="—">
+        <input class="de-input" type="text" id="lab-${uid}-lab-code-new-${newIdx}" placeholder="—">
       </div>
     </div>
-    <!-- BAGIAN YANG DIUBAH: Brix dan Location Sejajar -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
       <div class="de-field">
         <label class="de-label" style="color:#111;">Brix</label>
-        <input class="de-input" type="text" placeholder="—">
+        <input class="de-input" type="text" id="lab-${uid}-air-test-new-${newIdx}" placeholder="—">
       </div>
       <div class="de-field">
-        <label class="de-label" style="color:#111;">Location</label>
-        <input class="de-input" type="text" placeholder="—">
+        <label class="de-label" style="color:#111;">Sample Location</label>
+        ${buildLocationDropdown(`lab-${uid}-location-new-${newIdx}`, '')}
       </div>
     </div>
     <div class="de-field">
       <label class="de-label" style="color:#111;">Catatan</label>
-      <textarea class="de-input de-textarea" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
+      <textarea class="de-input de-textarea" id="lab-${uid}-notes-brix-new-${newIdx}" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
     </div>
   `;
   
@@ -617,11 +757,11 @@ function labAddMoistureFormEntry(uid) {
     </div>
     <div class="de-field">
       <label class="de-label" style="color:#111;">MC%</label>
-      <input class="de-input" type="text" placeholder="—">
+      <input class="de-input" type="text" id="lab-${uid}-sampling-point-new-${newIdx}" placeholder="—">
     </div>
     <div class="de-field">
       <label class="de-label" style="color:#111;">Catatan</label>
-      <textarea class="de-input de-textarea" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
+      <textarea class="de-input de-textarea" id="lab-${uid}-notes-moisture-new-${newIdx}" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea>
     </div>
   `;
   
@@ -637,10 +777,43 @@ window.labAddMoistureFormEntry = labAddMoistureFormEntry;
 
 // ── Reset Lab Form ───────────────────────────────────
 function labResetProject(uid) {
-  ['tlv','header-retaking','air-test','lab-code','sampling-point','notes-brix','notes-moisture'].forEach(f => {
-    const el = document.getElementById('lab-'+uid+'-'+f);
-    if (el) el.value = '';
-  });
+  // Hapus draft sessionStorage
+  try { sessionStorage.removeItem('lab_form_' + encodeURIComponent(uid)); } catch {}
+  // Reset BRIX: hapus semua entry, ganti dengan 1 entry kosong
+  const brixCont = document.getElementById('lab-'+uid+'-brix-form-entries');
+  if (brixCont) {
+    brixCont.innerHTML = `<div id="lab-${uid}-brix-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+        <button class="fp-item-remove" onclick="document.getElementById('lab-${uid}-brix-entry-0').remove()" style="display:none;" title="Hapus entry">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+        <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${buildSampleDropdown('lab-'+uid+'-tlv-0', '', 'brix')}</div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Kode Pile</label><input class="de-input" type="text" id="lab-${uid}-lab-code-0" placeholder="—"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+        <div class="de-field"><label class="de-label" style="color:#111;">Brix</label><input class="de-input" type="text" id="lab-${uid}-air-test-0" placeholder="—"></div>
+        <div class="de-field"><label class="de-label" style="color:#111;">Sample Location</label>${buildLocationDropdown('lab-'+uid+'-location-0', '')}</div>
+      </div>
+      <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label><textarea class="de-input de-textarea" id="lab-${uid}-notes-brix-0" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea></div>
+    </div>`;
+  }
+
+  // Reset MOISTURE: hapus semua entry, ganti dengan 1 entry kosong
+  const moistCont = document.getElementById('lab-'+uid+'-moisture-form-entries');
+  if (moistCont) {
+    moistCont.innerHTML = `<div id="lab-${uid}-moisture-entry-0" style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:600;color:#666;">Entry #1</div>
+        <button class="fp-item-remove" style="display:none;" title="Hapus entry">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px;">
+        <div class="de-field"><label class="de-label" style="color:#111;">Nama Sample</label>${buildSampleDropdown('lab-'+uid+'-moist-tlv-0', '', 'moisture')}</div>
+      </div>
+      <div class="de-field"><label class="de-label" style="color:#111;">MC%</label><input class="de-input" type="text" id="lab-${uid}-sampling-point-0" placeholder="—"></div>
+      <div class="de-field"><label class="de-label" style="color:#111;">Catatan</label><textarea class="de-input de-textarea" id="lab-${uid}-notes-moisture-0" style="min-height:60px;" placeholder="Catatan tambahan..."></textarea></div>
+    </div>`;
+  }
 }
 window.labResetProject = labResetProject;
 
@@ -652,34 +825,54 @@ function labSaveProject(uid, projName) {
   const proj = projs[projIdx];
   if (!proj) return;
   
-  // Tangkap semua baris pada form BRIX
+  // Tangkap semua baris pada form BRIX — baca by ID bukan by index
+  // (baca by index rentan geser karena location dropdown inject hidden input)
   const brixEntries = [];
   const brixContainer = document.getElementById('lab-'+uid+'-brix-form-entries');
   if (brixContainer) {
-    Array.from(brixContainer.children).forEach(entryDiv => {
-      const selects = entryDiv.querySelectorAll('select');
-      const inputs  = entryDiv.querySelectorAll('input:not(.exclude-save), textarea');
-      const sample   = selects[0]?.value?.trim() || '';
-      const kode     = inputs[0]?.value?.trim()  || '';
-      const brix     = inputs[1]?.value?.trim()  || '';
-      const location = inputs[2]?.value?.trim()  || '';
-      const notes    = inputs[3]?.value?.trim()  || '';
+    Array.from(brixContainer.children).forEach((entryDiv, i) => {
+      // Cari index entry dari id div (brix-entry-N atau brix-entry-new-N)
+      const entryId = entryDiv.id || '';
+      const idxMatch = entryId.match(/brix-entry-(?:new-)?(\d+)$/);
+      const eIdx = idxMatch ? idxMatch[1] : i;
+
+      // Baca by ID — cover pola awal (-N) dan pola new entry (-new-N)
+      const sampleEl   = entryDiv.querySelector(`select[id$="-tlv-${eIdx}"], select[id$="-tlv-new-${eIdx}"]`);
+      const kodeEl     = entryDiv.querySelector(`input[id$="-lab-code-${eIdx}"], input[id$="-lab-code-new-${eIdx}"]`);
+      const brixEl     = entryDiv.querySelector(`input[id$="-air-test-${eIdx}"], input[id$="-air-test-new-${eIdx}"]`);
+      const locationEl = entryDiv.querySelector(`select.location-dropdown`);
+      const notesEl    = entryDiv.querySelector(`textarea[id*="-notes-brix-"]`);
+
+      const _sampleRaw = sampleEl?.value?.trim() || '';
+      const sample   = (_sampleRaw === '__ADD_NEW__' || _sampleRaw === '__ADD_LOC__') ? '' : _sampleRaw;
+      const kode     = kodeEl?.value?.trim()     || '';
+      const brix     = brixEl?.value?.trim()     || '';
+      const _locRaw  = locationEl?.value?.trim() || '';
+      const location = (_locRaw === '__ADD_LOC__' || _locRaw === '__ADD_NEW__') ? '' : _locRaw;
+      const notes    = notesEl?.value?.trim()    || '';
       if (sample || kode || brix || location || notes) {
         brixEntries.push({ sample, kode, brix, location, notes });
       }
     });
   }
 
-  // Tangkap semua baris pada form MOISTURE
+  // Tangkap semua baris pada form MOISTURE — baca by ID
   const moistEntries = [];
   const moistContainer = document.getElementById('lab-'+uid+'-moisture-form-entries');
   if (moistContainer) {
-    Array.from(moistContainer.children).forEach(entryDiv => {
-      const selects = entryDiv.querySelectorAll('select');
-      const inputs  = entryDiv.querySelectorAll('input:not(.exclude-save), textarea');
-      const sample = selects[0]?.value?.trim() || '';
-      const mc     = inputs[0]?.value?.trim()  || '';
-      const notes  = inputs[1]?.value?.trim()  || '';
+    Array.from(moistContainer.children).forEach((entryDiv, i) => {
+      const entryId  = entryDiv.id || '';
+      const idxMatch = entryId.match(/moisture-entry-(?:new-)?(\d+)$/);
+      const eIdx = idxMatch ? idxMatch[1] : i;
+
+      const sampleEl = entryDiv.querySelector(`select[id$="-moist-tlv-${eIdx}"], select[id$="-moist-new-${eIdx}"]`);
+      const mcEl     = entryDiv.querySelector(`input[id$="-sampling-point-${eIdx}"], input[id$="-sampling-point-new-${eIdx}"]`);
+      const notesEl  = entryDiv.querySelector(`textarea[id*="-notes-moisture-"]`);
+
+      const _moistSampleRaw = sampleEl?.value?.trim() || '';
+      const sample = (_moistSampleRaw === '__ADD_NEW__' || _moistSampleRaw === '__ADD_LOC__') ? '' : _moistSampleRaw;
+      const mc     = mcEl?.value?.trim()     || '';
+      const notes  = notesEl?.value?.trim()  || '';
       if (sample || mc || notes) {
         moistEntries.push({ sample, mc, notes });
       }
@@ -742,6 +935,9 @@ function labSaveProject(uid, projName) {
       const json = await res.json();
       if (!json.success) throw new Error(json.error || 'Gagal simpan');
       showSt('success', '✅ Lab untuk "' + projName + '" tersimpan ke database!');
+      // Hapus draft sessionStorage setelah save sukses — data sudah di DB
+      try { sessionStorage.removeItem('lab_form_' + encodeURIComponent(uid)); } catch {}
+      // Form TIDAK di-reset otomatis. User klik Reset kalau ingin input entry baru.
     } catch(err) {
       console.error('labSaveProject API error:', err);
       showSt('success', '✅ Lab tersimpan (lokal). DB: ' + err.message);
@@ -753,9 +949,10 @@ window.labSaveProject = labSaveProject;
 
 // ── Helper: build satu baris entry CIP ──────────────
 function buildLabCIPRow(uid, idx, data) {
-  const rowId = uid+'-cip-row-'+idx;
+  const rowId  = uid+'-cip-row-'+idx;
+  const savedTs = data?.timestamp || '';
   return `
-    <div id="${rowId}" style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;
+    <div id="${rowId}" style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;
       padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
       <div>
         <label class="de-label" style="font-size:9px;color:#111;">PH</label>
@@ -769,6 +966,15 @@ function buildLabCIPRow(uid, idx, data) {
         <label class="de-label" style="font-size:9px;color:#111;">KETERANGAN</label>
         <input class="de-input" type="text"
           id="${uid}-cip-ket-${idx}" value="${data?.keterangan || ''}" placeholder="Keterangan...">
+      </div>
+      <div>
+        <label class="de-label" style="font-size:9px;color:#111;">WAKTU</label>
+        <input class="de-input" type="text" readonly
+          id="${uid}-cip-ts-${idx}"
+          value="${savedTs}"
+          placeholder="Klik →"
+          onclick="if(!this.value){const n=new Date();this.value=n.toLocaleString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});this.style.color='#111';this.style.fontWeight='700';}"
+          style="cursor:pointer;color:${savedTs?'#111':'#9ca3af'};font-family:monospace;font-size:11px;font-weight:${savedTs?'700':'400'};" title="Klik untuk set waktu sekarang">
       </div>
       <div style="padding-bottom:2px;">
         <button class="fp-item-remove"
@@ -810,7 +1016,8 @@ function labSaveCIPEntries(uid, key) {
     const idx = idxMatch[1];
     const ph  = document.getElementById(uid+'-cip-ph-'+idx)?.value.trim();
     const ket = document.getElementById(uid+'-cip-ket-'+idx)?.value.trim();
-    if (ph || ket) entries.push({ ph: ph || '', keterangan: ket || '' });
+    const ts  = document.getElementById(uid+'-cip-ts-'+idx)?.value.trim() || '';
+    if (ph || ket) entries.push({ ph: ph || '', keterangan: ket || '', timestamp: ts });
   });
 
   if (!entries.length) {
@@ -883,37 +1090,78 @@ function showLabCIPSt(uid, type, msg) {
 }
 window.showLabCIPSt = showLabCIPSt;
 
+// Toggle fields sesuai section — WWTP pakai COD/BOD, lainnya TDS/Hardness/PH/Alkali
+function labHarianToggleFields(key) {
+  const section         = document.getElementById('lab-h-'+key+'-section')?.value;
+  const stdFields       = document.getElementById('lab-h-'+key+'-std-fields');
+  const wwtpFields      = document.getElementById('lab-h-'+key+'-wwtp-fields');
+  const otherNameField  = document.getElementById('lab-h-'+key+'-other-name-field');
+  if (!stdFields || !wwtpFields) return;
+
+  if (section === 'wwtp') {
+    stdFields.style.display      = 'none';
+    wwtpFields.style.display     = 'block';
+    if (otherNameField) otherNameField.style.display = 'none';
+  } else if (section === 'other') {
+    stdFields.style.display      = 'contents';
+    wwtpFields.style.display     = 'none';
+    if (otherNameField) otherNameField.style.display = 'block';
+  } else {
+    stdFields.style.display      = 'contents';
+    wwtpFields.style.display     = 'none';
+    if (otherNameField) otherNameField.style.display = 'none';
+  }
+}
+window.labHarianToggleFields = labHarianToggleFields;
+
 function labResetHarian(key) {
-  ['section','sample','ph','tds','hardness','alkali','notes'].forEach(f => {
+  ['section','ph','tds','hardness','alkali','notes','cod','bod','wwtp-ph','wwtp-tds','other-name'].forEach(f => {
     const el = document.getElementById('lab-h-'+key+'-'+f); if(el) el.value='';
   });
+  const tglEl = document.getElementById('lab-h-'+key+'-tanggal');
+  if (tglEl) tglEl.value = new Date().toISOString().split('T')[0];
+  labHarianToggleFields(key);
 }
 window.labResetHarian = labResetHarian;
 
 async function labSaveHarian(key) {
   const section = document.getElementById('lab-h-'+key+'-section')?.value;
-  if (!section) return alert('⚠️ Pilih section terlebih dahulu (TW1 / TW2 / Filter Water)!');
-  if (!confirm('Simpan data analisa air untuk ' + section.toUpperCase() + '?')) return;
-
-  const analisa = {
-    sample:   document.getElementById('lab-h-'+key+'-sample')?.value.trim(),
-    ph:       document.getElementById('lab-h-'+key+'-ph')?.value || null,
-    tds:      document.getElementById('lab-h-'+key+'-tds')?.value || null,
-    hardness: document.getElementById('lab-h-'+key+'-hardness')?.value || null,
-    alkali:   document.getElementById('lab-h-'+key+'-alkali')?.value || null,
-  };
-
-  const payload = {
-    tanggal:  new Date().toISOString().split('T')[0],
-    section:  section,   // 'tw1' | 'tw2' | 'filter'
-    analisa:  analisa,
-    notes:    document.getElementById('lab-h-'+key+'-notes')?.value.trim() || '',
-    entry_by: window.SAIL_USER?.username || 'Operator'
-  };
+  if (!section) return alert('⚠️ Pilih section terlebih dahulu!');
 
   const sb = document.getElementById('lab-h-'+key+'-sb');
   const sm = document.getElementById('lab-h-'+key+'-sm');
   if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-loading'; sm.textContent='⏳ Menyimpan...'; }
+
+  // Kumpulkan analisa sesuai section
+  let analisa = {};
+  if (section === 'wwtp') {
+    analisa = {
+      cod:    document.getElementById('lab-h-'+key+'-cod')?.value      || null,
+      bod:    document.getElementById('lab-h-'+key+'-bod')?.value      || null,
+      ph:     document.getElementById('lab-h-'+key+'-wwtp-ph')?.value  || null,
+      tds:    document.getElementById('lab-h-'+key+'-wwtp-tds')?.value || null,
+    };
+  } else {
+    analisa = {
+      ph:       document.getElementById('lab-h-'+key+'-ph')?.value       || null,
+      tds:      document.getElementById('lab-h-'+key+'-tds')?.value      || null,
+      hardness: document.getElementById('lab-h-'+key+'-hardness')?.value || null,
+      alkali:   document.getElementById('lab-h-'+key+'-alkali')?.value   || null,
+    };
+  }
+
+  // Untuk section "other", ambil nama custom yang diisi user
+  const sectionLabel = section === 'other'
+    ? (document.getElementById('lab-h-'+key+'-other-name')?.value.trim() || 'Lain-lain')
+    : section;
+
+  const payload = {
+    tanggal:       document.getElementById('lab-h-'+key+'-tanggal')?.value || new Date().toISOString().split('T')[0],
+    section:       sectionLabel,
+    analisa:       analisa,
+    notes:         document.getElementById('lab-h-'+key+'-notes')?.value.trim() || '',
+    entry_by:      window.SAIL_USER?.username || 'Operator'
+  };
 
   try {
     const response = await fetch('/api/dataentry/laboratorium-harian', {
@@ -921,12 +1169,10 @@ async function labSaveHarian(key) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-
     const res = await response.json();
     if (res.success) {
-      if (sb && sm) { sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data analisa berhasil disimpan!'; setTimeout(()=>{sb.style.display='none';},3000); }
+      if (sb && sm) { sb.className='de-status-bar de-status-success'; sm.textContent='✅ Data tersimpan!'; setTimeout(()=>{sb.style.display='none';},3000); }
       labResetHarian(key);
-      // Refresh display dashboard
       if (typeof fetchWaterQuality === 'function') fetchWaterQuality();
       if (window.loadReportingData) window.loadReportingData();
     } else {
@@ -1213,12 +1459,50 @@ function initDataEntryForm(key){
 
   // ── LABORATORIUM ─────────────────────────────────────────
   if(key === 'laboratorium'){
-    // Hanya klik tab Harian kalau form project belum terisi
-    const formArea = document.getElementById('lab-proj-form-' + key);
-    const hasProjectForm = formArea && formArea.dataset.renderedUid && formArea.innerHTML.trim() !== '' && !formArea.innerHTML.includes('⏳');
-    if (!hasProjectForm) {
-      const tabH = document.getElementById('lab-tab-harian-'+key);
-      if(tabH) tabH.click();
+    // DOM baru saja dibuat ulang oleh loadPage — restore project + form dari sessionStorage
+
+    // 1. Cari uid yang punya state di sessionStorage
+    const savedUid = (() => {
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith('lab_form_')) {
+          const uid = decodeURIComponent(k.replace('lab_form_', ''));
+          const data = JSON.parse(sessionStorage.getItem(k) || 'null');
+          // Cek apakah ada data yang tidak kosong
+          const hasData = data && (
+            data.brixEntries?.some(e => e.sample || e.kode || e.brix || e.location || e.notes) ||
+            data.moistEntries?.some(e => e.sample || e.mc || e.notes)
+          );
+          if (hasData) return uid;
+        }
+      }
+      return null;
+    })();
+
+    if (savedUid) {
+      // Ada data yang belum disave — restore ke tab Project dan pilih project yang benar
+      const projIdx = savedUid.split('_proj_')[1];
+      const tabP = document.getElementById('lab-tab-project-' + key);
+      if (tabP) tabP.click(); // switch ke tab Project
+
+      // Tunggu dropdown project ter-populate, lalu pilih project dan render
+      const _tryRestoreProject = (attempt) => {
+        const sel = document.getElementById('lab-proj-sel-' + key);
+        if (sel && sel.options.length > 1) {
+          sel.value = projIdx;
+          if (sel.value === projIdx) {
+            // Trigger render — labRenderProject akan baca sessionStorage
+            labRenderProject(key);
+            return;
+          }
+        }
+        if (attempt < 20) setTimeout(() => _tryRestoreProject(attempt + 1), 100);
+      };
+      setTimeout(() => _tryRestoreProject(0), 150);
+    } else {
+      // Tidak ada draft — buka tab Harian seperti biasa
+      const tabH = document.getElementById('lab-tab-harian-' + key);
+      if (tabH) tabH.click();
     }
     return;
   }
@@ -1226,6 +1510,19 @@ function initDataEntryForm(key){
   // ── PRODUCTION ───────────────────────────────────────────
   const sel = document.getElementById('dep-proj-sel-'+key);
   if(!sel) return;
+
+  // Reset form dan stage panel saat halaman dibuka ulang — user harus pilih project lagi.
+  // Ini mencegah auto-load project dari sesi sebelumnya (window._currentDEProj lama).
+  window._currentDEProj = null;
+  const wrapReset = document.getElementById('dep-form-'+key);
+  if (wrapReset) wrapReset.innerHTML = '';
+  const floatReset = document.getElementById('dep-stage-float-'+key);
+  if (floatReset) floatReset.innerHTML = '';
+  const spacerReset = document.getElementById('dep-stage-spacer-'+key);
+  if (spacerReset) spacerReset.style.height = '0';
+  const reopenReset = document.getElementById('dep-stage-reopen-'+key);
+  if (reopenReset) reopenReset.style.display = 'none';
+
   sel.innerHTML = '<option value="">⏳ Memuat project...</option>';
   sel.disabled = true;
 
@@ -1236,10 +1533,12 @@ function initDataEntryForm(key){
     // Filter: tampilkan project yang:
     // 1. allowed_roles null/kosong (dibuat admin tanpa restrict) → semua role lihat
     // 2. allowed_roles berisi role user ini
-    const visibleProjs = isAdmin ? allProjs : allProjs.filter(p => {
+    // 3. Set point sudah diisi/di-save (tidak boleh muncul kalau belum ada set point)
+    const roleFiltered = isAdmin ? allProjs : allProjs.filter(p => {
       if (!p.allowed_roles || p.allowed_roles.length === 0) return true;
       return p.allowed_roles.includes(currentRole);
     });
+    const visibleProjs = roleFiltered.filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
 
     sel.innerHTML = '<option value="">-- Pilih project ongoing --</option>';
     visibleProjs.forEach(p => {
@@ -1304,6 +1603,47 @@ function buildSetpointPageWithHeaders(key, sp) {
   }).join('');
 }
 
+// Build hanya section Parameter CT
+function buildCTSectionOnly(key, sp) {
+  const fieldMap = {};
+  SP_FIELDS.forEach(f => { fieldMap[f.id] = f; });
+  return DE_SECTIONS
+    .filter(s => (s.label || '').toLowerCase().includes('parameter ct'))
+    .map(section => {
+      const fieldsHTML = section.fields
+        .map(id => fieldMap[id]).filter(Boolean)
+        .map(f => buildSetpointField(f, key, sp[f.id] || '')).join('');
+      return `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;background:${section.bg};border:1px solid ${section.border};border-radius:8px;padding:9px 14px;margin-bottom:12px;">
+          <span style="font-size:15px;">${section.icon}</span>
+          <span style="font-size:12px;font-weight:700;color:${section.color};letter-spacing:0.5px;text-transform:uppercase;">${section.label}</span>
+        </div>
+        <div class="setpoint-grid">${fieldsHTML}</div>
+      </div>`;
+    }).join('');
+}
+
+// Build semua section KECUALI Parameter CT
+function buildSetpointExcludeCT(key, sp) {
+  const fieldMap = {};
+  SP_FIELDS.forEach(f => { fieldMap[f.id] = f; });
+  return DE_SECTIONS
+    .filter(s => !(s.label || '').toLowerCase().includes('parameter ct'))
+    .map(section => {
+      const fieldsHTML = section.fields
+        .map(id => fieldMap[id]).filter(Boolean)
+        .map(f => buildSetpointField(f, key, sp[f.id] || '')).join('');
+      return `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;background:${section.bg};border:1px solid ${section.border};border-radius:8px;padding:9px 14px;margin-bottom:12px;">
+          <span style="font-size:15px;">${section.icon}</span>
+          <span style="font-size:12px;font-weight:700;color:${section.color};letter-spacing:0.5px;text-transform:uppercase;">${section.label}</span>
+        </div>
+        <div class="setpoint-grid">${fieldsHTML}</div>
+      </div>`;
+    }).join('');
+}
 
 function buildPhotoUpload(key) {
   return `
@@ -1445,6 +1785,14 @@ function toggleSPMode(elementId, fieldId, key) {
 window.toggleSPMode = toggleSPMode;
 
 function buildSetpointField(f, key, spVal) {
+  // Format angka ke 2 desimal; teks biasa dibiarkan apa adanya
+  const fmt2 = (val) => {
+    if (val === null || val === undefined || String(val).trim() === '') return val;
+    const n = parseFloat(String(val).replace(',', '.'));
+    return isNaN(n) ? val : n.toFixed(2);
+  };
+  const spValFmt = (f.type === 'number' && spVal !== '' && spVal !== undefined) ? fmt2(spVal) : spVal;
+
   const extraNote = (f.id === 'sp-temp-top')
     ? ` oninput="checkTopColumnVacuum('${key}',this.value)"`
     : '';
@@ -1452,9 +1800,17 @@ function buildSetpointField(f, key, spVal) {
   const isCalc = f.calculated;
   // Jika ini adalah field kalkulasi otomatis, setting awal adalah AUTO (Terkunci)
   const calcAttrs = isCalc ? ' data-mode="auto" readonly style="background:#f3f4f6;color:var(--txt3);cursor:not-allowed;" title="Auto-calculated"' : '';
-  // Non-calculated fields: set value so DOM reads correctly for calculations and save
-  const valueAttr = (!isCalc && spVal !== '' && spVal !== undefined) ? ` value="${spVal}"` : '';
-  const inputAttrs = `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${spVal}"${valueAttr} onfocus="this.classList.remove('sp-ghost');this.placeholder=''" onblur="if(this.value===''){this.classList.add('sp-ghost');this.placeholder='${spVal}';}${extraNote}" ${calcAttrs}`;
+  // Non-calculated: nilai tersimpan tampil abu, klik → kosong, blur tanpa ubah → abu kembali
+  const hasSpVal = !isCalc && spValFmt !== '' && spValFmt !== undefined;
+  const valueAttr = hasSpVal ? ` value="${spValFmt}" data-prev-value="${spValFmt}"` : ` data-prev-value=""`;
+  const baseStyle = hasSpVal ? 'width:100%;color:#999;' : 'width:100%;';
+  const ghostFocus = hasSpVal
+    ? `if(this.value===this.dataset.prevValue&&this.dataset.prevValue!==''){this.value='';this.style.color='#111';}`
+    : ``;
+  const ghostBlur = hasSpVal
+    ? `if(this.value===''&&this.dataset.prevValue!==''){this.value=this.dataset.prevValue;this.style.color='#999';}else if(this.value!==''){this.style.color='#111';this.dataset.prevValue=this.value;}${extraNote}`
+    : `if(this.value!==''){this.style.color='#111';this.dataset.prevValue=this.value;}${extraNote}`;
+  const inputAttrs = `class="de-input" id="dep-${f.id}-${key}" type="${f.type}" step="0.1" placeholder="${hasSpVal ? '—' : (spValFmt || '—')}"${valueAttr} style="${baseStyle}" onfocus="${ghostFocus}" onblur="${ghostBlur}" ${calcAttrs}`;
 
   // Tombol Toggle Auto/Manual
   const autoTag = isCalc ? ` <button type="button" id="btn-mode-dep-${f.id}-${key}" onclick="toggleSPMode('dep-${f.id}-${key}', '${f.id}', '${key}')" style="margin-left:auto;font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid var(--blue);background:#ebf2fd;color:var(--blue);cursor:pointer;font-weight:700;transition:all 0.2s;">AUTO</button>` : '';
@@ -1470,7 +1826,7 @@ function buildSetpointField(f, key, spVal) {
       </label>
       
       <div class="de-input-wrap" style="width:100%;">
-        <input ${inputAttrs} style="width:100%;">
+        <input ${inputAttrs}>
         ${f.unit ? `<span class="de-input-unit">${f.unit}</span>` : ''}
       </div>
       
@@ -1670,72 +2026,195 @@ window.setupSPModalCalculations = setupSPModalCalculations;
 
 function renderSetpointPage(key, proj, page) {
   const wrap = document.getElementById('dep-form-'+key);
-  if (!wrap) {
-    console.error('Wrap element not found for key:', key);
-    return;
-  }
-
-  console.log('Rendering setpoint page for:', key, proj);
+  if (!wrap) { console.error('Wrap not found:', key); return; }
 
   const draft = window._spDrafts?.[key] || {};
-  // setPoint dari cache (sudah di-map dbToApp), set_point dari raw DB response
-  // Draft paling prioritas (perubahan belum disimpan), lalu setPoint, lalu set_point
-  const sp = { ...(proj.setPoint || proj.set_point || {}), ...draft };
-  const fields = SP_FIELDS; // Gunakan semua field dalam satu page
-  const pageTitle = 'Set Point — All Fields';
+  const sp    = { ...(proj.setPoint || proj.set_point || {}), ...draft };
+  const activeTab = window[`_depTab_${key}`] || 'setpoint';
 
   try {
-    let html = `
-      <div class="de-entry-note">
-        ⚙️ <strong>Set Point — All Fields</strong> — Nilai set point ditampilkan sebagai placeholder. Klik kolom untuk isi nilai baru.
+    const tabBtnBase = 'padding:12px 24px;font-size:13px;font-weight:600;background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;color:#666;transition:all .2s;';
+    const tabBtnActive = 'border-bottom:3px solid var(--blue);color:var(--blue);';
+
+    const html = `
+      <!-- Tab Switch -->
+      <div style="display:flex;gap:0;margin-bottom:20px;border-bottom:2px solid var(--border);">
+        <button id="dep-tab-btn-setpoint-${key}"
+          style="${tabBtnBase}${activeTab==='setpoint' ? tabBtnActive : ''}"
+          onclick="depSwitchTab('${key}','setpoint')">⚙️ Set Point</button>
+        <button id="dep-tab-btn-ct-${key}"
+          style="${tabBtnBase}${activeTab==='ct' ? tabBtnActive : ''}"
+          onclick="depSwitchTab('${key}','ct')">📝 Parameter CT <span style="font-size:10px;color:#9ca3af;font-weight:400;">(opsional)</span></button>
       </div>
-      <div style="margin-bottom:18px;">
-        ${buildSetpointPageWithHeaders(key, sp)}
+
+      <!-- TAB: SET POINT -->
+      <div id="dep-tab-setpoint-${key}" style="display:${activeTab==='setpoint'?'block':'none'};">
+        <div class="de-entry-note">
+          ⚙️ <strong>Set Point</strong> — Nilai set point ditampilkan sebagai placeholder. Klik kolom untuk isi nilai baru.
+        </div>
+        <div style="margin-bottom:18px;">
+          ${buildSetpointExcludeCT(key, sp)}
+        </div>
+        <div class="de-field" style="margin-bottom:16px;">
+          <label class="de-label" style="color:#111;display:block;">NOTES</label>
+          <textarea class="de-input de-textarea" id="dep-notes-${key}" placeholder="Catatan tambahan...">${sp.notes || ''}</textarea>
+          ${buildPhotoUpload(key)}
+        </div>
+        <div class="de-status-bar" id="dep-sb-${key}" style="display:none"><span id="dep-sm-${key}"></span></div>
+        <div class="de-actions" style="justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:8px;">
+            <button class="de-btn de-btn-primary" id="dep-cip-status-${key}" style="padding:8px 16px;font-size:12px;cursor:pointer;">🧼 CIP</button>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="de-btn de-btn-ghost" onclick="resetDEP('${key}')">🔄 Reset</button>
+            <button class="de-btn de-btn-primary" onclick="submitDEP('${key}')">💾 Save Data</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: PARAMETER CT -->
+      <div id="dep-tab-ct-${key}" style="display:${activeTab==='ct'?'block':'none'};">
+        <div class="de-entry-note" style="background:#f0fdf4;border-color:#86efac;">
+          📝 <strong>Parameter CT</strong> — Opsional. Isi dan simpan terpisah dari Set Point.
+        </div>
+        <div style="margin-bottom:18px;">
+          ${buildCTSectionOnly(key, sp)}
+        </div>
+        <div class="de-status-bar" id="dep-ct-sb-${key}" style="display:none"><span id="dep-ct-sm-${key}"></span></div>
+        <div class="de-actions" style="justify-content:flex-end;">
+          <button class="de-btn de-btn-ghost" onclick="resetDECT('${key}')">🔄 Reset CT</button>
+          <button class="de-btn de-btn-primary" onclick="submitDECT('${key}')" style="background:#059669;border-color:#059669;">💾 Save Parameter CT</button>
+        </div>
       </div>`;
 
-    // Selalu tampilkan field tambahan di akhir
-    html += `
-      <div class="de-field" style="margin-bottom:16px;">
-        <label class="de-label" style="color:#111;margin-top:10px;display:block;">NOTES</label>
-        <textarea class="de-input de-textarea" id="dep-notes-${key}" placeholder="Catatan tambahan...">${sp.notes || ''}</textarea>
-        ${buildPhotoUpload(key)}
-      </div>`;
-
-    html += buildFormActionsSinglePage(key);
     wrap.innerHTML = html;
-
-    // Setup automatic calculations for set point fields
     setTimeout(() => setupSetpointCalculations(key), 10);
 
-    // Setup CIP button event listener
+    // CIP listener
     const cipButton = wrap.querySelector('#dep-cip-status-'+key);
     if (cipButton) {
-      cipButton.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Extra check: CIP tidak bisa diakses jika sudah done
-        if (cipButton.disabled) {
-          showQuickToast('❌ CIP sudah selesai dan tidak dapat diubah lagi!');
-          return;
-        }
-        
-        console.log('🔘 CIP button clicked via event listener');
+      cipButton.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        if (cipButton.disabled) { showQuickToast('❌ CIP sudah selesai!'); return; }
         openCIPModal(key);
       });
     }
-
     updateCIPStatus(key, proj);
 
-    console.log('Setpoint page rendered successfully for:', key);
   } catch (error) {
     console.error('Error rendering setpoint page:', error);
-    wrap.innerHTML = '<div style="color:red;">Error rendering form: ' + error.message + '</div>';
+    wrap.innerHTML = '<div style="color:red;">Error: ' + error.message + '</div>';
   }
 }
 
+// ── Tab switch untuk Data Entry Production ──────────────────
+function depSwitchTab(key, tab) {
+  window[`_depTab_${key}`] = tab;
+  const tabs = ['setpoint', 'ct'];
+  tabs.forEach(t => {
+    const btn  = document.getElementById(`dep-tab-btn-${t}-${key}`);
+    const pane = document.getElementById(`dep-tab-${t}-${key}`);
+    const active = t === tab;
+    if (btn)  {
+      btn.style.borderBottom = active ? '3px solid var(--blue)' : '3px solid transparent';
+      btn.style.color        = active ? 'var(--blue)' : '#666';
+    }
+    if (pane) pane.style.display = active ? 'block' : 'none';
+  });
+}
+window.depSwitchTab = depSwitchTab;
+
+// ── Reset CT fields ─────────────────────────────────────────
+function resetDECT(key) {
+  const ctFieldIds = DE_SECTIONS
+    .filter(s => (s.label || '').toLowerCase().includes('parameter ct'))
+    .flatMap(s => s.fields);
+  ctFieldIds.forEach(id => {
+    const el = document.getElementById('dep-'+id+'-'+key);
+    if (el) { el.value = ''; el.style.color = ''; }
+  });
+}
+window.resetDECT = resetDECT;
+
+// ── Submit khusus Parameter CT ──────────────────────────────
+async function submitDECT(key) {
+  const sel = document.getElementById('dep-proj-sel-'+key);
+  const sb  = document.getElementById('dep-ct-sb-'+key);
+  const sm  = document.getElementById('dep-ct-sm-'+key);
+  const showStatus = (type, msg) => {
+    if (sb && sm) { sb.style.display='flex'; sb.className='de-status-bar de-status-'+type; sm.textContent=msg; }
+  };
+
+  if (!sel || sel.value === '') { showStatus('error','❌ Pilih project dulu!'); return; }
+  const proj = gPJ('ongoing')[+sel.value];
+  if (!proj) return;
+
+  if (!confirm('Apakah Anda yakin ingin menyimpan data Parameter CT ini?')) return;
+
+  // Kumpulkan field CT dari DOM
+  const ctFields = DE_SECTIONS
+    .filter(s => (s.label || '').toLowerCase().includes('parameter ct'))
+    .flatMap(s => s.fields);
+
+  const ctData = {};
+  let anyFilled = false;
+  ctFields.forEach(id => {
+    const el = document.getElementById('dep-'+id+'-'+key);
+    const v  = el ? el.value.trim() : '';
+    if (v !== '') { ctData[id] = v; anyFilled = true; }
+  });
+
+  if (!anyFilled) { showStatus('error','❌ Isi minimal satu field Parameter CT!'); return; }
+
+  showStatus('loading','⏳ Menyimpan Parameter CT...');
+
+  try {
+    const allProjs = gPJ('ongoing');
+    const idx = allProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
+    const mergedCT = { ...(allProjs[idx]?.setPoint || proj.setPoint || {}), ...ctData };
+
+    // 1. POST ke production history dengan flag _ct_only = true
+    //    Ini agar history CT tersimpan di de_production_history tapi
+    //    production-ops.js bisa memisahkannya dari SP updates
+    const spOld = Object.fromEntries(
+      SP_FIELDS_PAGE1.map(f => [f.id, proj.setPoint?.[f.id] ?? ''])
+    );
+    await fetch('/api/dataentry/production', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        project_name: proj.name,
+        foto_urls:    [],
+        _ct_only:     true,   // flag untuk production-ops.js
+        ...spOld,             // SP lama (tidak berubah)
+        ...ctData,            // CT fields baru
+      }),
+    });
+
+    // 2. PUT setpoint project agar nilai CT terbaru tersimpan
+    if (proj._id) {
+      await fetch('/api/projects/'+proj._id+'/setpoint', {
+        method:  'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(mergedCT),
+      });
+    }
+
+    // Update cache lokal
+    if (idx >= 0) {
+      allProjs[idx].setPoint = mergedCT;
+      sPJ('ongoing', allProjs);
+    }
+    showStatus('success','✅ Parameter CT tersimpan!');
+  } catch(err) {
+    showStatus('error','❌ Gagal: ' + err.message);
+  }
+}
+window.submitDECT = submitDECT;
+
 window.goToSetpointPage1 = goToSetpointPage1;
 window.goToSetpointPage2 = goToSetpointPage2;
+
 
 // ═══════════════════════════════════════════════════════════
 // LOAD DATA ENTRY PROJECT FORM - Refactored Version with Pagination
@@ -1760,7 +2239,18 @@ function loadDEProjForm(key) {
 
   // Render Production Stage Tracker untuk tab production
   if (key === 'production') {
-    setTimeout(() => renderProdStagePanel(key), 50);
+    // Render panel setelah DOM selesai diupdate oleh renderSetpointPage
+    setTimeout(() => {
+      renderProdStagePanel(key);
+      // Pastikan panel visible — jika sebelumnya ditutup user, buka kembali
+      const fw = document.getElementById('dep-stage-float-'+key);
+      if (fw && fw.style.display === 'none') {
+        toggleProdStagePanelFloat(key, true);
+      }
+      // Sembunyikan tombol reopen karena panel sudah tampil
+      const reopen = document.getElementById('dep-stage-reopen-'+key);
+      if (reopen) reopen.style.display = 'none';
+    }, 100);
   }
 }
 
@@ -1800,7 +2290,16 @@ function updateCIPStatus(key, proj) {
 function resetDEP(key){
   SP_FIELDS.forEach(f => {
     const el = document.getElementById('dep-'+f.id+'-'+key);
-    if(el){el.value='';el.classList.add('sp-ghost');}
+    if(el){
+      const prev = el.dataset.prevValue || '';
+      if(prev !== ''){
+        el.value = prev;
+        el.style.color = '#999';
+      } else {
+        el.value = '';
+        el.style.color = '';
+      }
+    }
   });
   // restore placeholders from current selected project
   loadDEProjForm(key);
@@ -1852,15 +2351,23 @@ function buildCIPChecklist(key, cipData, readOnly = false) {
           </div>
         `;
       } else {
+        const activeBg  = isChecked ? '#f0fdf4' : 'var(--bg)';
+        const activeBdr = isChecked ? '#86efac' : 'var(--border)';
+        const activeLbl = isChecked ? '#15803d' : 'var(--txt2)';
         checklistHTML += `
-          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
-            <input type="checkbox" id="${checkId}" data-key="${uniqueKey}" ${isChecked ? 'checked' : ''}
-                   onchange="handleCIPCheckbox('${checkId}', '${timeId}')"
-                   style="width:16px;height:16px;cursor:pointer;">
-            <label for="${checkId}" style="font-size:13px;color:var(--txt2);cursor:pointer;user-select:none;">
+          <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:${activeBg};border:1px solid ${activeBdr};border-radius:6px;transition:background .2s,border .2s;" id="cip-row-${sIdx}-${iIdx}">
+            ${isChecked
+              ? `<div data-checked="true" style="width:16px;height:16px;border-radius:3px;border:2px solid #15803d;background:#15803d;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>`
+              : `<input type="checkbox" id="${checkId}" data-key="${uniqueKey}"
+                       onchange="handleCIPCheckbox('${checkId}', '${timeId}', '${sIdx}', '${iIdx}')"
+                       style="width:16px;height:16px;cursor:pointer;accent-color:#15803d;">`
+            }
+            <label for="${checkId}" style="font-size:13px;color:${activeLbl};cursor:${isChecked ? 'default' : 'pointer'};user-select:none;font-weight:${isChecked ? '600' : '400'};">
               ${item}
             </label>
-            <span id="${timeId}" style="font-size:11px;color:${isChecked ? '#111' : '#9ca3af'};font-family:monospace;min-width:120px;text-align:right;font-weight:${isChecked ? '800' : '400'};">
+            <span id="${timeId}" style="font-size:11px;color:${isChecked ? '#15803d' : '#9ca3af'};font-family:monospace;min-width:120px;text-align:right;font-weight:${isChecked ? '800' : '400'};">
               ${timestamp || '—'}
             </span>
           </div>
@@ -1889,32 +2396,37 @@ function buildCIPFields(key, cipData) {
   }).join('');
 }
 
-function handleCIPCheckbox(checkId, timeId) {
+function handleCIPCheckbox(checkId, timeId, sIdx, iIdx) {
   const checkbox = document.getElementById(checkId);
   const timeSpan = document.getElementById(timeId);
-  
-  if (checkbox.checked) {
-    // Set timestamp when checked
+  const row      = document.getElementById(`cip-row-${sIdx}-${iIdx}`);
+
+  if (checkbox && checkbox.checked) {
+    // Ganti native checkbox dengan custom green checkmark div
+    const customCheck = document.createElement('div');
+    customCheck.style.cssText = 'width:16px;height:16px;border-radius:3px;border:2px solid #15803d;background:#15803d;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
+    customCheck.setAttribute('data-checked', 'true');
+    customCheck.innerHTML = '<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    checkbox.replaceWith(customCheck);
+
+    // Hijau saat ter-lock
+    if (row) {
+      row.style.background = '#f0fdf4';
+      row.style.border     = '1px solid #86efac';
+    }
+    const label = row?.querySelector('label');
+    if (label) { label.style.color = '#15803d'; label.style.fontWeight = '600'; label.style.cursor = 'default'; }
+
+    // Set timestamp
     const now = new Date();
     const timestamp = now.toLocaleString('id-ID', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
-    timeSpan.textContent = timestamp;
-    // Bold hitam saat dicentang
-    timeSpan.style.color = '#111';
+    timeSpan.textContent      = timestamp;
+    timeSpan.style.color      = '#15803d';
     timeSpan.style.fontWeight = '800';
-    timeSpan.style.fontSize = '11px';
-  } else {
-    // Clear timestamp when unchecked
-    timeSpan.textContent = '—';
-    // Kembali abu saat uncheck
-    timeSpan.style.color = '#9ca3af';
-    timeSpan.style.fontWeight = '400';
-    timeSpan.style.fontSize = '11px';
+    timeSpan.style.fontSize   = '11px';
   }
 }
 
@@ -2324,20 +2836,8 @@ function _setupProdStageScrollListener(key) {
 
   content._prodStageListener = () => {
     const cur = content.scrollTop;
-    const scrollingUp = cur < lastScrollTop;   // arah scroll ke atas
     lastScrollTop = cur;
-
-    // Buka hanya jika scroll NAIK dan hampir di paling atas
-    if (scrollingUp && cur < 10) {
-      const floatWrap = document.getElementById('dep-stage-float-'+key);
-      const reopen    = document.getElementById('dep-stage-reopen-'+key);
-      const spacer    = document.getElementById('dep-stage-spacer-'+key);
-      if (floatWrap && floatWrap.style.display === 'none') {
-        _applyFloatWrapPosition(key);
-        if (spacer) requestAnimationFrame(() => { spacer.style.height = floatWrap.offsetHeight + 'px'; });
-        if (reopen) reopen.style.display = 'none';
-      }
-    }
+    // Auto-reopen dihapus — panel hanya buka manual via tombol ▲ Tahapan Produksi
   };
   content._prodStageListenerKey = key;
   content.addEventListener('scroll', content._prodStageListener);
@@ -2428,7 +2928,7 @@ function closeCIPModal() {
   document.body.style.overflow = '';
 }
 
-function openCIPModal(key) {
+async function openCIPModal(key) {
   console.log('🔍 openCIPModal called with key:', key);
   try {
     let sel = document.getElementById('dep-proj-sel-'+key);
@@ -2438,6 +2938,9 @@ function openCIPModal(key) {
       showQuickToast('❌ Pilih project dulu!');
       return;
     }
+
+    // ✅ Selalu load fresh dari DB sebelum buka modal agar checks terbaru tampil
+    await loadPJ('ongoing');
 
     const allProjs = gPJ('ongoing');
     const proj = allProjs[+sel.value];
@@ -2450,14 +2953,17 @@ function openCIPModal(key) {
 const cipData = key === 'production'
   ? { 
       checks: proj.cip_prod_checks || proj.cipProdChecks || {}, 
-      timestamps: proj.cip_prod_timestamps || {}, // ← TAMBAHAN BARU
+      timestamps: proj.cip_prod_timestamps || {},
       savedAt: proj.cipProdSavedAt 
     }
   : { 
       checks: proj.cip_lab_checks  || proj.cipLabChecks  || {}, 
-      timestamps: proj.cip_lab_timestamps || {}, // ← TAMBAHAN BARU
+      timestamps: proj.cip_lab_timestamps || {},
       savedAt: proj.cipLabSavedAt  
     };
+    console.log('📥 CIP open - proj keys:', Object.keys(proj));
+    console.log('📥 CIP open - cip_prod_checks:', JSON.stringify(proj.cip_prod_checks));
+    console.log('📥 CIP open - cipData.checks:', JSON.stringify(cipData.checks));
     const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
 
     const now = new Date();
@@ -2475,9 +2981,12 @@ const cipData = key === 'production'
 
         <div style="padding:20px 24px;border-bottom:1px solid var(--border);background:${cipDone ? '#14532d' : '#1f2937'};display:flex;align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-size:17px;font-weight:700;color:white;display:flex;align-items:center;gap:8px;">
+            <div style="font-size:17px;font-weight:700;color:white;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               ${cipDone ? '✅' : '🧼'} ${config.title}
-              ${cipDone ? '<span style="font-size:11px;font-weight:600;background:#15803d;color:#bbf7d0;padding:2px 10px;border-radius:100px;margin-left:4px;">SELESAI — View Only</span>' : ''}
+              ${cipDone ? '<span style="font-size:11px;font-weight:600;background:#15803d;color:#bbf7d0;padding:2px 10px;border-radius:100px;margin-left:4px;" id="cip-done-badge">SELESAI — View Only</span>' : ''}
+              ${cipDone && (localStorage.getItem('role')||'') === 'superadmin'
+                ? '<button id="cip-edit-mode-btn" onclick="toggleCIPEditMode(\''+key+'\', false)" style="font-size:11px;font-weight:600;background:#b45309;color:#fef3c7;padding:3px 12px;border-radius:100px;border:none;cursor:pointer;margin-left:4px;">✏️ Edit Mode</button>'
+                : ''}
             </div>
             <div style="font-size:12px;color:#9ca3af;margin-top:3px;">${proj.name} — ${key === 'production' ? 'Production' : 'Laboratorium'}</div>
           </div>
@@ -2517,7 +3026,13 @@ const cipData = key === 'production'
 
         <div style="padding:16px 24px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:10px;justify-content:${cipDone ? 'flex-end' : 'space-between'};">
           ${cipDone
-            ? `<button class="de-btn de-btn-primary" onclick="closeCIPModal()" style="background:#15803d;border-color:#15803d;">✕ Tutup</button>`
+            ? `<div style="display:flex;gap:10px;width:100%;justify-content:space-between;align-items:center;">
+                <div id="cip-edit-save-area" style="display:none;gap:10px;flex:1;">
+                  <button class="de-btn de-btn-ghost" onclick="toggleCIPEditMode('${key}', true)" style="background:white;border-color:var(--border2);">✕ Batal Edit</button>
+                  <button class="de-btn de-btn-primary" onclick="saveCIPModal('${key}', true)" style="background:#15803d;border-color:#15803d;">💾 Simpan Perubahan</button>
+                </div>
+                <button class="de-btn de-btn-primary" onclick="closeCIPModal()" style="background:#15803d;border-color:#15803d;margin-left:auto;">✕ Tutup</button>
+               </div>`
             : `<button class="de-btn de-btn-ghost" onclick="closeCIPModal()">Cancel</button>
                <div style="display:flex;gap:10px;">
                  <button class="de-btn de-btn-ghost" onclick="saveCIPModal('${key}', false)" style="background:white;border-color:var(--border2);">💾 Save</button>
@@ -2547,6 +3062,97 @@ const cipData = key === 'production'
   }
 }
 
+// ── Toggle Edit Mode CIP untuk superadmin ──────────────────────────────────
+function toggleCIPEditMode(key, cancel) {
+  // Guard: hanya superadmin yang boleh masuk edit mode
+  if ((localStorage.getItem('role') || '') !== 'superadmin') {
+    showQuickToast('❌ Hanya superadmin yang dapat mengedit CIP yang sudah selesai');
+    return;
+  }
+  const editBtn      = document.getElementById('cip-edit-mode-btn');
+  const saveArea     = document.getElementById('cip-edit-save-area');
+  const doneBadge    = document.getElementById('cip-done-badge');
+  const container    = document.getElementById('cip-checklist-container');
+  const lockBanner   = document.querySelector('#cip-modal [style*="f0fdf4"]');
+
+  if (cancel) {
+    // Kembali ke view mode — reload checklist asli
+    if (editBtn)    { editBtn.style.display = 'inline-block'; editBtn.textContent = '✏️ Edit Mode'; }
+    if (saveArea)   saveArea.style.display = 'none';
+    if (doneBadge)  doneBadge.style.display = 'inline-block';
+    if (lockBanner) lockBanner.style.display = '';
+    // Reload checklist dari data asli (readOnly=true)
+    const allProjs = gPJ('ongoing');
+    const sel = document.getElementById('dep-proj-sel-'+key) || document.getElementById('lab-proj-sel-'+key);
+    const proj = sel ? allProjs[+sel.value] : null;
+    if (proj && container) {
+      const cipData = key === 'production'
+        ? { checks: proj.cip_prod_checks || {}, timestamps: proj.cip_prod_timestamps || {} }
+        : { checks: proj.cip_lab_checks  || {}, timestamps: proj.cip_lab_timestamps  || {} };
+      container.innerHTML = buildCIPChecklist(key, cipData, true);
+    }
+    return;
+  }
+
+  // Masuk edit mode — render checklist dengan checkbox interaktif
+  if (editBtn)    { editBtn.style.display = 'none'; }
+  if (saveArea)   { saveArea.style.display = 'flex'; }
+  if (doneBadge)  { doneBadge.textContent = 'EDIT MODE'; doneBadge.style.background = '#b45309'; doneBadge.style.color = '#fef3c7'; }
+  if (lockBanner) { lockBanner.style.display = 'none'; }
+
+  // Render ulang checklist dalam mode editable
+  const allProjs = gPJ('ongoing');
+  const sel = document.getElementById('dep-proj-sel-'+key) || document.getElementById('lab-proj-sel-'+key);
+  const proj = sel ? allProjs[+sel.value] : null;
+  if (proj && container) {
+    const cipData = key === 'production'
+      ? { checks: proj.cip_prod_checks || {}, timestamps: proj.cip_prod_timestamps || {} }
+      : { checks: proj.cip_lab_checks  || {}, timestamps: proj.cip_lab_timestamps  || {} };
+    // readOnly=false agar checkbox bisa diklik, termasuk uncheck
+    container.innerHTML = buildCIPChecklistEditable(key, cipData);
+  }
+}
+window.toggleCIPEditMode = toggleCIPEditMode;
+
+// Versi editable buildCIPChecklist — semua item pakai <input type="checkbox"> (bisa uncheck)
+function buildCIPChecklistEditable(key, cipData) {
+  const config = CIP_CHECKLISTS[key] || CIP_CHECKLISTS.production;
+  const checks = cipData?.checks || {};
+  let html = '';
+  config.sections.forEach((section, sIdx) => {
+    html += `<div style="margin-bottom:20px;">
+      <div style="background:#b45309;color:white;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:700;margin-bottom:10px;">
+        ✏️ ${section.name} — Edit Mode
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">`;
+    section.items.forEach((item, iIdx) => {
+      const checkId   = 'cip-check-' + sIdx + '-' + iIdx;
+      const timeId    = 'cip-time-'  + sIdx + '-' + iIdx;
+      const uniqueKey = sIdx + '__' + item;
+      const isChecked = checks[uniqueKey] || checks[item] || false;
+      const timestamp = cipData?.timestamps?.[uniqueKey] || '';
+      const activeBg  = isChecked ? '#f0fdf4' : 'var(--bg)';
+      const activeBdr = isChecked ? '#86efac' : 'var(--border)';
+      const activeLbl = isChecked ? '#15803d' : 'var(--txt2)';
+      html += `
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 12px;background:${activeBg};border:1px solid ${activeBdr};border-radius:6px;transition:background .2s,border .2s;" id="cip-row-${sIdx}-${iIdx}">
+          <input type="checkbox" id="${checkId}" data-key="${uniqueKey}" ${isChecked ? 'checked' : ''}
+                 onchange="handleCIPCheckbox('${checkId}', '${timeId}', '${sIdx}', '${iIdx}')"
+                 style="width:16px;height:16px;cursor:pointer;accent-color:#15803d;">
+          <label for="${checkId}" style="font-size:13px;color:${activeLbl};cursor:pointer;user-select:none;font-weight:${isChecked ? '600' : '400'};">
+            ${item}
+          </label>
+          <span id="${timeId}" style="font-size:11px;color:${isChecked ? '#15803d' : '#9ca3af'};font-family:monospace;min-width:120px;text-align:right;font-weight:${isChecked ? '800' : '400'};">
+            ${timestamp || '—'}
+          </span>
+        </div>`;
+    });
+    html += `</div></div>`;
+  });
+  return html;
+}
+window.buildCIPChecklistEditable = buildCIPChecklistEditable;
+
 async function saveCIPModal(key, isFinish) {
   const aksi = isFinish ? "MENYELESAIKAN" : "MENYIMPAN DRAF";
   if (!confirm(`Apakah Anda yakin ingin ${aksi} data CIP ${key === 'production' ? 'Produksi' : 'Laboratorium'} ini?`)) return;
@@ -2560,20 +3166,22 @@ async function saveCIPModal(key, isFinish) {
   config.sections.forEach((sec, sIdx) => {
     sec.items.forEach((item, iIdx) => {
       const checkId   = `cip-check-${sIdx}-${iIdx}`;
-      const timeId    = `cip-time-${sIdx}-${iIdx}`; // ← TAMBAHAN BARU
+      const timeId    = `cip-time-${sIdx}-${iIdx}`;
       const uniqueKey = `${sIdx}__${item}`;
-      
+      const row       = document.getElementById(`cip-row-${sIdx}-${iIdx}`);
+
       const el  = document.getElementById(checkId);
-      const val = el ? el.checked : false;
+      // Kalau native checkbox tidak ada, cek apakah sudah diganti custom green div
+      const isCustomChecked = !el && row?.querySelector('[data-checked="true"]') !== null;
+      const val = el ? el.checked : isCustomChecked;
       checks[uniqueKey] = val;
-      
-      // ═══ SIMPAN TIMESTAMP ═══
+
+      // Simpan timestamp
       const timeEl = document.getElementById(timeId);
-      if (timeEl && val) {
+      if (timeEl && val && timeEl.textContent !== '—') {
         timestamps[uniqueKey] = timeEl.textContent;
       }
-      // ═══ AKHIR TAMBAHAN ═══
-      
+
       if (!val) allDone = false;
     });
   });
@@ -2590,15 +3198,17 @@ async function saveCIPModal(key, isFinish) {
         ? { 
             cip_prod_done: isFinish || allDone, 
             cip_prod_checks: checks,
-            cip_prod_timestamps: timestamps, // ← TAMBAHAN BARU
-            cipProdSavedAt: new Date().toISOString() // ← TAMBAHAN BARU
+            cip_prod_timestamps: timestamps,
+            cipProdSavedAt: new Date().toISOString()
           }
         : { 
             cip_lab_done:  isFinish || allDone, 
             cip_lab_checks:  checks,
-            cip_lab_timestamps: timestamps, // ← TAMBAHAN BARU
-            cipLabSavedAt: new Date().toISOString() // ← TAMBAHAN BARU
+            cip_lab_timestamps: timestamps,
+            cipLabSavedAt: new Date().toISOString()
           };
+      console.log('📤 CIP save payload:', JSON.stringify(body));
+      console.log('📤 checks collected:', JSON.stringify(checks));
       const res  = await fetch('/api/projects/'+proj._id+'/cip', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -2609,10 +3219,6 @@ async function saveCIPModal(key, isFinish) {
       await loadPJ('ongoing');
       // Re-render project cards agar tombol End langsung aktif
       const content = document.getElementById('content');
-      if (content && typeof getProjectHTML === 'function' && typeof initProjectPage === 'function') {
-        content.innerHTML = getProjectHTML('ongoing', 'On Going Projects');
-        initProjectPage('ongoing');
-      }
     } catch(e) {
       console.error('saveCIPModal API error:', e);
       showQuickToast('❌ Gagal simpan CIP: ' + e.message);
@@ -2638,10 +3244,6 @@ async function saveCIPModal(key, isFinish) {
     sPJ('ongoing', allProjs);
     // Re-render cards agar tombol End langsung aktif
     const content = document.getElementById('content');
-    if (content && typeof getProjectHTML === 'function' && typeof initProjectPage === 'function') {
-      content.innerHTML = getProjectHTML('ongoing', 'On Going Projects');
-      initProjectPage('ongoing');
-    }
   }
 
   closeCIPModal(key);
@@ -2676,22 +3278,38 @@ function saveCIPFromDE(key) {
   }
 
   // Find real project in ongoing list
-  const projs = gPJ('ongoing').filter(p => p.setPoint && Object.keys(p.setPoint).length > 0);
-  const proj  = projs[+sel.value];
+  const allProjs = gPJ('ongoing');
+  const proj     = allProjs[+sel.value];
   if (!proj) return;
-  const allProjs  = gPJ('ongoing');
-  const realIdx   = allProjs.findIndex(p => p.name === proj.name && p.created_at === proj.created_at);
-  if (realIdx < 0) return;
+  const realIdx  = +sel.value;
 
   // Save CIP to correct field based on key
   if (key === 'production') {
     allProjs[realIdx].cipProdDone   = true;
+    allProjs[realIdx].cip_prod_done = true;
     allProjs[realIdx].cipProdFields = fields;
   } else if (key === 'laboratorium') {
     allProjs[realIdx].cipLabDone   = true;
+    allProjs[realIdx].cip_lab_done = true;
     allProjs[realIdx].cipLabFields = fields;
   }
   sPJ('ongoing', allProjs);
+
+  // ✅ PUT ke API agar tersimpan ke DB (tombol End bisa aktif tanpa refresh)
+  if (proj._id) {
+    const cipPayload = key === 'production'
+      ? { cip_prod_done: true, cip_prod_checks: fields }
+      : { cip_lab_done: true,  cip_lab_checks: fields  };
+    fetch('/api/projects/' + proj._id + '/cip', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cipPayload),
+    }).then(() => {
+      loadPJ('ongoing').then(() => renderPJ('ongoing'));
+    }).catch(err => console.error('CIP save error:', err));
+  } else {
+    renderPJ('ongoing');
+  }
 
   // Update UI
   const statusEl = document.getElementById('dep-cip-status-'+key);
@@ -2728,18 +3346,42 @@ async function submitDEP(key){
   const spData  = {};
   let anyFilled = false;
 
-  SP_FIELDS.forEach(f => {
-    const el    = document.getElementById('dep-'+f.id+'-'+key);
-    const domVal = el ? el.value.trim() : '';
-    // Kalau DOM kosong, coba ambil dari draft atau setPoint yang sudah ada
-    const value = domVal !== '' ? domVal : (draft[f.id] || proj.setPoint?.[f.id] || '');
-    if (f.calculated) { if (value) spData[f.id] = value; return; }
-    // Hanya set jika ada nilai — jangan overwrite field lama dengan string kosong
+  // isSPSave = true kalau dipanggil dari tombol 'Save Set Point'
+  // isSPSave = false kalau dipanggil dari tombol 'Save Data' di data entry
+  const spModal = document.getElementById('sp-modal-'+key);
+  const isSPSave = spModal && (spModal.style.display !== 'none' && spModal.offsetParent !== null);
+
+  // PAGE1 = Set Point Production, PAGE2 = Parameter CT
+  // Save production hanya ambil PAGE1 — CT disave terpisah via submitDECT
+  SP_FIELDS_PAGE1.forEach(f => {
+    const el = document.getElementById('dep-'+f.id+'-'+key);
+    // Untuk calculated fields: ambil dari DOM (hasil kalkulasi otomatis)
+    // Untuk manual fields: ambil DOM → draft → setPoint lama (kalau isSPSave)
+    // Untuk field dengan grey placeholder: nilai bisa kosong di DOM padahal ada di data-prev-value
+    const domVal = el ? (el.value.trim() || el.dataset?.prevValue?.trim() || '') : '';
+    const value = domVal !== '' ? domVal
+      : (draft[f.id] || (isSPSave ? (proj.setPoint?.[f.id] || '') : ''));
     if (value !== '') {
-      anyFilled = true;
+      if (!f.calculated) anyFilled = true; // hanya manual field yang trigger anyFilled
       spData[f.id] = value;
     }
-    // Jika kosong, biarkan mergedSP mengambil dari proj.setPoint (tidak di-set di sini)
+  });
+  // PAGE2: Temperature fields dibaca dari DOM (user boleh ubah),
+  // CT fields (sp-add1~8) diambil dari setPoint lama karena disave terpisah via submitDECT
+  const CT_IDS = new Set(['sp-add1','sp-add2','sp-add3','sp-add4','sp-add5','sp-add6','sp-add7','sp-add8']);
+  SP_FIELDS_PAGE2.forEach(f => {
+    if (CT_IDS.has(f.id)) {
+      // CT: selalu pakai nilai lama agar tidak hilang
+      const existing = proj.setPoint?.[f.id];
+      if (existing !== undefined && existing !== '') spData[f.id] = existing;
+    } else {
+      // Temperature & non-CT: baca dari DOM sama seperti PAGE1
+      const el = document.getElementById('dep-'+f.id+'-'+key);
+      const domVal = el ? (el.value.trim() || el.dataset?.prevValue?.trim() || '') : '';
+      const value = domVal !== '' ? domVal
+        : (draft[f.id] || (isSPSave ? (proj.setPoint?.[f.id] || '') : ''));
+      if (value !== '') spData[f.id] = value;
+    }
   });
 
   const notesValue = document.getElementById('dep-notes-'+key)?.value.trim() || draft.notes || '';
@@ -2887,7 +3529,10 @@ function limbahRenderProject(key) {
 }
 
 async function submitLimbah(key) {
+  // FIX: proteksi submit-ganda — double-click bisa bikin 2 row identik tersimpan
+  if (window._limbahSubmitting) return;
   if (!confirm('Apakah Anda yakin ingin menyimpan data Limbah ini?')) return;
+  window._limbahSubmitting = true;
 
   const projSel     = document.getElementById('limbah-proj-sel');
   const selectedIdx = projSel ? projSel.value : '';
@@ -2921,7 +3566,25 @@ async function submitLimbah(key) {
   const tssVal   = document.getElementById(key+'-tss')?.value   || '';
   const phVal    = document.getElementById(key+'-ph')?.value    || '';
   const notesVal = document.getElementById(key+'-notes')?.value || '';
-  const jar      = window._tmpJar || null;
+  // Baca jar data KHUSUS project aktif — key sama dengan yang disimpan submitJarTestModal
+  const _pOpt  = projSel?.options[projSel?.selectedIndex];
+  const _pName = _pOpt && selectedIdx!=='' ? (_pOpt.textContent||'').trim() : '';
+  const _jKey  = _pName ? 'jartest__'+_pName : 'jartest__harian';
+  let _jData   = (window._jarByProj||{})[_jKey] || null;
+  if (!_jData) { try { _jData = JSON.parse(localStorage.getItem(_jKey)||'null'); } catch {} }
+  // Fallback ke window._jarTestData (diset oleh submitJarTestModal)
+  if (!_jData && window._jarTestData) {
+    // Pastikan jar test ini untuk konteks yang sama (harian atau project yang sama)
+    const _jarProj = window._jarTestData.proj_name || null;
+    if (!_pName || _jarProj === _pName || !_jarProj) {
+      _jData = window._jarTestData;
+    }
+  }
+  const jar    = _jData ? {alum:_jData.jar_alum??null,total:_jData.jar_total??null} : (window._tmpJar||null);
+  console.log('🧪 jar ['+_jKey+']:', jar);
+
+  // Ambil jar_entries (detail per sampel) juga, bukan hanya rata-rata
+  const jarEntries = _jData ? (_jData.jar_entries || _jData.entries || []) : [];
 
   const volumeFinal = volVal !== '' ? Number(volVal) : null;
 
@@ -2931,6 +3594,7 @@ async function submitLimbah(key) {
     : (volVal !== '' || codVal !== '' || bodVal !== '' || tssVal !== '' || phVal !== '' || notesVal !== '');
 
   if (!hasData) {
+    window._limbahSubmitting = false;
     showQuickToast('❌ Isi minimal satu field sebelum menyimpan!');
     return;
   }
@@ -2963,18 +3627,27 @@ async function submitLimbah(key) {
     tss:     tssVal  !== '' ? Number(tssVal)  : null,
     ph:      phVal   !== '' ? Number(phVal)   : null,
     notes:   notesVal || null,
-    // Kolom tambahan (perlu ALTER TABLE — lihat SQL di bawah)
+    // Kolom tambahan
     project_name: projObj ? projObj.name : null,
     tipe:         projObj ? 'project' : 'harian',
     awal:         awalVal  !== '' ? Number(awalVal)  : null,
     akhir:        akhirVal !== '' ? Number(akhirVal) : null,
     jar_alum:     jar ? (Number(jar.alum)  || null) : null,
     jar_total:    jar ? (Number(jar.total) || null) : null,
+    jar_entries:  jarEntries,   // ← detail per sampel
   };
+
+  // ✅ FIX: pilih endpoint sesuai mode.
+  // Mode "harian" (tidak link project) HARUS ke /api/dataentry/limbah-harian
+  // (tabel de_limbah_harian) karena itu yang dibaca Laporan Harian.
+  // Mode project tetap ke /api/dataentry/limbah (tabel de_limbah).
+  const apiUrl = isProject
+    ? '/api/dataentry/limbah'
+    : '/api/dataentry/limbah-harian';
 
   try {
     // ── 4. POST ke API ───────────────────────────────────────────────────
-    const res  = await fetch('/api/dataentry/limbah', {
+    const res  = await fetch(apiUrl, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(payload),
@@ -2996,8 +3669,8 @@ async function submitLimbah(key) {
           { label: 'BOD (mg/L)',       newVal: bodVal            },
           { label: 'TSS (mg/L)',       newVal: tssVal            },
           { label: 'pH',               newVal: phVal             },
-          { label: 'Jar Test Alum',    newVal: jar?.alum  || '' },
-          { label: 'Jar Test Total',   newVal: jar?.total || '' },
+          { label: 'Jar Test PAC (L/h)',    newVal: jar?.alum  != null ? jar.alum  : '' },
+          { label: 'Jar Test Polimer (L/h)', newVal: jar?.total != null ? jar.total : '' },
           { label: 'Catatan',          newVal: notesVal          },
         ].filter(f => f.newVal !== '' && f.newVal !== null && f.newVal !== undefined)
       });
@@ -3013,7 +3686,7 @@ async function submitLimbah(key) {
           'COD (mg/L)': codVal || '—', 'BOD (mg/L)': bodVal || '—',
           'TSS (mg/L)': tssVal || '—', 'pH': phVal || '—',
           'Catatan': notesVal || '—',
-          ...(jar ? { 'Jar Test Alum (PPM)': jar.alum, 'Jar Test Total (PPM)': jar.total } : {})
+          ...(jar ? { 'Jar Test PAC (L/h)': jar.alum, 'Jar Test Polimer (L/h)': jar.total } : {})
         },
         saved_at: new Date().toISOString()
       });
@@ -3022,14 +3695,20 @@ async function submitLimbah(key) {
     }
 
     // ── 5. Tampilkan sukses, lalu fade status bar saja (TIDAK reset form) ──
+    window._limbahSubmitting = false;
     setTimeout(() => {
       if (sbEl) sbEl.style.display = 'none';
       window._tmpJar = null;
+      try { localStorage.removeItem(_jKey); } catch {}
+      if (window._jarByProj) delete window._jarByProj[_jKey];
+      const _jBadge = document.getElementById('jar-status-'+key);
+      if (_jBadge) _jBadge.style.display = 'none';
       const jarBadge = document.getElementById(key+'-jar-badge');
       if (jarBadge) jarBadge.textContent = '';
     }, 2500);
 
   } catch (err) {
+    window._limbahSubmitting = false;
     console.error('submitLimbah Error:', err);
     showSt('error', '❌ Gagal menyimpan: ' + err.message);
   }
@@ -3333,13 +4012,6 @@ ${isOngoing && ['admin','superadmin'].includes(localStorage.getItem('role')||'')
           <strong>⚠️ Note:</strong> Fill all required parameters for this production batch. These values will be used as reference in data entry forms.
         </div>
         <div class="setpoint-section">
-          <div class ="setpoint-section-title"> Tahapan</div>
-           <div class="setpoint-grid">
-            <div class="de-field"><label class="de-label">Sirkulasi</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-slurry-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
-            <div class="de-field"><label class="de-label">Hopper Metering</label><input class="de-input sp-field-${type}" id="sp-hopper-${type}" type="text"></div>
-            <div class="de-field"><label class="de-label">...</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-density-${type}" type="number" step="0.1"><span class="de-input-unit">Kg/m³</span></div></div>
-          </div>
-        </div>
           <div class="setpoint-section-title">🧪 Slurry</div>
           <div class="setpoint-grid">
             <div class="de-field"><label class="de-label">Slurry Ratio</label><div class="de-input-wrap"><input class="de-input sp-field-${type}" id="sp-slurry-${type}" type="number" step="0.1"><span class="de-input-unit">%</span></div></div>
@@ -3686,10 +4358,11 @@ window.saveNewSample = async function(id) {
     input.value = '';
     document.getElementById(id + '-custom-wrap').style.display = 'none';
     
-    // Refresh semua dropdown yg sedang terbuka
-    document.querySelectorAll('.sample-dropdown').forEach(dropdown => {
-        const currentVal = dropdown.id === id ? newVal : dropdown.value;
-        dropdown.outerHTML = buildSampleDropdown(dropdown.id, currentVal);
+    // Refresh semua dropdown — collect IDs dulu agar tidak duplikat
+    const _snIds = Array.from(document.querySelectorAll('.sample-dropdown')).map(d => ({id: d.id, v: d.id === id ? newVal : d.value}));
+    _snIds.forEach(({id: did, v: cv}) => {
+        const el = document.getElementById(did);
+        if (el) el.parentElement.outerHTML = buildSampleDropdown(did, cv);
     });
 };
 
@@ -3725,10 +4398,138 @@ window.deleteSample = async function(id) {
           console.warn('⚠️ Sample dihapus lokal saja:', err.message);
         }
         
-        // Refresh & bersihkan pilihan
-        document.querySelectorAll('.sample-dropdown').forEach(dropdown => {
-            const currentVal = dropdown.value === val ? '' : dropdown.value;
-            dropdown.outerHTML = buildSampleDropdown(dropdown.id, currentVal);
+        // Refresh & bersihkan pilihan — collect IDs dulu agar tidak duplikat
+        const _sdIds = Array.from(document.querySelectorAll('.sample-dropdown')).map(d => ({id: d.id, v: d.value === val ? '' : d.value}));
+        _sdIds.forEach(({id: did, v: cv}) => {
+            const el = document.getElementById(did);
+            if (el) el.parentElement.outerHTML = buildSampleDropdown(did, cv);
         });
     }
+};
+
+// ══ SAMPLE LOCATION DROPDOWN (dari database, pola sama dengan lab-samples) ══
+
+window._labLocationsCache = window._labLocationsCache || null;
+
+// Load locations dari API database
+window.loadLabLocationsFromAPI = async function() {
+  try {
+    const res  = await fetch('/api/dataentry/lab-locations');
+    const json = await res.json();
+    if (json.success && Array.isArray(json.data)) {
+      const locations = json.data.map(r => r.name || r);
+      window._labLocationsCache = locations;
+      return locations;
+    }
+  } catch (err) {
+    console.warn('loadLabLocationsFromAPI error:', err.message);
+  }
+  window._labLocationsCache = window._labLocationsCache || [];
+  return window._labLocationsCache;
+};
+
+window.buildLocationDropdown = function(id, value) {
+    const locations = window._labLocationsCache || [];
+    let opts = '<option value="">-- Pilih Lokasi --</option>';
+    opts += '<option value="__ADD_LOC__" style="font-weight:bold;color:var(--blue);">＋ Tambah Lokasi Baru...</option>';
+    locations.forEach(loc => {
+        const sel = (loc === value) ? 'selected' : '';
+        opts += `<option value="${loc}" ${sel}>${loc}</option>`;
+    });
+    if (value && !locations.includes(value) && value !== '__ADD_LOC__') {
+        opts += `<option value="${value}" selected>${value}</option>`;
+    }
+    const showDel = locations.includes(value) ? 'block' : 'none';
+    return `
+    <div style="display:flex;flex-direction:column;gap:6px;width:100%;">
+        <div style="display:flex;gap:6px;align-items:center;width:100%;">
+            <select class="de-input de-select location-dropdown" id="${id}" style="flex:1" onchange="handleLabLocationChange('${id}')" data-prev-value="${value || ''}">
+                ${opts}
+            </select>
+            <button type="button" id="${id}-del" onclick="deleteLabLocation('${id}')" style="display:${showDel};background:none;border:none;color:var(--red);font-size:18px;font-weight:bold;cursor:pointer;padding:0 5px;" title="Hapus Lokasi Ini">✕</button>
+        </div>
+        <div id="${id}-custom-wrap" style="display:none;gap:6px;align-items:center;">
+            <input class="de-input exclude-save" id="${id}-new" type="text" placeholder="Nama lokasi baru..." style="flex:1;">
+            <button type="button" class="de-btn de-btn-primary exclude-save" style="padding:7px 14px;font-size:11px" onclick="saveNewLabLocation('${id}')">Simpan</button>
+            <button type="button" class="exclude-save" onclick="cancelAddLabLocation('${id}')" style="background:none;border:none;color:var(--red);font-size:18px;font-weight:bold;cursor:pointer;padding:0 5px;" title="Batal">✕</button>
+        </div>
+    </div>`;
+};
+
+window.handleLabLocationChange = function(id) {
+    const sel = document.getElementById(id);
+    const delBtn = document.getElementById(id + '-del');
+    const customWrap = document.getElementById(id + '-custom-wrap');
+    if (!sel) return;
+    if (sel.value === '__ADD_LOC__') {
+        customWrap.style.display = 'flex';
+        delBtn.style.display = 'none';
+    } else {
+        customWrap.style.display = 'none';
+        delBtn.style.display = sel.value ? 'block' : 'none';
+        sel.dataset.prevValue = sel.value;
+    }
+};
+
+window.saveNewLabLocation = async function(id) {
+    const inp = document.getElementById(id + '-new');
+    const val = inp ? inp.value.trim() : '';
+    if (!val) { alert('Nama lokasi tidak boleh kosong!'); return; }
+    const locations = window._labLocationsCache || [];
+    if (locations.includes(val)) { alert('Lokasi sudah ada!'); return; }
+    try {
+        const res = await fetch('/api/dataentry/lab-locations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: val })
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Gagal simpan');
+    } catch(err) {
+        console.warn('saveNewLocation API error:', err.message);
+    }
+    // Update cache dan refresh semua dropdown
+    const updated = [...(window._labLocationsCache || []), val];
+    window._labLocationsCache = updated;
+    // Collect IDs dulu, replace hanya dropdown div (bukan de-field agar label tidak hilang)
+    const _slIds = Array.from(document.querySelectorAll('.location-dropdown')).map(d => ({id: d.id, v: d.id === id ? val : d.value}));
+    _slIds.forEach(({id: did, v: cv}) => {
+        const el = document.getElementById(did);
+        if (el) el.closest('div[style*="flex-direction:column"]').outerHTML = buildLocationDropdown(did, cv);
+    });
+};
+
+window.cancelAddLabLocation = function(id) {
+    const sel = document.getElementById(id);
+    const customWrap = document.getElementById(id + '-custom-wrap');
+    const delBtn = document.getElementById(id + '-del');
+    if (customWrap) customWrap.style.display = 'none';
+    if (sel) {
+        sel.value = sel.dataset.prevValue || '';
+        if (delBtn) delBtn.style.display = sel.value ? 'block' : 'none';
+    }
+};
+
+window.deleteLabLocation = async function(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const val = sel.dataset.prevValue || sel.value;
+    if (!val || val === '__ADD_LOC__') return;
+    if (!confirm(`Hapus lokasi "${val}"?`)) return;
+    try {
+        await fetch('/api/dataentry/lab-locations', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: val })
+        });
+    } catch(err) {
+        console.warn('deleteLocation API error:', err.message);
+    }
+    window._labLocationsCache = (window._labLocationsCache || []).filter(l => l !== val);
+    // Collect IDs dulu, replace hanya dropdown div (bukan de-field agar label tidak hilang)
+    const _dlIds = Array.from(document.querySelectorAll('.location-dropdown')).map(d => ({id: d.id, v: d.value === val ? '' : d.value}));
+    _dlIds.forEach(({id: did, v: cv}) => {
+        const el = document.getElementById(did);
+        if (el) el.closest('div[style*="flex-direction:column"]').outerHTML = buildLocationDropdown(did, cv);
+    });
 };

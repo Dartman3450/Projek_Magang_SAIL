@@ -8,8 +8,8 @@
 
 (function initSessionManager() {
   // ═══ CONFIG ═══
-  const SESSION_TIMEOUT = 60 * 60 * 1000;      // 1 jam (milliseconds)
-  const IDLE_TIMEOUT = 2 * 60 * 60 * 1000;     // 2 jam (milliseconds) — diperpanjang untuk data entry
+  const SESSION_TIMEOUT = 12 * 60 * 60 * 1000;      // 1 jam (milliseconds)
+  const IDLE_TIMEOUT = 12 * 60 * 60 * 1000;     // 2 jam (milliseconds) — diperpanjang untuk data entry
   const CHECK_INTERVAL = 60 * 1000;            // Check setiap 1 menit
   
   let lastActivityTime = Date.now();
@@ -33,7 +33,7 @@
 
     // ─ Cek Session Timeout (1 jam) ─
     if (sessionAge > SESSION_TIMEOUT) {
-      logoutDueToExpiry('Session Anda telah expired (1 jam). Silakan login kembali.');
+      logoutDueToExpiry('Session Anda telah expired. Silakan login kembali.');
       return;
     }
 
@@ -98,6 +98,13 @@
     // Cek apakah user sudah login
     const isLoggedIn = localStorage.getItem('isLoggedin') === 'true';
     if (!isLoggedIn) return; // Tidak perlu setup kalau tidak login
+
+    // Role 'display' tidak kena session timeout — layar monitoring 24/7
+    const role = localStorage.getItem('role') || '';
+    if (role === 'display') {
+      console.log('📺 Session Manager: role display — no timeout applied');
+      return;
+    }
 
     console.log('✅ Session Manager initialized');
 

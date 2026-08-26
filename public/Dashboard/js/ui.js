@@ -52,6 +52,13 @@ function doLogout() {
 // ── Hide nav items the current role cannot access ──
 function filterNav() {
   const role  = localStorage.getItem('role') || 'admin';
+
+  // ── Role 'display': hanya tampilkan dashboard, sidebar disembunyikan ──
+  if (role === 'display') {
+    _applyDisplayMode();
+    return;
+  }
+
   const allow = ROLE_ACCESS[role]; // null = admin, sees everything
   if (!allow) return;              // admin — nothing to hide
 
@@ -75,6 +82,55 @@ function filterNav() {
       }
     }
   });
+}
+
+// ── Mode Display: sembunyikan sidebar, hanya tampilkan dashboard IoT ──
+function _applyDisplayMode() {
+  // Tunggu DOM siap
+  const apply = () => {
+    const sidebar    = document.getElementById('sidebar');
+    const toggleBtn  = document.getElementById('sidebar-toggle-btn');
+    const ghost      = document.getElementById('sidebar-ghost');
+    const main       = document.querySelector('.main');
+
+    if (!sidebar) { setTimeout(apply, 100); return; }
+
+    // Sembunyikan sidebar dan tombol toggle
+    sidebar.style.display    = 'none';
+    if (toggleBtn) toggleBtn.style.display = 'none';
+    if (ghost)     ghost.style.display     = 'none';
+
+    // Main content full width
+    if (main) {
+      main.style.marginLeft  = '0';
+      main.style.paddingLeft = '0';
+      main.style.width       = '100%';
+    }
+
+    // Tambahkan tombol Logout di pojok kiri bawah
+    if (!document.getElementById('display-logout-btn')) {
+      const btn = document.createElement('button');
+      btn.id = 'display-logout-btn';
+      btn.innerHTML = '🚪 Logout';
+      btn.onclick = confirmLogout;
+      btn.style.cssText = `
+        position:fixed; bottom:20px; left:20px; z-index:9000;
+        background:#ef4444; color:#fff; border:none;
+        padding:10px 18px; border-radius:10px;
+        font-size:13px; font-weight:600; cursor:pointer;
+        font-family:inherit; box-shadow:0 4px 12px rgba(0,0,0,.2);
+        transition:background .2s;
+      `;
+      btn.onmouseenter = () => btn.style.background = '#b91c1c';
+      btn.onmouseleave = () => btn.style.background = '#ef4444';
+      document.body.appendChild(btn);
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', apply);
+  } else {
+    apply();
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -192,16 +248,16 @@ function _renderAlertBanners() {
   strip.innerHTML = active.map(([key, v]) => {
     const isDanger = v.type === 'danger';
     const icon  = isDanger ? '🚨' : '⚠️';
-    const tag   = isDanger ? 'BAHAYA' : 'PERINGATAN';
+    const tag   = isDanger ? 'WARNING' : 'WARNING';
     const label = v.label || key;
     const pct   = Math.round(v.pct ?? 0);
     const msg   = isDanger
       ? `<span class="alert-banner-text">${icon} <strong>${label}</strong> — Air kritis: <strong>${pct}%</strong> — Tindakan segera diperlukan!</span>`
-      : `<span class="alert-banner-text">${icon} <strong>${label}</strong> — Level rendah: <strong>${pct}%</strong> — Segera periksa pasokan air.</span>`;
-    return `<div class="alert-banner ${v.type}">
-      <span class="alert-banner-tag">${tag}</span>
+      : `<span class="alert-banner-text">${icon} <strong>${label}</strong> — Level rendah: <strong>${pct}%</strong> — Segera periksa!.</span>`;
+    return `<div class="alert-banner ${v.type}" style="background:#dc2626;border-color:#b91c1c;color:#ffffff;">
+      <span class="alert-banner-tag" style="background:#b91c1c;color:#ffffff;">${tag}</span>
       ${msg}
-      <button class="alert-banner-dismiss" onclick="dismissWLAlert('${key}')">✕ Tutup</button>
+      <button class="alert-banner-dismiss" style="background:#b91c1c;color:#ffffff;border-color:#991b1b;" onclick="dismissWLAlert('${key}')">✕ Clear</button>
     </div>`;
   }).join('');
 }
@@ -282,9 +338,9 @@ function toggleSidebar() {
 }
 
 function openSidebar() {
-  if (_sidebarOpen) return;
-  _sidebarOpen = true;
-  _applySidebar();
+  // Dinonaktifkan — sidebar hanya bisa dibuka via tombol toggle
+  // Jangan hapus fungsi ini karena mungkin dipanggil dari tempat lain
+  return;
 }
 
 function _applySidebar() {
@@ -307,18 +363,7 @@ function _applySidebar() {
 
 // When sidebar is open, hovering off the left edge keeps it open — nothing special needed.
 // When collapsed, mouseleave on the ghost zone after a short delay closes it again.
-document.addEventListener('DOMContentLoaded', () => {
-  const ghost = document.getElementById('sidebar-ghost');
-  if (!ghost) return;
-  ghost.addEventListener('mouseleave', () => {
-    // user moved mouse away from ghost zone — if sidebar re-opened via hover, close again
-    _sidebarHoverTimer = setTimeout(() => {
-      if (_sidebarOpen && document.body.classList.contains('sidebar-collapsed')) {
-        // shouldn't happen, but guard
-      }
-    }, 300);
-  });
-});
+// Sidebar hanya bisa dibuka/tutup via tombol toggle — hover dinonaktifkan
 
 // Also close sidebar when clicking the ghost zone (alternative open)
 // Already handled via onmouseenter="openSidebar()" in HTML

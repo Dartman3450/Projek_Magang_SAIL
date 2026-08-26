@@ -69,21 +69,13 @@ async function orgGetAll() {
   if (_orgUseAPI) {
     const data = await orgApiCall();
     if (data && Array.isArray(data)) {
-      // Merge: kalau localStorage punya versi lebih baru (assessments lebih banyak), pakai lokal
-      let local = [];
-      try { local = JSON.parse(localStorage.getItem(ORG_LS_KEY) || '[]'); } catch {}
-      const merged = data.map(apiItem => {
-        const localItem = local.find(l => String(l._id) === String(apiItem._id));
-        if (localItem &&
-            (localItem.assessments || []).length > (apiItem.assessments || []).length) {
-          return localItem; // lokal lebih up-to-date (API belum ter-sync)
-        }
-        return apiItem;
-      });
-      localStorage.setItem(ORG_LS_KEY, JSON.stringify(merged));
-      return merged;
+      // Selalu prioritaskan data dari API — ini sumber kebenaran tunggal
+      // agar survey dari perangkat/akun lain selalu terlihat
+      localStorage.setItem(ORG_LS_KEY, JSON.stringify(data));
+      return data;
     }
   }
+  // Fallback ke localStorage kalau API tidak tersedia
   try { return JSON.parse(localStorage.getItem(ORG_LS_KEY) || '[]'); }
   catch { return []; }
 }
@@ -154,23 +146,29 @@ function orgGetCatLabel(value) {
   return (orgGetCats().find(c => c.value === value) || { label: value }).label;
 }
 
-// ── Attribute Definitions ────────────────────────────────────────────
+// ── Attribute Definitions ─────────────────────────────────────────────
+// Skala 1–5 : 1 = less/rendah, 5 = very/sangat tinggi
 const ORG_ATTRS = {
-  kopi: [
-    { key: 'bitterness', label: 'Bitterness', icon: '☕', hint: 'Tingkat kepahitan' },
-    { key: 'sweet',      label: 'Sweet',       icon: '🍬', hint: 'Tingkat kemanisan' },
-    { key: 'sour',       label: 'Sour',        icon: '🍋', hint: 'Tingkat keasaman' },
-    { key: 'body',       label: 'Body',        icon: '💪', hint: 'Kekentalan & tekstur' },
-    { key: 'aroma',      label: 'Aroma',       icon: '👃', hint: 'Intensitas aroma' },
-    { key: 'overall',    label: 'Overall',     icon: '⭐', hint: 'Kesan keseluruhan' },
-  ],
   teh: [
-    { key: 'flavourAroma', label: 'Flavour Aroma',    icon: '🌸', hint: 'Intensitas aroma rasa',   header: 'Aroma' },
-    { key: 'smokyAroma',   label: 'Smoky Aroma',      icon: '💨', hint: 'Intensitas aroma asap',   header: 'Aroma' },
-    { key: 'rasa',         label: 'Rasa',             icon: '👅', hint: 'Penilaian rasa teh',      header: 'Rasa' },
-    { key: 'astringent',   label: 'Level Astringent', icon: '🌿', hint: 'Tingkat sepet/astringen', header: 'Level Astringent' },
+    { key: 'bitterness', label: 'Bitterness', icon: '🍵', hint: 'Tingkat kepahitan' },
+    { key: 'astringent', label: 'Astringent',  icon: '🌿', hint: 'Tingkat sepet/astringen' },
+    { key: 'sweet',      label: 'Sweet',       icon: '🍬', hint: 'Tingkat kemanisan' },
+    { key: 'grassy',     label: 'Grassy',      icon: '🌱', hint: 'Aroma/rasa rumput segar' },
+    { key: 'smoky',      label: 'Smoky',       icon: '💨', hint: 'Intensitas aroma asap' },
+    { key: 'aroma',      label: 'Aroma',       icon: '🌸', hint: 'Intensitas aroma keseluruhan' },
+    { key: 'mouthFeel',  label: 'Mouth Feel',  icon: '💧', hint: 'Sensasi/tekstur di mulut' },
+  ],
+  kopi: [
+    { key: 'aroma',      label: 'Aroma',       icon: '👃', hint: 'Intensitas aroma' },
+    { key: 'flavour',    label: 'Flavour',     icon: '☕', hint: 'Kekayaan & kedalaman rasa' },
+    { key: 'sour',       label: 'Sour',        icon: '🍋', hint: 'Tingkat keasaman' },
+    { key: 'bitter',     label: 'Bitter',      icon: '🫘', hint: 'Tingkat kepahitan' },
+    { key: 'cleanest',   label: 'Cleanest',    icon: '✨', hint: 'Kebersihan / kejernihan rasa' },
+    { key: 'saltinest',  label: 'Saltinest',   icon: '🧂', hint: 'Tingkat keasinan' },
+    { key: 'mouthFeel',  label: 'Mouth Feel',  icon: '💧', hint: 'Sensasi/tekstur di mulut' },
   ],
 };
+const ORG_SCALE_MAX = 5; // skala penilaian 1–5
 
 // ── Sample Number Generator ──────────────────────────────────────────
 function orgGenSampleNo(all) {
@@ -216,10 +214,12 @@ function getOrganolepticHTML() {
                padding:5px 12px;border-radius:20px;font-weight:600;display:flex;align-items:center;gap:6px;">
         👤 <span id="org-badge-name">${orgEsc(userName)}</span>
       </span>
+      ${(['utility','Produksi','scientist','limbah'].includes(localStorage.getItem('role') || '')) ? '' : `
       <button class="de-btn de-btn-primary" onclick="orgOpenAddModal()"
         style="display:flex;align-items:center;gap:8px;padding:10px 20px;font-size:13px;font-weight:700;white-space:nowrap;">
         ＋ Tambah Tes
       </button>
+      `}
     </div>
   </div>
 
@@ -409,8 +409,9 @@ async function initOrganoleptic() {
 
   if (_orgPollTimer) clearInterval(_orgPollTimer);
   _orgPollTimer = setInterval(async () => {
-    if (_orgTab === 'panel') await orgRenderPanelList();
-  }, 15000);
+    if (_orgTab === 'panel')   await orgRenderPanelList(false); // false = no loading blink
+    if (_orgTab === 'summary') await orgRenderSummary();
+  }, 10000); // 10 detik cukup, kurangi frekuensi blink
 }
 window.initOrganoleptic = initOrganoleptic;
 
@@ -425,7 +426,7 @@ function orgUpdateBadge() {
 async function orgSwitchTab(tab) {
   _orgTab = tab;
   orgRenderTab(tab);
-  if (tab === 'panel')   await orgRenderPanelList();
+  if (tab === 'panel')   await orgRenderPanelList(true);
   if (tab === 'summary') await orgRenderSummary();
 }
 window.orgSwitchTab = orgSwitchTab;
@@ -443,10 +444,21 @@ function orgRenderTab(active) {
 // ══════════════════════════════════════════════════════════════════
 //  4. RENDER PANEL LIST
 // ══════════════════════════════════════════════════════════════════
-async function orgRenderPanelList() {
+async function orgRenderPanelList(showLoading = true) {
   const container = document.getElementById('org-panel-list');
   if (!container) return;
-  container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--txt3);font-size:12px;">⏳ Memuat…</div>`;
+
+  // Jangan re-render kalau ada modal yang sedang terbuka (user sedang input)
+  const modalOpen = document.getElementById('org-add-modal')
+    || document.getElementById('org-fill-modal')
+    || document.getElementById('org-share-modal')
+    || document.getElementById('org-confirm-modal');
+  if (modalOpen) return;
+
+  // Hanya tampilkan loading spinner saat pertama kali (bukan saat poll otomatis)
+  if (showLoading && !container.hasChildNodes()) {
+    container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--txt3);font-size:12px;">⏳ Memuat…</div>`;
+  }
 
   const all = await orgGetAll();
   if (!all.length) {
@@ -458,7 +470,11 @@ async function orgRenderPanelList() {
       </div>`;
     return;
   }
-  container.innerHTML = [...all].map(test => orgCardHTML(test)).join('');
+  const newHTML = [...all].map(test => orgCardHTML(test)).join('');
+  // Hanya update DOM kalau kontennya benar-benar berubah (hindari blink)
+  if (container.innerHTML !== newHTML) {
+    container.innerHTML = newHTML;
+  }
 }
 
 // ── Card HTML ────────────────────────────────────────────────────────
@@ -525,9 +541,9 @@ function orgCardHTML(test) {
         style="font-size:12px;padding:7px 14px;gap:5px;">
         ✏️ Isi Penilaian
       </button>
-      <span class="org-share-chip" onclick="orgCopyShareLink('${orgEsc(test._id)}', '${orgEsc(shareUrl)}')"
-        title="Bagikan link ke panelis lain">
-        🔗 Bagikan
+      <span class="org-share-chip" onclick="orgShowShareModal('${orgEsc(test._id)}', '${orgEsc(shareUrl)}')"
+        title="Bagikan QR ke panelis">
+        📤 Bagikan
       </span>`;
   }
 
@@ -576,15 +592,69 @@ function orgCardHTML(test) {
   </div>`;
 }
 
-// ── Copy share link ──────────────────────────────────────────────────
-function orgCopyShareLink(id, url) {
+// ── Share Modal dengan QR Code ────────────────────────────────────────
+function orgShowShareModal(id, url) {
+  document.getElementById('org-share-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'org-share-modal';
+  overlay.className = 'org-modal-overlay';
+  overlay.innerHTML = `
+    <div class="org-modal" style="max-width:360px;">
+      <div class="org-modal-head">
+        <div class="org-modal-title">📤 Bagikan ke Panelis</div>
+        <button class="org-modal-close" onclick="document.getElementById('org-share-modal').remove()">✕</button>
+      </div>
+      <div class="org-modal-body" style="text-align:center;">
+        <div style="font-size:11px;color:var(--txt3);margin-bottom:14px;">
+          Panelis scan QR ini atau buka link untuk mengisi penilaian.<br>
+          <b style="color:var(--txt);">Tidak perlu login</b> — cukup masukkan nama saja.
+        </div>
+        <!-- QR Code container -->
+        <div id="org-qr-wrap" style="display:inline-block;padding:12px;background:#fff;border-radius:12px;border:1px solid var(--border);margin-bottom:14px;">
+          <div id="org-qr-canvas"></div>
+        </div>
+        <!-- Link copy -->
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;">
+          <input id="org-share-url-input" value="${url}" readonly
+            style="flex:1;font-size:10px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;
+                   background:var(--bg);color:var(--txt2);outline:none;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;">
+          <button class="de-btn de-btn-primary" onclick="orgCopyShareUrl('${id}')"
+            style="padding:7px 14px;font-size:11px;white-space:nowrap;">
+            📋 Salin
+          </button>
+        </div>
+        <div id="org-share-copy-msg" style="font-size:11px;color:var(--green);min-height:16px;"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  // Generate QR menggunakan API qr-server (tidak butuh library)
+  const qrImg = document.createElement('img');
+  const encoded = encodeURIComponent(url);
+  qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encoded}`;
+  qrImg.width  = 180;
+  qrImg.height = 180;
+  qrImg.style.borderRadius = '6px';
+  qrImg.alt = 'QR Code';
+  document.getElementById('org-qr-canvas').appendChild(qrImg);
+}
+window.orgShowShareModal = orgShowShareModal;
+
+function orgCopyShareUrl(id) {
+  const input = document.getElementById('org-share-url-input');
+  if (!input) return;
+  const url = input.value;
   navigator.clipboard?.writeText(url).then(() => {
-    orgShowToast('🔗 Link disalin! Bagikan ke panelis lain.', '#1e40af');
+    const msg = document.getElementById('org-share-copy-msg');
+    if (msg) { msg.textContent = '✅ Link berhasil disalin!'; setTimeout(() => { msg.textContent = ''; }, 2500); }
   }).catch(() => {
-    prompt('Salin link ini dan bagikan ke panelis:', url);
+    input.select();
+    document.execCommand('copy');
+    const msg = document.getElementById('org-share-copy-msg');
+    if (msg) { msg.textContent = '✅ Link berhasil disalin!'; setTimeout(() => { msg.textContent = ''; }, 2500); }
   });
 }
-window.orgCopyShareLink = orgCopyShareLink;
+window.orgCopyShareUrl = orgCopyShareUrl;
 
 // ══════════════════════════════════════════════════════════════════
 //  5. ADD TEST MODAL
@@ -622,7 +692,9 @@ async function orgOpenAddModal() {
         <div style="margin-bottom:12px;">
           <label style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px;">NAMA SAMPLE <span style="color:var(--red)">*</span></label>
           <input class="de-input" type="text" id="org-add-name" placeholder="Contoh: Arabika Batch-07"
-            style="width:100%;box-sizing:border-box;">
+            autocomplete="off" autocorrect="off" spellcheck="false"
+            style="width:100%;box-sizing:border-box;"
+            onkeydown="event.stopPropagation()">
         </div>
 
         <!-- Kategori -->
@@ -673,7 +745,29 @@ async function orgOpenAddModal() {
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  setTimeout(() => document.getElementById('org-add-name')?.focus(), 80);
+  // Focus + reset input dengan delay lebih panjang untuk handle kasus setelah PDF viewer
+  // PDF viewer (browser native) kadang mengunci focus/keyboard event di background
+  const focusInput = () => {
+    const inp = document.getElementById('org-add-name');
+    if (!inp) return;
+    // Force browser melepas state lama: blur dulu, baru focus ulang
+    inp.blur();
+    inp.disabled = true;
+    requestAnimationFrame(() => {
+      inp.disabled = false;
+      inp.focus();
+      inp.click();
+      // Pastikan cursor benar-benar di dalam input
+      inp.setSelectionRange(inp.value.length, inp.value.length);
+    });
+  };
+  setTimeout(focusInput, 100);
+  setTimeout(focusInput, 400);
+  setTimeout(focusInput, 800); // retry tambahan kalau PDF viewer benar-benar stuck
+  // Klik manual di overlay (selain modal) tidak boleh menutup browser native focus trap
+  document.addEventListener('visibilitychange', function _vc() {
+    if (!document.hidden) { focusInput(); document.removeEventListener('visibilitychange', _vc); }
+  });
 }
 window.orgOpenAddModal = orgOpenAddModal;
 
@@ -919,14 +1013,9 @@ function orgRenderFillModal(test) {
 
 function orgBuildAttrBlocks(attrs) {
   let html = '';
-  let lastHeader = null;
   attrs.forEach(attr => {
-    if (attr.header && attr.header !== lastHeader) {
-      lastHeader = attr.header;
-      const headerIcons = { 'Aroma': '👃', 'Rasa': '👅', 'Level Astringent': '🌿' };
-      html += `<div class="org-section-header">${headerIcons[attr.header] || '📋'} ${orgEsc(attr.header)}</div>`;
-    }
-    const btns = Array.from({ length: 10 }, (_, i) => i + 1).map(r =>
+    // Tombol 1–5
+    const btns = [1,2,3,4,5].map(r =>
       `<button class="org-rb" id="org-rb-${attr.key}-${r}" onclick="orgSelectAttrRating('${attr.key}',${r})">${r}</button>`
     ).join('');
     html += `
@@ -935,6 +1024,10 @@ function orgBuildAttrBlocks(attrs) {
         <span style="font-size:16px;">${attr.icon || '📋'}</span>
         <span class="org-attr-label">${orgEsc(attr.label)}</span>
         <span class="org-attr-hint">${orgEsc(attr.hint)}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:9px;color:var(--txt3);">1 = Less</span>
+        <span style="font-size:9px;color:var(--txt3);">5 = Very</span>
       </div>
       <div class="org-rating-row-compact">${btns}</div>
       <div id="org-rating-val-${attr.key}" style="font-size:10px;color:var(--txt3);text-align:center;margin-bottom:6px;min-height:14px;"></div>
@@ -945,26 +1038,24 @@ function orgBuildAttrBlocks(attrs) {
 }
 
 function orgRatingClass(r) {
-  if (r <= 2) return 'sel-red';
-  if (r <= 4) return 'sel-orange';
-  if (r <= 5) return 'sel-yellow';
-  if (r <= 7) return 'sel-green';
-  if (r <= 9) return 'sel-blue';
-  return 'sel-purple';
+  if (r === 1) return 'sel-red';
+  if (r === 2) return 'sel-orange';
+  if (r === 3) return 'sel-yellow';
+  if (r === 4) return 'sel-green';
+  return 'sel-blue'; // 5
 }
 function orgRatingLabel(r) {
-  if (r <= 2) return '😞 Sangat Buruk';
-  if (r <= 4) return '😐 Kurang';
-  if (r <= 5) return '🙂 Cukup';
-  if (r <= 7) return '😊 Baik';
-  if (r <= 9) return '🌟 Sangat Baik';
-  return '🏆 Sempurna';
+  if (r === 1) return '😐 Sangat Rendah';
+  if (r === 2) return '🙂 Rendah';
+  if (r === 3) return '😊 Sedang';
+  if (r === 4) return '🌟 Tinggi';
+  return '🏆 Sangat Tinggi'; // 5
 }
 
 function orgSelectAttrRating(key, r) {
   if (!_orgFillRatings[key]) _orgFillRatings[key] = {};
   _orgFillRatings[key].score = r;
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 5; i++) {
     const btn = document.getElementById(`org-rb-${key}-${i}`);
     if (!btn) continue;
     btn.className = 'org-rb' + (i === r ? ' ' + orgRatingClass(r) : '');
@@ -972,7 +1063,7 @@ function orgSelectAttrRating(key, r) {
   const lbl = document.getElementById(`org-rating-val-${key}`);
   if (lbl) {
     lbl.style.color = 'var(--txt2)';
-    lbl.textContent = `${r}/10 — ${orgRatingLabel(r)}`;
+    lbl.textContent = `${r}/5 — ${orgRatingLabel(r)}`;
   }
 }
 window.orgSelectAttrRating = orgSelectAttrRating;
@@ -1054,7 +1145,17 @@ window.orgCloseFill = orgCloseFill;
 
 // ══════════════════════════════════════════════════════════════════
 //  7. CROSS-DEVICE PANELIST ENTRY (standalone via URL ?panel_entry=)
+//     Alur: masuk → isi nama (jika belum) → form penilaian
 // ══════════════════════════════════════════════════════════════════
+
+// Ambil nama tamu dari localStorage (disimpan saat panelis pertama kali isi nama)
+function orgGetGuestName() {
+  return localStorage.getItem('org_guest_name') || '';
+}
+function orgSetGuestName(name) {
+  localStorage.setItem('org_guest_name', name.trim());
+}
+
 async function orgOpenPanelistEntryPage(testId) {
   const wrap = document.getElementById('org-wrap');
   if (!wrap) return;
@@ -1076,18 +1177,27 @@ async function orgOpenPanelistEntryPage(testId) {
 
   const done  = (test.assessments || []).length;
   const total = test.panelCount;
-  const me    = orgGetCurrentUser();
 
-  // Cek apakah akun ini sudah mengisi
-  if (me && orgHasFilledTest(test)) {
-    const myNo = orgGetUserPanelNo(test);
+  // Cek apakah sudah mengisi (via accountUser login ATAU nama tamu + tanda di assessment)
+  const guestName  = orgGetGuestName();
+  const accountMe  = orgGetCurrentUser();
+  const alreadyFilled = (test.assessments || []).some(a =>
+    (accountMe && (a.accountUser === accountMe)) ||
+    (guestName && a.guestName && a.guestName.toLowerCase() === guestName.toLowerCase())
+  );
+
+  if (alreadyFilled) {
+    const myAssess = (test.assessments || []).find(a =>
+      (accountMe && (a.accountUser === accountMe)) ||
+      (guestName && a.guestName && a.guestName.toLowerCase() === guestName.toLowerCase())
+    );
     wrap.innerHTML = `
       <div class="org-empty" style="padding-top:60px;">
         <div class="org-empty-ico">🔒</div>
         <div class="org-empty-txt" style="color:#166534;">Anda sudah mengisi!</div>
         <div style="margin-top:12px;padding:14px 20px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;display:inline-block;max-width:320px;">
-          <div style="font-size:13px;font-weight:700;color:#166534;">👤 ${orgEsc(orgGetCurrentUserDisplay() || me)}</div>
-          <div style="font-size:11px;color:#15803d;margin-top:4px;">Panel #${myNo} untuk <b>${orgEsc(test.sampleName)}</b> sudah tersimpan.</div>
+          <div style="font-size:13px;font-weight:700;color:#166534;">👤 ${orgEsc(myAssess?.panelName || guestName || accountMe || '—')}</div>
+          <div style="font-size:11px;color:#15803d;margin-top:4px;">Panel #${myAssess?.panelNo} untuk <b>${orgEsc(test.sampleName)}</b> sudah tersimpan.</div>
         </div>
         <div style="margin-top:12px;font-size:11px;color:var(--txt3);">${done} dari ${total} panelis telah mengisi.</div>
       </div>`;
@@ -1100,13 +1210,105 @@ async function orgOpenPanelistEntryPage(testId) {
         <div class="org-empty-ico">🔒</div>
         <div class="org-empty-txt">Sesi sudah ditutup</div>
         <div class="org-empty-sub">Semua ${total} panelis sudah mengisi. Terima kasih!</div>
-        <div style="margin-top:20px;">
-          <div style="font-size:24px;font-weight:900;color:var(--green);">${done}/${total}</div>
-          <div style="font-size:11px;color:var(--txt3);">Panelis telah mengisi</div>
-        </div>
       </div>`;
     return;
   }
+
+  // Jika nama sudah tersimpan → langsung ke form penilaian
+  if (guestName || accountMe) {
+    const displayName = guestName || orgGetCurrentUserDisplay() || accountMe;
+    orgShowEntryForm(wrap, test, testId, displayName);
+    return;
+  }
+
+  // Belum ada nama → tampilkan halaman input nama
+  orgShowNamePage(wrap, test, testId);
+}
+
+// ── Halaman isi nama ─────────────────────────────────────────────────
+function orgShowNamePage(wrap, test, testId) {
+  const catType  = test.categoryType || orgGetCatType(test.category);
+  const catLabel = orgGetCatLabel(test.category);
+  const catIcon  = catType === 'kopi' ? '☕' : '🍵';
+  const done     = (test.assessments || []).length;
+  const total    = test.panelCount;
+
+  wrap.innerHTML = `
+    <div style="max-width:420px;margin:0 auto;padding:32px 16px 60px;display:flex;flex-direction:column;align-items:center;">
+
+      <!-- Logo/Brand -->
+      <div style="font-size:36px;margin-bottom:6px;">🧪</div>
+      <div style="font-size:11px;font-weight:700;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;margin-bottom:20px;">SAIL Organoleptic</div>
+
+      <!-- Sample card -->
+      <div style="width:100%;background:linear-gradient(135deg,var(--blue),#3b82f6);color:#fff;border-radius:14px;padding:18px 20px;margin-bottom:24px;text-align:left;">
+        <div style="font-size:10px;font-weight:700;opacity:.8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">${catIcon} ${orgEsc(catLabel)}</div>
+        <div style="font-size:20px;font-weight:800;margin-bottom:4px;">${orgEsc(test.sampleName)}</div>
+        <div style="font-size:11px;opacity:.8;">${orgEsc(test.sampleNo || '')} &nbsp;·&nbsp; ${done}/${total} panelis sudah mengisi</div>
+      </div>
+
+      <!-- Form nama -->
+      <div style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 20px;">
+        <div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:4px;">Selamat Datang 👋</div>
+        <div style="font-size:12px;color:var(--txt3);margin-bottom:18px;">Masukkan nama Anda sebelum mengisi penilaian.</div>
+
+        <label style="font-size:11px;font-weight:700;color:var(--txt2);display:block;margin-bottom:6px;">Nama Lengkap</label>
+        <input id="org-guest-name-input" type="text" placeholder="Contoh: Budi Santoso"
+          maxlength="60" autocomplete="name"
+          style="width:100%;box-sizing:border-box;padding:11px 14px;border:2px solid var(--border);border-radius:9px;
+                 background:var(--bg);color:var(--txt);font-size:14px;outline:none;transition:border-color .15s;font-family:inherit;"
+          onfocus="this.style.borderColor='var(--blue)'"
+          onblur="this.style.borderColor='var(--border)'"
+          onkeydown="if(event.key==='Enter')orgGuestNameSubmit('${orgEsc(testId)}')" />
+        <div id="org-name-err" style="font-size:11px;color:#ef4444;min-height:16px;margin-top:5px;"></div>
+
+        <button class="de-btn de-btn-primary" onclick="orgGuestNameSubmit('${orgEsc(testId)}')"
+          style="width:100%;padding:12px;font-size:14px;font-weight:800;border-radius:10px;justify-content:center;margin-top:8px;">
+          Mulai Penilaian →
+        </button>
+      </div>
+
+      <div style="font-size:10px;color:var(--txt3);margin-top:16px;text-align:center;">
+        Nama hanya digunakan untuk identifikasi panelis
+      </div>
+    </div>`;
+
+  setTimeout(() => document.getElementById('org-guest-name-input')?.focus(), 100);
+}
+window.orgShowNamePage = orgShowNamePage;
+
+async function orgGuestNameSubmit(testId) {
+  const input = document.getElementById('org-guest-name-input');
+  const errEl = document.getElementById('org-name-err');
+  const name  = (input?.value || '').trim();
+
+  if (!name || name.length < 2) {
+    if (errEl) errEl.textContent = '⚠️ Nama minimal 2 karakter.';
+    input?.focus();
+    return;
+  }
+  if (errEl) errEl.textContent = '';
+
+  // Simpan nama ke localStorage
+  orgSetGuestName(name);
+
+  // Lanjut ke form penilaian
+  const wrap = document.getElementById('org-wrap');
+  const all  = await orgGetAll();
+  const test = all.find(t => String(t._id) === String(testId));
+  if (!wrap || !test) return;
+  orgShowEntryForm(wrap, test, testId, name);
+}
+window.orgGuestNameSubmit = orgGuestNameSubmit;
+
+// ── Form penilaian (setelah nama diisi) ─────────────────────────────
+function orgShowEntryForm(wrap, test, testId, displayName) {
+  const done     = (test.assessments || []).length;
+  const total    = test.panelCount;
+  const catType  = test.categoryType || orgGetCatType(test.category);
+  const attrs    = ORG_ATTRS[catType] || ORG_ATTRS.teh;
+  const catLabel = orgGetCatLabel(test.category);
+  const catIcon  = catType === 'kopi' ? '☕' : '🍵';
 
   // Ambil panel number berikutnya
   const filledNos = (test.assessments || []).map(a => a.panelNo);
@@ -1117,12 +1319,6 @@ async function orgOpenPanelistEntryPage(testId) {
   _orgFillTestId  = testId;
   _orgFillPanel   = panelNo;
   _orgFillRatings = {};
-
-  const catType  = test.categoryType || orgGetCatType(test.category);
-  const attrs    = ORG_ATTRS[catType] || ORG_ATTRS.kopi;
-  const catLabel = orgGetCatLabel(test.category);
-  const catIcon  = catType === 'kopi' ? '☕' : '🍵';
-  const meName   = orgGetCurrentUserDisplay() || me || '';
 
   wrap.innerHTML = `
     <div style="max-width:520px;margin:0 auto;padding:16px 0 40px;">
@@ -1139,13 +1335,24 @@ async function orgOpenPanelistEntryPage(testId) {
       </div>
 
       <!-- User + panel badge -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
           <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;letter-spacing:.4px;">Anda adalah</div>
           <div style="font-size:18px;font-weight:800;color:var(--txt);">Panel #${panelNo}</div>
-          ${meName ? `<div style="font-size:11px;color:var(--txt2);margin-top:2px;">👤 ${orgEsc(meName)}</div>` : ''}
+          <div style="font-size:12px;color:var(--txt2);margin-top:2px;">👤 ${orgEsc(displayName)}</div>
         </div>
-        <span style="font-size:32px;">👤</span>
+        <button onclick="orgChangeName('${orgEsc(testId)}')"
+          style="font-size:10px;padding:5px 10px;border:1px solid var(--border);border-radius:7px;
+                 background:var(--bg);color:var(--txt3);cursor:pointer;white-space:nowrap;">
+          ✏️ Ganti nama
+        </button>
+      </div>
+
+      <!-- Skala penjelasan -->
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:14px;
+                  display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--txt2);">
+        <span>Skala Penilaian:</span>
+        <span><b style="color:#ef4444;">1</b> = Less &nbsp;·&nbsp; <b style="color:#22c55e;">3</b> = Medium &nbsp;·&nbsp; <b style="color:#3b82f6;">5</b> = Very</span>
       </div>
 
       <!-- Attribute blocks -->
@@ -1163,6 +1370,15 @@ async function orgOpenPanelistEntryPage(testId) {
       </div>
     </div>`;
 }
+window.orgShowEntryForm = orgShowEntryForm;
+
+function orgChangeName(testId) {
+  localStorage.removeItem('org_guest_name');
+  const wrap = document.getElementById('org-wrap');
+  wrap.innerHTML = `<div style="text-align:center;padding:30px;color:var(--txt3);">⏳</div>`;
+  orgOpenPanelistEntryPage(testId);
+}
+window.orgChangeName = orgChangeName;
 
 async function orgSubmitEntryPage(testId) {
   const sb   = document.getElementById('org-entry-sb');
@@ -1170,14 +1386,19 @@ async function orgSubmitEntryPage(testId) {
   const test = all.find(t => String(t._id) === String(testId));
   if (!test) return;
 
-  const me      = orgGetCurrentUser();
-  const meName  = orgGetCurrentUserDisplay();
-  const catType = test.categoryType || orgGetCatType(test.category);
-  const attrs   = ORG_ATTRS[catType] || ORG_ATTRS.kopi;
+  const accountMe  = orgGetCurrentUser();
+  const guestName  = orgGetGuestName();
+  const meName     = accountMe ? (orgGetCurrentUserDisplay() || accountMe) : guestName;
+  const catType    = test.categoryType || orgGetCatType(test.category);
+  const attrs      = ORG_ATTRS[catType] || ORG_ATTRS.teh;
 
-  // Double-check lock
-  if (me && orgHasFilledTest(test)) {
-    orgShowSb(sb, '🔒 Akun Anda sudah mengisi sesi ini!', '#f0fdf4', '#166534');
+  // Double-check: sudah mengisi?
+  const alreadyFilled = (test.assessments || []).some(a =>
+    (accountMe && a.accountUser === accountMe) ||
+    (guestName && a.guestName && a.guestName.toLowerCase() === guestName.toLowerCase())
+  );
+  if (alreadyFilled) {
+    orgShowSb(sb, '🔒 Anda sudah mengisi sesi ini!', '#f0fdf4', '#166534');
     return;
   }
 
@@ -1200,8 +1421,9 @@ async function orgSubmitEntryPage(testId) {
   test.assessments = (test.assessments || []).filter(a => a.panelNo !== _orgFillPanel);
   test.assessments.push({
     panelNo:     _orgFillPanel,
-    panelName:   meName || me || 'Panelis ' + _orgFillPanel,
-    accountUser: me,
+    panelName:   meName || 'Panelis ' + _orgFillPanel,
+    accountUser: accountMe || null,
+    guestName:   guestName || null,
     ratings,
     ts: Date.now(),
   });
@@ -1221,7 +1443,7 @@ async function orgSubmitEntryPage(testId) {
         <div class="org-empty-ico">🎉</div>
         <div class="org-empty-txt" style="color:var(--green);font-size:18px;">Terima Kasih!</div>
         <div style="margin-top:10px;padding:14px 20px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:12px;display:inline-block;max-width:340px;">
-          <div style="font-size:13px;font-weight:700;color:#166534;">Penilaian Panel #${_orgFillPanel} tersimpan</div>
+          <div style="font-size:13px;font-weight:700;color:#166534;">Penilaian Panel #${_orgFillPanel} tersimpan ✅</div>
           <div style="font-size:11px;color:#15803d;margin-top:4px;">
             Sample: <b>${orgEsc(test.sampleName)}</b><br>
             ${meName ? `Panelis: <b>${orgEsc(meName)}</b>` : ''}
@@ -1251,8 +1473,211 @@ async function orgConfirmDelete(id) {
 window.orgConfirmDelete = orgConfirmDelete;
 
 // ══════════════════════════════════════════════════════════════════
-//  9. SUMMARY TAB
+//  9. SUMMARY TAB  — v4.0 Spider per-panelis + Bar frekuensi level
 // ══════════════════════════════════════════════════════════════════
+
+// Palet warna panelis (hingga 12 panelis)
+const ORG_PANELIST_COLORS = [
+  '#3b82f6','#ef4444','#22c55e','#f59e0b','#8b5cf6',
+  '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1',
+  '#14b8a6','#e11d48',
+];
+
+// State aktif panelis per test (key = testId)
+const _orgActivePanel = {};
+
+function orgSumSetActive(testId, panelNo) {
+  const container = document.getElementById(`org-sum-card-${testId}`);
+  if (!container) return;
+  const all = container.querySelectorAll('[data-panel-no]');
+
+  // Toggle: klik yang sudah aktif → tampilkan semua
+  if (_orgActivePanel[testId] === panelNo) {
+    delete _orgActivePanel[testId];
+    all.forEach(el => { el.style.opacity = '1'; el.style.fontWeight = ''; });
+    orgSumRedrawSpider(testId);
+    orgSumUpdateBars(testId);
+    return;
+  }
+  _orgActivePanel[testId] = panelNo;
+  all.forEach(el => {
+    const pno = parseInt(el.dataset.panelNo);
+    el.style.opacity = pno === panelNo ? '1' : '0.25';
+    el.style.fontWeight = pno === panelNo ? '700' : '';
+  });
+  orgSumRedrawSpider(testId);
+  orgSumUpdateBars(testId);
+}
+window.orgSumSetActive = orgSumSetActive;
+
+// ── Spider Chart ─────────────────────────────────────────────────
+function orgDrawSpider(canvasId, testId, assessments, attrs) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx  = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+  const R  = Math.min(W, H) / 2 - 38;
+  const N  = attrs.length;
+  const activePno = _orgActivePanel[testId];
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Grid (skala 1–5) ──
+  const levels = [1, 2, 3, 4, 5];
+  levels.forEach(lvl => {
+    ctx.beginPath();
+    attrs.forEach((_, i) => {
+      const angle = (Math.PI * 2 * i / N) - Math.PI / 2;
+      const r = (lvl / 5) * R;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // level label di sumbu pertama
+    const ang0 = -Math.PI / 2;
+    const lx = cx + (lvl / 5) * R * Math.cos(ang0) + 4;
+    const ly = cy + (lvl / 5) * R * Math.sin(ang0);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(String(lvl), lx, ly + 3);
+  });
+
+  // ── Axis lines + labels ──
+  attrs.forEach((attr, i) => {
+    const angle = (Math.PI * 2 * i / N) - Math.PI / 2;
+    const ex = cx + R * Math.cos(angle);
+    const ey = cy + R * Math.sin(angle);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(ex, ey);
+    ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Label
+    const lpad = 14;
+    const lx = cx + (R + lpad) * Math.cos(angle);
+    const ly = cy + (R + lpad) * Math.sin(angle);
+    ctx.fillStyle = '#475569';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = Math.abs(angle) < 0.1 || Math.abs(angle - Math.PI) < 0.1 ? 'center'
+                  : Math.cos(angle) > 0 ? 'left' : 'right';
+    ctx.fillText(attr.label, lx, ly + 4);
+  });
+
+  // ── Plot each panelist ──
+  assessments.forEach((a, pi) => {
+    const pno = a.panelNo;
+    const color = ORG_PANELIST_COLORS[(pno - 1) % ORG_PANELIST_COLORS.length];
+    const isActive = activePno == null || activePno === pno;
+    const alpha = isActive ? 1 : 0.08;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    attrs.forEach((attr, i) => {
+      const score = a.ratings?.[attr.key]?.score || 0;
+      const angle = (Math.PI * 2 * i / N) - Math.PI / 2;
+      const r = (score / 5) * R;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isActive ? 2 : 1;
+    ctx.stroke();
+    // Fill transparan
+    ctx.fillStyle = color;
+    ctx.globalAlpha = isActive ? 0.08 : 0.02;
+    ctx.fill();
+
+    // Dots pada tiap vertex
+    ctx.globalAlpha = alpha;
+    attrs.forEach((attr, i) => {
+      const score = a.ratings?.[attr.key]?.score || 0;
+      if (!score) return;
+      const angle = (Math.PI * 2 * i / N) - Math.PI / 2;
+      const r = (score / 5) * R;
+      ctx.beginPath();
+      ctx.arc(cx + r * Math.cos(angle), cy + r * Math.sin(angle), isActive ? 3.5 : 2, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+    ctx.restore();
+  });
+}
+
+function orgSumRedrawSpider(testId) {
+  const container = document.getElementById(`org-sum-card-${testId}`);
+  if (!container) return;
+  const canvas = container.querySelector('canvas[data-spider]');
+  if (!canvas) return;
+  const assessments = JSON.parse(canvas.dataset.assessments || '[]');
+  const attrs       = JSON.parse(canvas.dataset.attrs || '[]');
+  orgDrawSpider(canvas.id, testId, assessments, attrs);
+}
+
+// ── Update bar frekuensi berdasarkan panelis aktif ────────────────
+function orgSumUpdateBars(testId) {
+  const container = document.getElementById(`org-sum-card-${testId}`);
+  if (!container) return;
+  const activePno = _orgActivePanel[testId];
+  const assessmentsEl = container.querySelector('[data-all-assessments]');
+  if (!assessmentsEl) return;
+  const assessments = JSON.parse(assessmentsEl.dataset.allAssessments || '[]');
+  const attrsEl = container.querySelector('[data-all-attrs]');
+  const attrs   = JSON.parse(attrsEl?.dataset.allAttrs || '[]');
+
+  // Filter assessments jika ada yang aktif
+  const filtered = activePno == null
+    ? assessments
+    : assessments.filter(a => a.panelNo === activePno);
+
+  attrs.forEach(attr => {
+    // Hitung frekuensi tiap level 1-5 dari filtered assessments
+    const counts = [1,2,3,4,5].map(level => ({
+      level,
+      count: filtered.filter(a => a.ratings?.[attr.key]?.score === level).length,
+    }));
+    const maxCount = Math.max(...counts.map(c => c.count), 1);
+
+    counts.forEach(({ level, count }) => {
+      const barEl = container.querySelector(`[data-bar="${testId}-${attr.key}-${level}"]`);
+      const cntEl = container.querySelector(`[data-barcnt="${testId}-${attr.key}-${level}"]`);
+      const color = orgBarColor(level);
+
+      if (barEl) {
+        // Yang terbanyak = 100%, sisanya proporsional (misal max=2, count=1 → 50%)
+        barEl.style.width   = count > 0 ? (count / maxCount) * 100 + '%' : '0%';
+        barEl.style.opacity = count > 0 ? '1' : '0.15';
+        barEl.style.minWidth = count > 0 ? '4px' : '0';
+      }
+      if (cntEl) {
+        cntEl.textContent   = String(count);
+        cntEl.style.fontWeight = count > 0 ? '800' : '400';
+        cntEl.style.color      = count > 0 ? color : 'var(--txt3)';
+      }
+    });
+  });
+}
+
+// ── Bar color by level (skala 1–5) ───────────────────────────────
+function orgBarColor(level) {
+  if (level === 1) return '#ef4444'; // merah
+  if (level === 2) return '#f97316'; // orange
+  if (level === 3) return '#eab308'; // kuning
+  if (level === 4) return '#22c55e'; // hijau
+  return '#3b82f6';                  // biru (5)
+}
+
+// ── Main render ───────────────────────────────────────────────────
 async function orgRenderSummary() {
   const container = document.getElementById('org-summary-body');
   if (!container) return;
@@ -1269,137 +1694,177 @@ async function orgRenderSummary() {
     return;
   }
 
-  container.innerHTML = data.map((test, idx) => {
-    const done      = test.assessments.length;
-    const total     = test.panelCount;
-    const complete  = done >= total || test.status === 'closed';
-    const catType   = test.categoryType || orgGetCatType(test.category);
-    const attrs     = ORG_ATTRS[catType] || ORG_ATTRS.kopi;
-    const catLabel  = orgGetCatLabel(test.category);
-    const catIcon   = catType === 'kopi' ? '☕' : '🍵';
-    const dateStr   = test.created_at
+  container.innerHTML = data.map(test => {
+    const done     = test.assessments.length;
+    const total    = test.panelCount;
+    const complete = done >= total || test.status === 'closed';
+    const catType  = test.categoryType || orgGetCatType(test.category);
+    const attrs    = ORG_ATTRS[catType] || ORG_ATTRS.kopi;
+    const catLabel = orgGetCatLabel(test.category);
+    const catIcon  = catType === 'kopi' ? '☕' : '🍵';
+    const tid      = String(test._id);
+    const dateStr  = test.created_at
       ? new Date(test.created_at).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' })
       : (test.createdAt ? new Date(test.createdAt).toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }) : '—');
 
     const statusBadge = complete
-      ? `<span style="font-size:10px;font-weight:700;background:#f0fdf4;color:#166534;padding:3px 8px;border-radius:5px;">✅ Selesai</span>`
-      : `<span style="font-size:10px;font-weight:700;background:#fff7ed;color:#92400e;padding:3px 8px;border-radius:5px;">⏳ ${done}/${total}</span>`;
+      ? `<span style="font-size:10px;font-weight:700;background:#f0fdf4;color:#166534;padding:3px 10px;border-radius:6px;">✅ Selesai</span>`
+      : `<span style="font-size:10px;font-weight:700;background:#fff7ed;color:#92400e;padding:3px 10px;border-radius:6px;">⏳ ${done}/${total}</span>`;
 
-    // Hitung grand average
-
-    // Histogram + notes per atribut (gabungan, tidak duplikat)
-    let lastHeader = null;
-    const attrSections = attrs.map(attr => {
-      const scores   = test.assessments.map(a => a.ratings?.[attr.key]?.score).filter(Boolean);
-      if (!scores.length) return '';
-      const allNotes = test.assessments.map(a => a.ratings?.[attr.key]?.notes).filter(n => n && n.trim());
-
-      // ── Histogram vertikal SVG ──
-      const counts  = Array.from({ length: 10 }, (_, i) => scores.filter(s => s === i + 1).length);
-      const maxCnt  = Math.max(...counts, 1);
-      const W = 280, H = 110, padL = 28, padB = 22, padT = 10, padR = 8;
-      const chartW  = W - padL - padR;
-      const chartH  = H - padT - padB;
-      const barW    = Math.floor(chartW / 10);
-      const gap     = 2;
-
-      // Y-axis ticks (0 and maxCnt, plus midpoint if > 1)
-      const yTicks = maxCnt === 1 ? [0, 1] : [0, Math.ceil(maxCnt / 2), maxCnt];
-      const yLines = yTicks.map(v => {
-        const y = padT + chartH - Math.round((v / maxCnt) * chartH);
-        return `<line x1="${padL}" x2="${W - padR}" y1="${y}" y2="${y}" stroke="#e5e7eb" stroke-width="1"/>
-                <text x="${padL - 4}" y="${y + 4}" text-anchor="end" font-size="8" fill="#9ca3af">${v}</text>`;
-      }).join('');
-
-      const barsSVG = counts.map((cnt, i) => {
-        const score  = i + 1;
-        const bh     = Math.round((cnt / maxCnt) * chartH);
-        const x      = padL + i * barW + gap;
-        const y      = padT + chartH - bh;
-        const colors = ['','#ef4444','#ef4444','#f97316','#f97316','#eab308','#eab308','#22c55e','#22c55e','#3b82f6','#8b5cf6'];
-        const fill   = cnt > 0 ? (colors[score] || '#94a3b8') : '#f3f4f6';
-        const label  = cnt > 0
-          ? `<text x="${x + (barW - gap*2)/2}" y="${y - 3}" text-anchor="middle" font-size="8" font-weight="700" fill="${colors[score]}">${cnt}</text>`
-          : '';
-        return `
-          <rect x="${x}" y="${cnt > 0 ? y : padT + chartH}" width="${barW - gap*2}" height="${cnt > 0 ? bh : 0}"
-            fill="${fill}" rx="2"/>
-          ${label}
-          <text x="${x + (barW - gap*2)/2}" y="${H - 6}" text-anchor="middle" font-size="9" fill="${cnt > 0 ? '#374151' : '#9ca3af'}" font-weight="${cnt > 0 ? '700' : '400'}">${score}</text>`;
-      }).join('');
-
-      const bars = `
-        <div style="overflow-x:auto;">
-          <svg width="${W}" height="${H}" style="display:block;margin:4px 0;">
-            <!-- grid lines + y labels -->
-            ${yLines}
-            <!-- x axis -->
-            <line x1="${padL}" x2="${W - padR}" y1="${padT + chartH}" y2="${padT + chartH}" stroke="#d1d5db" stroke-width="1.5"/>
-            <!-- y axis -->
-            <line x1="${padL}" x2="${padL}" y1="${padT}" y2="${padT + chartH}" stroke="#d1d5db" stroke-width="1.5"/>
-            <!-- bars + labels -->
-            ${barsSVG}
-            <!-- axis titles -->
-            <text x="${padL + chartW/2}" y="${H}" text-anchor="middle" font-size="8" fill="#6b7280">Nilai (1–10)</text>
-            <text x="8" y="${padT + chartH/2}" text-anchor="middle" font-size="8" fill="#6b7280" transform="rotate(-90,8,${padT + chartH/2})">Jumlah</text>
-          </svg>
-        </div>`;
-
-      let headerHtml = '';
-      if (attr.header && attr.header !== lastHeader) {
-        lastHeader = attr.header;
-        headerHtml = `<div style="font-size:10px;font-weight:700;color:var(--txt3);letter-spacing:1px;text-transform:uppercase;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:8px;">${orgEsc(attr.header)}</div>`;
-      }
-
-      return `${headerHtml}
-        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;">
-          <div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
-            ${attr.icon || '📋'} ${orgEsc(attr.label)}
-          </div>
-          ${bars}
-          ${allNotes.length ? `
-            <div style="margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:7px;border-left:3px solid var(--blue);">
-              <div style="font-size:9px;font-weight:700;color:var(--txt3);letter-spacing:.8px;margin-bottom:5px;">CATATAN PANELIS:</div>
-              ${allNotes.map(n => `<div style="font-size:11px;color:var(--txt2);margin-bottom:3px;">• ${orgEsc(n)}</div>`).join('')}
-            </div>` : ''}
-        </div>`;
-    }).join('');
-
+    // Grand average
     const allScores = test.assessments.flatMap(a =>
       Object.values(a.ratings || {}).map(r => r.score).filter(Boolean)
     );
     const grandAvg = allScores.length
-      ? (allScores.reduce((s, v) => s + v, 0) / allScores.length).toFixed(2)
+      ? (allScores.reduce((s, v) => s + v, 0) / allScores.length).toFixed(1)
       : '—';
 
-    // Panelis list
-    const panelisList = test.assessments.map(a =>
-      `<span style="font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:2px 7px;">
-        #${a.panelNo} ${orgEsc(a.panelName || a.accountUser || '—')}
-      </span>`
-    ).join('');
+    // ── Legend panelis (klik untuk isolate) ──
+    const legendItems = test.assessments.map(a => {
+      const color = ORG_PANELIST_COLORS[(a.panelNo - 1) % ORG_PANELIST_COLORS.length];
+      const name  = orgEsc(a.panelName || a.accountUser || `Panel ${a.panelNo}`);
+      return `<div data-panel-no="${a.panelNo}"
+        onclick="orgSumSetActive('${tid}',${a.panelNo})"
+        style="display:inline-flex;align-items:center;gap:6px;padding:5px 11px;
+               border-radius:99px;border:2px solid ${color};background:transparent;
+               cursor:pointer;transition:all .15s;font-size:11px;color:var(--txt);user-select:none;"
+        onmouseenter="orgSumHover('${tid}',${a.panelNo},true)"
+        onmouseleave="orgSumHover('${tid}',${a.panelNo},false)">
+        <span style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block;"></span>
+        #${a.panelNo} ${name}
+      </div>`;
+    }).join('');
 
-    const html = `
-      <div class="org-sum-card">
+    // ── Spider canvas ──
+    const canvasId = `org-spider-${tid}`;
+    const attrsForCanvas   = JSON.stringify(attrs.map(a => ({ key: a.key, label: a.label })));
+    const assessForCanvas  = JSON.stringify(test.assessments.map(a => ({
+      panelNo: a.panelNo,
+      ratings: a.ratings,
+    })));
+
+    // ── Bar sections per atribut ──
+    let lastHeader = null;
+    const barSections = attrs.map(attr => {
+      const scores = test.assessments.map(a => a.ratings?.[attr.key]?.score).filter(Boolean);
+      if (!scores.length) return '';
+
+      const allNotes = test.assessments.flatMap(a => {
+        const n = a.ratings?.[attr.key]?.notes;
+        return n && n.trim() ? [`<b>#${a.panelNo}</b>: ${orgEsc(n)}`] : [];
+      });
+
+      let headerHtml = '';
+      if (attr.header && attr.header !== lastHeader) {
+        lastHeader = attr.header;
+        headerHtml = `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);padding:10px 0 6px;border-top:1px solid var(--border);margin-top:10px;">${orgEsc(attr.header)}</div>`;
+      }
+
+      // Rows level 1–5 — selalu tampil semua, count 0 tetap ditampilkan
+      const maxCnt = Math.max(...[1,2,3,4,5].map(l => scores.filter(s => s === l).length), 1);
+      const barRows = [1,2,3,4,5].map(level => {
+        const count = scores.filter(s => s === level).length;
+        const color = orgBarColor(level);
+        const pct   = count > 0 ? (count / maxCnt) * 100 : 0;
+        const labelColor = count > 0 ? color : 'var(--txt3)';
+        return `
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px;">
+            <div style="font-size:12px;font-weight:700;color:var(--txt2);width:18px;text-align:right;flex-shrink:0;font-family:'DM Mono',monospace;">${level}</div>
+            <div style="flex:1;background:var(--bg);border-radius:6px;height:20px;overflow:hidden;border:1px solid var(--border);">
+              <div data-bar="${tid}-${attr.key}-${level}"
+                style="height:100%;border-radius:6px;background:${color};
+                       width:${pct}%;min-width:${count>0?'4px':'0'};opacity:${count>0?1:0.15};transition:width .4s;"></div>
+            </div>
+            <div data-barcnt="${tid}-${attr.key}-${level}"
+              style="font-size:13px;font-weight:${count>0?'800':'400'};width:22px;text-align:left;color:${labelColor};">
+              ${count}
+            </div>
+          </div>`;
+      }).join('');
+
+      return `${headerHtml}
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+          <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span>${attr.icon || '📋'}</span> ${orgEsc(attr.label)}
+            <span style="margin-left:auto;font-size:10px;color:var(--txt3);font-weight:400;">
+              1 = less &nbsp;&nbsp; 5 = very
+            </span>
+          </div>
+          ${barRows}
+          ${allNotes.length ? `
+            <div style="margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:7px;border-left:3px solid var(--blue);">
+              <div style="font-size:9px;font-weight:800;color:var(--txt3);letter-spacing:.8px;margin-bottom:5px;">CATATAN:</div>
+              ${allNotes.map(n => `<div style="font-size:11px;color:var(--txt2);margin-bottom:2px;">• ${n}</div>`).join('')}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="org-sum-card" id="org-sum-card-${tid}">
+        <!-- Hidden data containers -->
+        <div data-all-assessments='${assessForCanvas.replace(/'/g,"&#39;")}' style="display:none;"></div>
+        <div data-all-attrs='${attrsForCanvas.replace(/'/g,"&#39;")}' style="display:none;"></div>
+
+        <!-- Header -->
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:4px;">
           <div class="org-sum-title">${orgEsc(test.sampleName)}</div>
           ${statusBadge}
         </div>
-        <div style="org-sum-meta">
+        <div class="org-sum-meta" style="margin-bottom:14px;">
           ${orgEsc(test.sampleNo || '')} &nbsp;·&nbsp; ${catIcon} ${orgEsc(catLabel)} &nbsp;·&nbsp;
-          ${dateStr} &nbsp;·&nbsp; Rata-rata: <b>${grandAvg}/10</b>
+          ${dateStr} &nbsp;·&nbsp; Grand avg: <b>${grandAvg}/10</b>
         </div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:16px;">${panelisList}</div>
-        
-        <!-- HISTOGRAM PER ATRIBUT -->
-        <div style="margin-top:8px;">
-          ${attrSections}
+
+        <!-- Spider + legend -->
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--txt2);margin-bottom:10px;">🕸️ Spider Chart — Per Panelis</div>
+          <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-bottom:12px;">
+            ${legendItems}
+          </div>
+          <div style="text-align:center;">
+            <canvas id="${canvasId}" data-spider="1"
+              data-assessments='${assessForCanvas.replace(/'/g,"&#39;")}'
+              data-attrs='${attrsForCanvas.replace(/'/g,"&#39;")}'
+              width="320" height="260"
+              style="max-width:100%;"></canvas>
+          </div>
+          <div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:6px;">
+            💡 Klik nama panelis untuk isolasi &nbsp;·&nbsp; Klik lagi untuk tampilkan semua
+          </div>
+        </div>
+
+        <!-- Bar frekuensi per atribut -->
+        <div>
+          ${barSections}
         </div>
       </div>`;
-    return html;
   }).join('');
+
+  // Draw semua spider setelah DOM siap
+  data.forEach(test => {
+    const tid      = String(test._id);
+    const catType  = test.categoryType || orgGetCatType(test.category);
+    const attrs    = ORG_ATTRS[catType] || ORG_ATTRS.kopi;
+    const canvasId = `org-spider-${tid}`;
+    orgDrawSpider(canvasId, tid, test.assessments, attrs);
+  });
 }
 window.orgRenderSummary = orgRenderSummary;
+
+// Hover effect (tanpa click, cuma preview sementara)
+function orgSumHover(testId, panelNo, enter) {
+  if (_orgActivePanel[testId] != null) return; // ada yang di-click, abaikan hover
+  if (enter) {
+    _orgActivePanel[testId] = panelNo;
+    orgSumRedrawSpider(testId);
+    orgSumUpdateBars(testId);
+  } else {
+    delete _orgActivePanel[testId];
+    orgSumRedrawSpider(testId);
+    orgSumUpdateBars(testId);
+  }
+}
+window.orgSumHover = orgSumHover;
 
 // ══════════════════════════════════════════════════════════════════
 //  10. HELPERS

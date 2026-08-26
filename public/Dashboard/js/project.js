@@ -8,6 +8,20 @@ async function initProjectPage(t) {
   renderPJ(t);
 }
 
+// Preload semua project di background saat halaman pertama kali dibuka
+// Agar data sudah tersedia sebelum user membuka section On Going / Completed
+(function _preloadProjects() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      loadPJ('ongoing').catch(() => {});
+      loadPJ('completed').catch(() => {});
+    });
+  } else {
+    loadPJ('ongoing').catch(() => {});
+    loadPJ('completed').catch(() => {});
+  }
+})();
+
 // Ambil dari cache (sync), load dari API (async)
 function gPJ(t) {
   return _pjCache[t] || [];
@@ -81,7 +95,7 @@ function renderPJ(type) {
   if(!list) return;
 
   const currentRole = localStorage.getItem('role') || 'utility';
-  const isAdmin = ['admin','superadmin'].includes(currentRole);
+  const isAdmin = ['admin','superadmin','PPIC'].includes(currentRole);
 
   const allPs = gPJ(type); // array asli — index ini yang dipakai semua fungsi (endProd, openEditPJ, dll)
   let ps = [...allPs];
@@ -128,9 +142,9 @@ function renderPJ(type) {
       else                   { statusCls = 'ongoing';  statusLbl = 'ONGOING'; }
     } else if (isCompleted)  { statusCls = 'completed'; statusLbl = 'DONE'; }
 
-    // admin/superadmin = bisa edit penuh
-    // PPIC = lihat saja (view-only) untuk project card actions
-    const canEdit = ['admin','superadmin'].includes(currentRole);
+    // admin/superadmin/PPIC = bisa edit penuh (Add/Edit/Set Point/Finish/End)
+    // Role lain (Produksi, utility, scientist, limbah) = otomatis view-only di bawah
+    const canEdit = ['admin','superadmin','PPIC'].includes(currentRole);
     const canReceipt = ['admin','superadmin','PPIC'].includes(currentRole);
 
     const actionBtns = isOngoing && canEdit ? `
@@ -145,12 +159,19 @@ function renderPJ(type) {
         <button class="pj-btn pj-btn-finish" onclick="openFP('${type}',${i})" title="Finish Production">
           ${p.fpDone ? '✓ Finish Prod' : '🏭 Finish Prod'}
         </button>
-        ${cipStatus ? `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:var(--green-bg);color:var(--green);border:1px solid #6ee7b7;font-weight:600">${cipStatus}</span>` : `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db">⏳ CIP Belum</span>`}
+        ${hasCIPProd ? `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-weight:600">✅ CIP Prod</span>` : `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;font-weight:600">⏳ CIP Prod</span>`}
+        ${hasCIPLab ? `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-weight:600">✅ CIP Lab</span>` : `<span style="font-size:10px;padding:3px 8px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;font-weight:600">⏳ CIP Lab</span>`}
         <button class="pj-btn pj-btn-end" onclick="endProd('${type}',${i})"
           ${!(hasCIP && hasFP) ? 'disabled' : ''}
           title="${!(hasCIP && hasFP)?'Lengkapi CIP (Prod+Lab) dan Finish Production dulu':'Akhiri produksi'}">
           🏁 End
         </button>
+        ${currentRole === 'superadmin' ? `
+        <button class="pj-btn pj-btn-end" onclick="confirmDeleteProject('${type}',${i})"
+          style="background:#fef2f2;color:#dc2626;border-color:#fca5a5;"
+          title="Hapus project ini">
+          🗑️ Delete
+        </button>` : ''}
       </div>` : isOngoing ? `
       <div class="proj-card-divider"></div>
       <div class="proj-card-actions" onclick="event.stopPropagation()">
@@ -161,6 +182,12 @@ function renderPJ(type) {
       <div class="proj-card-divider"></div>
       <div class="proj-card-actions" onclick="event.stopPropagation()">
         <button class="pj-btn pj-btn-update" onclick="openSumm('${type}',${i})">📊 Summary</button>
+        ${currentRole === 'superadmin' ? `
+        <button class="pj-btn pj-btn-end" onclick="confirmDeleteProject('${type}',${i})"
+          style="background:#fef2f2;color:#dc2626;border-color:#fca5a5;"
+          title="Hapus project ini">
+          🗑️ Delete
+        </button>` : ''}
       </div>` : '';
     return `
       <div class="proj-card" style="--acc:${col[type]||'var(--blue)'}; flex-wrap:wrap; gap:0;" ${!isOngoing&&!isCompleted?'onclick="openPD(\''+type+'\','+i+')\""':''}">
@@ -173,6 +200,7 @@ function renderPJ(type) {
                 <div class="proj-card-meta"><span>📅 ${p.start||'—'}</span><span>🏁 ${p.end||'—'}</span>${updCount>0?`<span>🔄 ${updCount} upd</span>`:''}</div>
                 ${p.kategori?`<div style="font-size:10px;color:var(--txt3);margin-top:3px">🏷️ ${getCatLabel(p.kategori)}</div>`:''}
                 <span class="proj-status ${statusCls}">${statusLbl}</span>
+                ${(type === 'ongoing' || type === 'production') ? `<span style="display:inline-flex;gap:4px;margin-top:4px;flex-wrap:wrap;">${hasCIPProd ? '<span style="font-size:9px;padding:2px 7px;border-radius:100px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-weight:700">✅ CIP Prod</span>' : '<span style="font-size:9px;padding:2px 7px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;font-weight:600">⏳ CIP Prod</span>'}${hasCIPLab ? '<span style="font-size:9px;padding:2px 7px;border-radius:100px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac;font-weight:700">✅ CIP Lab</span>' : '<span style="font-size:9px;padding:2px 7px;border-radius:100px;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;font-weight:600">⏳ CIP Lab</span>'}</span>` : ''}
               </div>
               ${p.batch?`<div style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;color:#6b7280;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:3px 8px;white-space:nowrap;flex-shrink:0">${p.batch}</div>`:''}
             </div>
@@ -191,7 +219,7 @@ function openAPJ(type) {
 
   const picker = document.createElement('div');
   picker.id = 'apj-picker-overlay';
-  picker.className = 'proj-modal-overlay show';
+  picker.className = 'proj-modal-overlay show'; picker.style.zIndex = '9000';
   picker.innerHTML = `
     <div class="proj-modal" style="max-width:400px;width:95vw;">
       <div class="proj-modal-head">
@@ -252,8 +280,9 @@ function _openNewProjectForm(type, receipt) {
   // Tanggal: set hari ini, tidak bisa diketik manual (hanya klik)
   const stEl = document.getElementById('pf-st-'+type);
   const enEl = document.getElementById('pf-en-'+type);
-  if (stEl) { stEl.value = new Date().toISOString().split('T')[0]; stEl.setAttribute('readonly', true); stEl.onclick = () => stEl.removeAttribute('readonly'); stEl.onblur = () => stEl.setAttribute('readonly', true); }
-  if (enEl) { enEl.value = ''; enEl.setAttribute('readonly', true); enEl.onclick = () => enEl.removeAttribute('readonly'); enEl.onblur = () => enEl.setAttribute('readonly', true); }
+  // Langsung bisa diklik 1x — tidak pakai readonly trick
+  if (stEl) { stEl.value = new Date().toISOString().split('T')[0]; stEl.removeAttribute('readonly'); stEl.onclick = null; stEl.onblur = null; }
+  if (enEl) { enEl.value = ''; enEl.removeAttribute('readonly'); enEl.onclick = null; enEl.onblur = null; }
 
   document.getElementById('pf-mat-'+type).value = '';
   document.getElementById('pf-nt-'+type).value  = '';
@@ -303,7 +332,7 @@ function openAPJFromReceipt(type) {
 
   const overlay = document.createElement('div');
   overlay.id = 'apj-receipt-picker';
-  overlay.className = 'proj-modal-overlay show';
+  overlay.className = 'proj-modal-overlay show'; overlay.style.zIndex = '9000';
   overlay.innerHTML = `
     <div class="proj-modal" style="max-width:520px;width:95vw;max-height:85vh;display:flex;flex-direction:column;">
       <div class="proj-modal-head">
@@ -361,20 +390,20 @@ function genBatchNo() {
   const mm = String(today.getMonth()+1).padStart(2,'0');
   const yyyy = String(today.getFullYear());
   const dateStr = dd+mm+yyyy;
-  
-  // Ambil semua project dari localStorage
+
+  // FIX: sebelumnya baca dari localStorage('pj_ongoing'/'pj_completed') yang sudah
+  // tidak pernah diisi lagi sejak data project pindah ke API/DB (lihat gPJ/loadPJ).
+  // Akibatnya todayCount selalu 0 dan batch selalu "001-...". Sekarang hitung dari
+  // cache project yang sebenarnya dipakai aplikasi (gPJ), yang di-refresh dari API.
   try {
-    const ongoing = JSON.parse(localStorage.getItem('pj_ongoing') || '[]');
-    const completed = JSON.parse(localStorage.getItem('pj_completed') || '[]');
-    const allProjects = [...ongoing, ...completed];
-    
-    // Hitung project hari ini
+    const allProjects = [...gPJ('ongoing'), ...gPJ('completed')];
+
     const todayISO = today.toISOString().split('T')[0];
     const todayCount = allProjects.filter(p => {
       if (!p.created_at) return false;
       return p.created_at.substring(0, 10) === todayISO;
     }).length;
-    
+
     const seq = todayCount + 1;
     return String(seq).padStart(3,'0')+'-'+dateStr;
   } catch(e) {
@@ -535,6 +564,21 @@ async function submitPJ(t) {
             headers:{'Content-Type':'application/json'},
             body: JSON.stringify(activeRcpt.receipt.sp_data)
           });
+          // FIX: sebelumnya cuma setpoint project yang keupdate, histori production
+          // NGGAK pernah kebuat — akibatnya SP Awal di Summary nggak pernah
+          // merefleksikan nilai Receipt, karena row "insert" pertama baru muncul
+          // belakangan pas user isi Data Entry Production manual (nilai beda dari Receipt).
+          // Sekarang disamakan dengan saveSP(): langsung POST ke /api/dataentry/production
+          // pakai data Receipt, supaya snapshot insert pertama = nilai Receipt asli.
+          await fetch('/api/dataentry/production', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              project_name: name,
+              foto_urls: [],
+              ...activeRcpt.receipt.sp_data,
+            })
+          }).catch(e => console.warn('production history seed warn:', e));
           await loadPJ(t);
         } catch(e) { console.warn('Auto-save SP from receipt failed:', e); }
       }
@@ -642,6 +686,35 @@ async function deleteFromSetPoint(type) {
   }
 }
 
+// ── Delete Project (dari card langsung) — hanya superadmin ──────────────────
+async function confirmDeleteProject(type, idx) {
+  const role = localStorage.getItem('role') || '';
+  if (role !== 'superadmin') {
+    showQuickToast('❌ Hanya superadmin yang dapat menghapus project');
+    return;
+  }
+  const ps   = gPJ(type);
+  const proj = ps[idx];
+  if (!proj) return;
+  const name = proj.name || 'Project ini';
+  if (!confirm('🗑️ Hapus project "' + name + '"?\n\nTindakan ini tidak bisa dibatalkan.')) return;
+  try {
+    const res  = await fetch('/api/projects/' + proj._id, {
+      method: 'DELETE',
+      headers: { 'x-user-role': role }
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Gagal hapus');
+    await loadPJ(type);
+    renderPJ(type);
+    showQuickToast('🗑️ Project "' + name + '" berhasil dihapus.');
+  } catch(e) {
+    console.error('confirmDeleteProject error:', e);
+    showQuickToast('❌ Gagal hapus: ' + e.message);
+  }
+}
+window.confirmDeleteProject = confirmDeleteProject;
+
 // ── Set Point page navigation ────────────────────────────
 function spGoPage2(type) {
   document.getElementById('sp-page1-'+type).style.display = 'none';
@@ -693,7 +766,9 @@ function openSP(type, idx) {
       if (el) el.value = p.setPoint[k];
     });
   }
+  // Pastikan banner tersembunyi saat modal dibuka
   const sb = document.getElementById('sp-sb-'+type); if(sb) sb.style.display='none';
+  const sm = document.getElementById('sp-sm-'+type); if(sm) sm.textContent='';
   spGoPage1(type);
   document.getElementById('sp-overlay-'+type)?.classList.add('show');
   setupSPModalCalculations(type);
@@ -744,9 +819,22 @@ async function saveSP(type) {
   if(sb&&sm){sb.style.display='flex';sb.className='de-status-bar de-status-loading';sm.textContent='⏳ Saving...';}
   if (proj._id) {
     try {
+      // 1. PUT ke setpoint project
       const res  = await fetch('/api/projects/'+proj._id+'/setpoint', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(spData) });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
+
+      // 2. POST ke production history agar muncul di summary UPDATE #1, #2, dst
+      await fetch('/api/dataentry/production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_name: proj.name,
+          foto_urls: [],
+          ...spData,
+        })
+      }).catch(e => console.warn('production history warn:', e));
+
       await loadPJ(type);
     } catch(e) {
       console.error('saveSP API error:', e);
@@ -757,7 +845,9 @@ async function saveSP(type) {
     sPJ(type, ps);
   }
   if(sb&&sm){sb.style.display='flex';sb.className='de-status-bar de-status-success';sm.textContent='✅ Set Point saved!';}
-  setTimeout(()=>{closeSP(type);renderPJ(type);},900);
+  // Banner tampil 2 detik lalu hilang otomatis, lalu modal ditutup
+  setTimeout(()=>{ if(sb) sb.style.display='none'; }, 2000);
+  setTimeout(()=>{closeSP(type);renderPJ(type);},2100);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -837,7 +927,7 @@ function openReceiptModal(type, projIdx) {
 
   const modal = document.createElement('div');
   modal.id = 'receipt-modal-overlay';
-  modal.className = 'proj-modal-overlay show';
+  modal.className = 'proj-modal-overlay show'; modal.style.zIndex = '9000';
   modal.innerHTML = `
     <div class="proj-modal" style="max-width:680px;width:95vw;">
       <div class="proj-modal-head">
@@ -938,7 +1028,7 @@ function openAddReceiptModal(type, projIdx, editIdx = -1) {
 
   const overlay = document.createElement('div');
   overlay.id = 'receipt-add-overlay';
-  overlay.className = 'proj-modal-overlay show';
+  overlay.className = 'proj-modal-overlay show'; overlay.style.zIndex = '9000';
   overlay.innerHTML = `
     <div class="proj-modal sp-modal" style="max-width:760px;width:95vw;max-height:90vh;">
       <div class="proj-modal-head">
@@ -1167,9 +1257,7 @@ function getReceiptPageHTML() {
       <div style="text-align:center;padding:48px;color:var(--txt3);font-size:13px;">⏳ Memuat...</div>
     </div>
   </div>
-  <div style="display:flex;justify-content:flex-end;padding:16px 0;gap:12px;">
-    <button class="de-btn de-btn-primary" onclick="openAddReceiptStandalone()">＋ Tambah Receipt</button>
-  </div>
+  <button class="proj-fab" onclick="openAddReceiptStandalone()" title="Tambah Receipt">＋</button>
 </div>`;
 }
 
@@ -1273,7 +1361,7 @@ function openAddReceiptStandalone(editIdx = -1) {
 
   const overlay = document.createElement('div');
   overlay.id = 'receipt-standalone-overlay';
-  overlay.className = 'proj-modal-overlay show';
+  overlay.className = 'proj-modal-overlay show'; overlay.style.zIndex = '9000';
   overlay.innerHTML = `
     <div class="proj-modal sp-modal" style="max-width:780px;width:95vw;max-height:93vh;display:flex;flex-direction:column;">
       <div class="proj-modal-head">
@@ -1415,6 +1503,7 @@ function buildReceiptSPForm(prefill = {}) {
     { title: '💧 Flow',        fields: ['sp-feed','sp-aroma','sp-steam','sp-cond1','sp-cond2'] },
     { title: '📊 Strip Rate',  fields: ['sp-ext','sp-int','sp-cond-rate','sp-offset'] },
     { title: '🌡️ Temperature', fields: ['sp-temp-feed','sp-temp-heater','sp-temp-top','sp-Condensate1','sp-Condensate2','sp-temp-bot','sp-prod-out'] },
+    { title: '🧊 Coolants',    fields: ['sp-chilled','sp-condenser-water'] },
     { title: '⚙️ Pressure',    fields: ['sp-system-vacuum','sp-steam-flow'] },
     { title: '📝 Parameter CT',fields: ['sp-add1','sp-add2','sp-add3','sp-add4','sp-add5','sp-add6','sp-add7','sp-add8'] },
   ];
@@ -1593,10 +1682,12 @@ function _saveFPDrafts(type) {
   document.querySelectorAll(`#fp-items-${type} .fp-item`).forEach(row => {
     const uid = row.id.replace('fp-row-','');
     items1.push({
-      date:  document.getElementById('fpr-date-'+uid)?.value  || '',
-      name:  document.getElementById('fpr-name-'+uid)?.value  || '',
-      code:  document.getElementById('fpr-code-'+uid)?.value  || '',
-      berat: document.getElementById('fpr-berat-'+uid)?.value || '',
+      date:       document.getElementById('fpr-date-'+uid)?.value       || '',
+      name:       document.getElementById('fpr-name-'+uid)?.value       || '',
+      code:       document.getElementById('fpr-code-'+uid)?.value       || '',
+      kondensat:  document.getElementById('fpr-kondensat-'+uid)?.value  || '',
+      berat:      document.getElementById('fpr-berat-'+uid)?.value      || '',
+      keterangan: document.getElementById('fpr-keterangan-'+uid)?.value || '',
     });
   });
 
@@ -1605,11 +1696,12 @@ function _saveFPDrafts(type) {
   document.querySelectorAll(`#fp-items2-${type} .fp-item2`).forEach(row => {
     const uid = row.id.replace('fp-row2-','');
     items2.push({
-      date:  document.getElementById('fpr2-date-'+uid)?.value  || '',
-      name:  document.getElementById('fpr2-name-'+uid)?.value  || '',
-      code:  document.getElementById('fpr2-code-'+uid)?.value  || '',
-      brix:  document.getElementById('fpr2-brix-'+uid)?.value  || '',
-      berat: document.getElementById('fpr2-berat-'+uid)?.value || '',
+      date:       document.getElementById('fpr2-date-'+uid)?.value       || '',
+      name:       document.getElementById('fpr2-name-'+uid)?.value       || '',
+      code:       document.getElementById('fpr2-code-'+uid)?.value       || '',
+      brix:       document.getElementById('fpr2-brix-'+uid)?.value       || '',
+      berat:      document.getElementById('fpr2-berat-'+uid)?.value      || '',
+      keterangan: document.getElementById('fpr2-keterangan-'+uid)?.value || '',
     });
   });
 
@@ -1715,13 +1807,17 @@ function addFPItem(type, data=null) {
       <input class="de-input" id="fpr-code-${uid}" type="text" value="${data?.code||''}" placeholder="Kode kemasan...">
     </div>
     <div class="de-field">
+      <label class="de-label">Kondensat</label>
+      <input class="de-input" id="fpr-kondensat-${uid}" type="number" step="0.1" value="${data?.kondensat||''}" placeholder="0">
+    </div>
+    <div class="de-field">
       <label class="de-label">Berat <span style="font-weight:400;color:var(--txt3)">(kg)</span></label>
       <input class="de-input" id="fpr-berat-${uid}" type="number" step="0.1" value="${data?.berat||''}" placeholder="0.0">
     </div>
     
     <div class="de-field" style="grid-column: 1 / -1;">
-      <label class="de-label">Catatan</label>
-      <textarea class="de-input" id="fpr-notes-${uid}" placeholder="Catatan..." style="min-height:50px;">${data?.notes||''}</textarea>
+      <label class="de-label">Keterangan</label>
+      <textarea class="de-input" id="fpr-keterangan-${uid}" placeholder="Keterangan..." style="min-height:50px;">${data?.keterangan||data?.notes||''}</textarea>
     </div>
 
     <div></div>
@@ -1759,6 +1855,10 @@ function addFPItem2(type, data=null) {
     <div class="de-field">
       <label class="de-label">Berat <span style="font-weight:400;color:var(--txt3)">(kg)</span></label>
       <input class="de-input" id="fpr2-berat-${uid}" type="number" step="0.1" value="${data?.berat||''}" placeholder="0.0">
+    </div>
+    <div class="de-field" style="grid-column: 1 / -1;">
+      <label class="de-label">Keterangan</label>
+      <textarea class="de-input" id="fpr2-keterangan-${uid}" placeholder="Keterangan..." style="min-height:50px;">${data?.keterangan||''}</textarea>
     </div>
     <div style="display:flex;align-items:flex-end;justify-content:flex-end">
       <button class="fp-item-remove" onclick="document.getElementById('fp-row2-${uid}').remove()" style="padding:8px 14px;font-size:12px">✕ Hapus</button>
@@ -1944,9 +2044,8 @@ function renderProjectReportList() {
             </div>
             <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
               ${catLabel ? `<span style="font-size:11px;padding:2px 8px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:100px;font-weight:600;">🏷️ ${catLabel}</span>` : ''}
-              ${prodCount > 0 ? `<span style="font-size:11px;padding:2px 8px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:100px;font-weight:600;">📦 ${prodCount} produk</span>` : ''}
               ${totalBerat > 0 ? `<span style="font-size:11px;padding:2px 8px;background:#faf5ff;color:#6d28d9;border:1px solid #ddd6fe;border-radius:100px;font-weight:600;">⚖️ ${totalBerat.toFixed(1)} kg</span>` : ''}
-              <span style="font-size:11px;padding:2px 8px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:100px;font-weight:700;">✅ SELESAI</span>
+              ${prodCount > 0 ? `<span style="font-size:11px;padding:2px 8px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:100px;font-weight:600;">📦 ${prodCount} pile</span>` : ''}
             </div>
           </div>
           <div style="flex-shrink:0;display:flex;align-items:center;">
@@ -1979,131 +2078,97 @@ function openSummModal(type, idx) {
 
   document.getElementById('summ-modal-overlay')?.remove();
 
-  const fpEntries   = p.fp_entries || p.fpItems2 || p.fpItems || [];
-  const totalBerat  = fpEntries.reduce((sum, e) => sum + (parseFloat(e.berat) || 0), 0);
   const catLabel    = p.kategori ? getCatLabel(p.kategori) : '—';
   const durasiLabel = _calcDurasi(p.start, p.end);
   const cipProd     = p.cip_prod_done || p.cipProdDone;
   const cipLab      = p.cip_lab_done  || p.cipLabDone;
+  const fpEntries   = p.fp_entries || p.fpItems2 || p.fpItems || [];
+  const totalBerat  = fpEntries.reduce((sum, e) => sum + (parseFloat(e.berat) || 0), 0);
 
-  const spRows = p.setPoint && Object.keys(p.setPoint).length > 0
-    ? Object.entries(p.setPoint)
-        .filter(([, v]) => v !== '' && v !== null && v !== undefined)
-        .map(([k, v]) => {
-          const field = (typeof SP_FIELDS !== 'undefined' ? SP_FIELDS : []).find(f => f.id === k);
-          const label = field ? field.label : k;
-          const unit  = field?.unit || '';
-          return `<tr>
-            <td style="padding:7px 10px;font-size:12px;color:var(--txt2);border-bottom:1px solid var(--border);">${label}</td>
-            <td style="padding:7px 10px;font-size:12px;font-weight:700;color:var(--txt);border-bottom:1px solid var(--border);text-align:right;">${v}${unit ? ' <span style="font-weight:400;color:var(--txt3);font-size:11px;">'+unit+'</span>' : ''}</td>
-          </tr>`;
-        }).join('')
-    : `<tr><td colspan="2" style="padding:16px;text-align:center;color:var(--txt3);font-size:12px;">Tidak ada data Set Point</td></tr>`;
+  const badge = (ok, label) =>
+    `<span style="font-size:11px;padding:4px 12px;border-radius:100px;font-weight:700;${ok
+      ? 'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;'
+      : 'background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;'}">${ok?'✅':'⏳'} ${label}</span>`;
 
-  const fpRows = fpEntries.length > 0
-    ? fpEntries.map((e, i) => `
-        <tr>
-          <td style="padding:7px 10px;font-size:12px;color:var(--txt2);border-bottom:1px solid var(--border);">${i+1}</td>
-          <td style="padding:7px 10px;font-size:12px;color:var(--txt);border-bottom:1px solid var(--border);">${e.name || '—'}</td>
-          <td style="padding:7px 10px;font-size:12px;color:var(--txt2);border-bottom:1px solid var(--border);">${e.code || '—'}</td>
-          <td style="padding:7px 10px;font-size:12px;color:var(--txt2);border-bottom:1px solid var(--border);">${e.brix || '—'}</td>
-          <td style="padding:7px 10px;font-size:12px;font-weight:700;color:var(--txt);border-bottom:1px solid var(--border);text-align:right;">${e.berat ? e.berat + ' kg' : '—'}</td>
-          <td style="padding:7px 10px;font-size:12px;color:var(--txt3);border-bottom:1px solid var(--border);">${e.date || '—'}</td>
-        </tr>`).join('')
-    : `<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--txt3);font-size:12px;">Tidak ada data produksi</td></tr>`;
+  const sectionDefs = [
+    { id:'produksi', icon:'🏭', label:'Data Produksi'  },
+  ];
 
   const overlay = document.createElement('div');
   overlay.id = 'summ-modal-overlay';
   overlay.className = 'proj-modal-overlay show';
+  overlay.style.zIndex = '9000';
   overlay.innerHTML = `
-    <div class="proj-modal" style="max-width:720px;width:95vw;max-height:90vh;display:flex;flex-direction:column;">
-      <div class="proj-modal-head" style="flex-shrink:0;">
+    <div class="proj-modal" style="max-width:900px;width:96vw;max-height:92vh;display:flex;flex-direction:column;">
+
+      <!-- Header -->
+      <div class="proj-modal-head" style="flex-shrink:0;border-bottom:2px solid var(--border);">
         <div>
           <div class="proj-modal-title" style="font-size:16px;">📊 Summary Project</div>
-          <div style="font-size:12px;color:var(--txt3);margin-top:3px;font-weight:600;">${p.name}${p.batch ? ' &nbsp;·&nbsp; ' + p.batch : ''}</div>
+          <div style="font-size:12px;color:var(--txt3);margin-top:3px;font-weight:600;display:flex;align-items:center;gap:8px;">
+            <span>${p.name}</span>
+            ${p.batch ? `<span style="font-family:'DM Mono',monospace;background:#f3f4f6;border:1px solid #d1d5db;border-radius:5px;padding:1px 7px;font-size:11px;">${p.batch}</span>` : ''}
+          </div>
         </div>
         <button class="proj-modal-close" onclick="document.getElementById('summ-modal-overlay').remove()">✕</button>
       </div>
-      <div class="proj-modal-body" style="overflow-y:auto;flex:1;padding:20px 24px;">
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:22px;">
+      <div class="proj-modal-body" style="overflow-y:auto;flex:1;padding:16px 20px 20px;">
+
+        <!-- Info cards -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px;">
           ${_summCard('📅 Tanggal Mulai', _fmtDate(p.start))}
           ${_summCard('🏁 Tanggal Selesai', _fmtDate(p.end))}
           ${_summCard('⏱️ Durasi', durasiLabel || '—')}
           ${_summCard('🏷️ Kategori', catLabel)}
-          ${_summCard('⚖️ Total Produksi', totalBerat > 0 ? totalBerat.toFixed(1) + ' kg' : '—')}
-          ${_summCard('📦 Jumlah Produk', fpEntries.length > 0 ? fpEntries.length + ' item' : '—')}
+          ${_summCard('⚖️ Total Bahan baku', totalBerat > 0 ? totalBerat.toFixed(1)+' kg' : '—')}
+          ${_summCard('📦 Jumlah Pile', fpEntries.length > 0 ? fpEntries.length+' pile' : '—')}
         </div>
 
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px;">
-          <span style="font-size:11px;padding:4px 12px;border-radius:100px;font-weight:700;${cipProd?'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;':'background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;'}">
-            ${cipProd ? '✅' : '⏳'} CIP Produksi
-          </span>
-          <span style="font-size:11px;padding:4px 12px;border-radius:100px;font-weight:700;${cipLab?'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;':'background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;'}">
-            ${cipLab ? '✅' : '⏳'} CIP Lab
-          </span>
-          <span style="font-size:11px;padding:4px 12px;border-radius:100px;font-weight:700;${(p.fpDone||p.fp_done)?'background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;':'background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db;'}">
-            ${(p.fpDone||p.fp_done) ? '✅' : '⏳'} Finish Production
-          </span>
+        <!-- Status badges -->
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          ${badge(cipProd, 'CIP Produksi')}
+          ${badge(cipLab,  'CIP Lab')}
+          ${badge(p.fpDone||p.fp_done, 'Finish Production')}
         </div>
 
         ${p.notes ? `
-        <div style="margin-bottom:22px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:8px;">📝 Catatan</div>
-          <div style="font-size:13px;color:var(--txt2);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;line-height:1.6;">${p.notes}</div>
+        <div style="margin-bottom:14px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:6px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);margin-bottom:4px;">📝 Catatan</div>
+          <div style="font-size:13px;color:var(--txt2);line-height:1.6;">${p.notes}</div>
         </div>` : ''}
 
-        <div style="margin-bottom:22px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:10px;">📦 Hasil Produksi (Finish Production)</div>
-          <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-            <table style="width:100%;border-collapse:collapse;min-width:460px;">
-              <thead>
-                <tr style="background:var(--bg);">
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">#</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">Produk</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">Kode</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">Brix</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:right;font-weight:700;border-bottom:1px solid var(--border);">Berat</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">Tanggal</th>
-                </tr>
-              </thead>
-              <tbody>${fpRows}</tbody>
-              ${totalBerat > 0 ? `
-              <tfoot>
-                <tr style="background:var(--bg);">
-                  <td colspan="4" style="padding:8px 10px;font-size:12px;font-weight:700;color:var(--txt);">TOTAL</td>
-                  <td style="padding:8px 10px;font-size:13px;font-weight:800;color:#16a34a;text-align:right;">${totalBerat.toFixed(1)} kg</td>
-                  <td></td>
-                </tr>
-              </tfoot>` : ''}
-            </table>
-          </div>
+        <!-- Tab bar -->
+        <div style="display:flex;border-bottom:2px solid var(--border);margin-bottom:0;gap:0;">
+          ${sectionDefs.map((s, i) => `
+            <button id="summ-modal-tab-btn-${s.id}"
+              onclick="_summModalSwitchTab('${type}',${idx},'${s.id}')"
+              style="flex:1;padding:10px 8px;background:${i===0?'var(--surface)':'var(--bg)'};border:none;
+                     border-bottom:${i===0?'2px solid var(--blue)':'2px solid transparent'};
+                     color:${i===0?'var(--blue)':'var(--txt3)'};font-size:12px;font-weight:700;cursor:pointer;
+                     display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:-2px;
+                     transition:all .15s;white-space:nowrap;"
+              data-active="${i===0?'1':'0'}">
+              <span>${s.icon}</span><span>${s.label}</span>
+            </button>`).join('')}
         </div>
 
-        ${p.setPoint && Object.keys(p.setPoint).length > 0 ? `
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--txt3);margin-bottom:10px;">⚙️ Set Point</div>
-          <div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border);">
-            <table style="width:100%;border-collapse:collapse;">
-              <thead>
-                <tr style="background:var(--bg);">
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:left;font-weight:700;border-bottom:1px solid var(--border);">Parameter</th>
-                  <th style="padding:8px 10px;font-size:11px;color:var(--txt3);text-align:right;font-weight:700;border-bottom:1px solid var(--border);">Nilai</th>
-                </tr>
-              </thead>
-              <tbody>${spRows}</tbody>
-            </table>
-          </div>
-        </div>` : ''}
+        <!-- Tab panels -->
+        ${sectionDefs.map((s, i) => `
+          <div id="summ-modal-sec-${s.id}" style="display:${i===0?'block':'none'};padding:14px 2px 4px;">
+            <div style="text-align:center;color:var(--txt3);font-size:12px;padding:20px;">⏳ Memuat...</div>
+          </div>`).join('')}
 
       </div>
-      <div style="flex-shrink:0;padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;">
+
+      <!-- Footer -->
+      <div style="flex-shrink:0;padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;">
         <button onclick="exportProjectSummaryPDF()"
-          style="padding:9px 20px;font-size:13px;font-weight:700;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff;color:#1d4ed8;cursor:pointer;">
+          style="padding:8px 18px;font-size:13px;font-weight:700;border:1px solid #dbeafe;border-radius:8px;background:#eff6ff;color:#1d4ed8;cursor:pointer;">
           📄 Download PDF
         </button>
         <button onclick="document.getElementById('summ-modal-overlay').remove()"
-          style="padding:9px 20px;font-size:13px;font-weight:700;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--txt);cursor:pointer;">
+          style="padding:8px 18px;font-size:13px;font-weight:700;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--txt);cursor:pointer;">
           Tutup
         </button>
       </div>
@@ -2111,40 +2176,190 @@ function openSummModal(type, idx) {
 
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  // Auto-load tab pertama (Produksi)
+  _summModalLoadTab(type, idx, 'produksi');
 }
 window.openSummModal = openSummModal;
 
-function exportProjectSummaryPDF() {
-  const modal = document.querySelector('#summ-modal-overlay .proj-modal');
-  if (!modal) {
-    alert('Summary project belum terbuka.');
-    return;
-  }
+// Switch tab di modal Laporan Project
+function _summModalSwitchTab(type, idx, tabId) {
+  const sectionDefs = ['produksi'];
 
-  const cssFiles = [
+  // Update tab button styles
+  sectionDefs.forEach(id => {
+    const btn = document.getElementById('summ-modal-tab-btn-'+id);
+    if (!btn) return;
+    const active = id === tabId;
+    btn.style.color       = active ? 'var(--blue)' : 'var(--txt3)';
+    btn.style.background  = active ? 'var(--surface)' : 'var(--bg)';
+    btn.style.borderBottom = active ? '2px solid var(--blue)' : '2px solid transparent';
+    btn.dataset.active    = active ? '1' : '0';
+  });
+
+  // Show/hide panels
+  sectionDefs.forEach(id => {
+    const panel = document.getElementById('summ-modal-sec-'+id);
+    if (panel) panel.style.display = id === tabId ? 'block' : 'none';
+  });
+
+  // Load jika belum (cek apakah masih loading placeholder)
+  const panel = document.getElementById('summ-modal-sec-'+tabId);
+  if (panel && panel.innerHTML.includes('⏳')) {
+    _summModalLoadTab(type, idx, tabId);
+  }
+}
+window._summModalSwitchTab = _summModalSwitchTab;
+
+// Load konten tab — pakai renderSummTabContent yang sama dengan Summary drawer
+function _summModalLoadTab(type, idx, tabId) {
+  const panel = document.getElementById('summ-modal-sec-'+tabId);
+  if (!panel) return;
+  const p = gPJ(type)?.[idx];
+  if (!p) { panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">❌ Data project tidak ditemukan.</div>'; return; }
+
+  // renderSummTabContent dipakai langsung — fungsi ini sama yang dipakai Summary drawer
+  // di Completed Project, jadi datanya identik (fetch dari API yang sama)
+  if (typeof renderSummTabContent === 'function') {
+    // Sementara ganti id panel supaya renderSummTabContent bisa nulis ke dalamnya
+    const origId = panel.id;
+    panel.id = 'summ-sec-'+type+'-'+tabId;
+    // hideTahapanCIP: true → khusus modal "Laporan Project" ini, sembunyikan
+    // section Tahapan Produksi & CIP Production. Drawer di Completed Project
+    // (openSumm) tidak terpengaruh karena tidak mengirim opsi ini.
+    renderSummTabContent(type, tabId, p, { hideTahapanCIP: true });
+    // Kembalikan id asli setelah render selesai (async, jadi pakai timeout kecil)
+    setTimeout(() => { panel.id = origId; }, 100);
+  } else {
+    panel.innerHTML = '<div style="padding:20px;text-align:center;color:var(--txt3);font-size:12px;">⚠️ Fungsi render belum tersedia.</div>';
+  }
+}
+window._summModalLoadTab = _summModalLoadTab;
+
+function exportProjectSummaryPDF() {
+  var modal = document.querySelector('#summ-modal-overlay .proj-modal');
+  if (!modal) { alert('Summary project belum terbuka.'); return; }
+
+  var modalClone = modal.cloneNode(true);
+
+  // Hapus section yang tidak perlu di PDF
+  ['summ-section-tahapan', 'summ-section-cip'].forEach(function(id) {
+    var el = modalClone.querySelector('#' + id);
+    if (el) el.parentNode.removeChild(el);
+  });
+
+  // Sembunyikan tombol, scroll hint, dan elemen UI lainnya
+  Array.from(modalClone.querySelectorAll(
+    'button, .proj-modal-close, [class*="geser"], [class*="scroll-hint"]'
+  )).forEach(function(el) { el.style.display = 'none'; });
+
+  // Expand semua scroll/overflow agar konten tidak terpotong
+  Array.from(modalClone.querySelectorAll('*')).forEach(function(el) {
+    var s = el.style;
+    if (s.overflow || s.overflowX || s.overflowY) {
+      s.overflow = 'visible'; s.overflowX = 'visible'; s.overflowY = 'visible';
+    }
+    if (s.maxHeight) s.maxHeight = 'none';
+    if (s.height && (s.height.indexOf('vh') !== -1 || s.height.indexOf('px') !== -1)) s.height = 'auto';
+    if (s.position === 'sticky' || s.position === 'fixed') s.position = 'static';
+  });
+
+  var cssFiles = [
     '/Dashboard/css/01-base.css',
     '/Dashboard/css/05-forms.css',
     '/Dashboard/css/06-modals-drawers.css',
     '/Dashboard/css/09-v2-additions.css'
   ];
-  const headLinks = cssFiles.map(h => `<link rel="stylesheet" href="${h}">`).join('\n');
+  var headLinks = cssFiles.map(function(h) {
+    return '<link rel="stylesheet" href="' + location.origin + h + '">';
+  }).join('\n');
 
-  const win = window.open('', '_blank', 'noopener');
-  if (!win) {
-    alert('Popup diblokir. Izinkan popup untuk download PDF.');
-    return;
+  var printStyle = [
+    // Kertas A4 landscape, margin minimal
+    '@page { size: A4 landscape; margin: 10mm 8mm; }',
+
+    // Sembunyikan URL di footer browser
+    '@media print {',
+    '  a[href]::after, a::after { content: "" !important; display: none !important; }',
+    '  .url-footer { display: none !important; }',
+    '}',
+
+    // Base
+    'body { font-family: "Inter", "DM Sans", Arial, sans-serif;',
+    '  font-size: 9px; background: #fff; color: #111;',
+    '  margin: 0; padding: 0; width: 277mm; }',
+
+    // Modal wrapper — tampil 100% lebar tanpa shadow/border
+    '.proj-modal {',
+    '  max-width: none !important; width: 100% !important;',
+    '  max-height: none !important; height: auto !important;',
+    '  overflow: visible !important;',
+    '  border: none !important; box-shadow: none !important;',
+    '  border-radius: 0 !important; padding: 8px !important; }',
+
+    // Semua div: expand overflow
+    'div { overflow: visible !important; max-height: none !important; height: auto !important; }',
+
+    // Sembunyikan elemen UI
+    'button, .proj-modal-close, [class*="geser"], [class*="scroll-hint"],',
+    '.pj-btn, [onclick] svg { display: none !important; }',
+
+    // Tabel: font kecil, tidak meluber
+    'table { border-collapse: collapse; width: 100%; font-size: 8.5px;',
+    '  table-layout: fixed; margin-bottom: 8px; }',
+    'th { font-size: 8px; padding: 4px 5px; white-space: nowrap;',
+    '  overflow: hidden; text-overflow: ellipsis; position: static !important; }',
+    'td { font-size: 8.5px; padding: 3px 5px; white-space: nowrap;',
+    '  overflow: hidden; text-overflow: ellipsis; position: static !important; }',
+
+    // Sticky dihapus
+    'th, td { position: static !important; }',
+    'thead { display: table-header-group; }',
+
+    // Page break
+    'tr { page-break-inside: avoid; break-inside: avoid; }',
+    'table { page-break-inside: auto; }',
+    'h1,h2,h3,h4 { page-break-after: avoid; break-after: avoid;',
+    '  font-size: 11px; margin: 6px 0 4px; }',
+
+    // Print color
+    '* { -webkit-print-color-adjust: exact !important;',
+    '    print-color-adjust: exact !important; }'
+  ].join('\n');
+
+  var bodyHTML  = modalClone.outerHTML;
+  var scriptTag = '<scr' + 'ipt>'
+    + 'window.addEventListener("load", function() {'
+    + '  setTimeout(function() { window.print(); }, 600);'
+    + '});'
+    + '</' + 'script>';
+
+  var printedHTML = '<!doctype html><html><head>'
+    + '<meta charset="utf-8">'
+    + '<title>Laporan Project</title>'
+    + headLinks
+    + '<style>' + printStyle + '</style>'
+    + '</head><body>'
+    + bodyHTML
+    + scriptTag
+    + '</body></html>';
+
+  try {
+    var blob = new Blob([printedHTML], { type: 'text/html' });
+    var url  = URL.createObjectURL(blob);
+    var win  = window.open(url, '_blank');
+    if (!win) {
+      URL.revokeObjectURL(url);
+      alert('Popup diblokir. Izinkan popup untuk download PDF.');
+      return;
+    }
+    setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+  } catch (e) {
+    console.error('exportProjectSummaryPDF error:', e);
+    alert('Gagal membuka halaman cetak PDF. Coba lagi.');
   }
-
-  const printedHTML = `<!doctype html><html><head><meta charset="utf-8"><title>Laporan Project</title>${headLinks}<style>body{padding:16px;background:#fff}.proj-modal{max-width:none!important;width:100%!important;max-height:none!important;border:none!important;box-shadow:none!important}.proj-modal-close{display:none!important}</style></head><body>${modal.outerHTML}</body></html>`;
-  win.document.open();
-  win.document.write(printedHTML);
-  win.document.close();
-
-  setTimeout(() => {
-    win.focus();
-    win.print();
-  }, 500);
 }
+
 window.exportProjectSummaryPDF = exportProjectSummaryPDF;
 
 function _summCard(label, value) {

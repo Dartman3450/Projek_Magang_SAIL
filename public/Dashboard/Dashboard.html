@@ -23,7 +23,33 @@
   <link rel="stylesheet" href="/Dashboard/css/07-projects.css"/>    <!-- Halaman project -->
   <link rel="stylesheet" href="/Dashboard/css/08-alerts.css"/>      <!-- Water level alert -->
   <link rel="stylesheet" href="/Dashboard/css/09-v2-additions.css"/><!-- v2: Kartu Stok, Surat Jalan, Photo -->
+  <link rel="stylesheet" href="/Dashboard/css/10-responsive.css"/>  <!-- Responsive design mobile/tablet/desktop -->
 
+  <!-- ═══ DISPLAY MODE + SIDEBAR COLLAPSE STYLES ═══ -->
+  <style>
+    /* Sidebar collapsed state */
+    body.sidebar-collapsed .sidebar {
+      width: 0;
+      overflow: hidden;
+      padding: 0;
+    }
+    body.sidebar-collapsed .main {
+      margin-left: 0 !important;
+    }
+    body.sidebar-collapsed #sidebar-toggle-btn {
+      left: 0;
+    }
+    body.sidebar-collapsed #sidebar-ghost {
+      display: block;
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: 16px;
+      z-index: 199;
+    }
+    /* Display mode — sembunyikan topbar crumb info yang tidak perlu */
+    body.display-mode .topbar-crumb { display: none; }
+    body.display-mode .topbar { padding: 8px 16px; }
+  </style>
   <!-- ═══ INLINE ALERT BANNER STYLES ═══ -->
   <style>
     /* ── Alert Banner Strip ── */
@@ -34,7 +60,7 @@
       width: 100%;
       position: sticky;
       top: 0;
-      z-index: 500;
+      z-index: 50;
     }
     .alert-banner {
       display: flex;
@@ -52,19 +78,20 @@
       to   { opacity: 1; transform: translateY(0); }
     }
     .alert-banner.warn {
-      background: #fefce8;
-      color: #854d0e;
-      border-color: #fde68a;
+      background: #dc2626;
+      color: #ffffff;
+      border-color: #b91c1c;
+      animation: bannerSlideIn 0.3s ease, dangerPulse 2s ease-in-out infinite;
     }
     .alert-banner.danger {
-      background: #fef2f2;
-      color: #991b1b;
-      border-color: #fca5a5;
+      background: #dc2626;
+      color: #ffffff;
+      border-color: #b91c1c;
       animation: bannerSlideIn 0.3s ease, dangerPulse 2s ease-in-out infinite;
     }
     @keyframes dangerPulse {
-      0%, 100% { background: #fef2f2; }
-      50%       { background: #fee2e2; }
+      0%, 100% { background: #dc2626; }
+      50%       { background: #b91c1c; }
     }
     .alert-banner-icon { font-size: 14px; flex-shrink: 0; }
     .alert-banner-text { flex: 1; }
@@ -76,8 +103,8 @@
       border-radius: 20px;
       flex-shrink: 0;
     }
-    .alert-banner.warn  .alert-banner-tag { background: #fde68a; color: #78350f; }
-    .alert-banner.danger .alert-banner-tag { background: #fca5a5; color: #7f1d1d; animation: tagBlink 1s step-end infinite; }
+    .alert-banner.warn  .alert-banner-tag { background: #b91c1c; color: #ffffff; animation: tagBlink 1s step-end infinite; }
+    .alert-banner.danger .alert-banner-tag { background: #b91c1c; color: #ffffff; animation: tagBlink 1s step-end infinite; }
     @keyframes tagBlink { 0%,100%{opacity:1} 50%{opacity:.4} }
     .alert-banner-dismiss {
       background: transparent;
@@ -93,6 +120,13 @@
       flex-shrink: 0;
     }
     .alert-banner-dismiss:hover { opacity: 1; }
+    /* Saat summary drawer terbuka — banner disembunyikan di belakang */
+    #alert-banner-strip.behind-drawer {
+      z-index: -1 !important;
+      filter: blur(2px);
+      opacity: 0.4;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
@@ -162,7 +196,7 @@
 <button class="sidebar-toggle" id="sidebar-toggle-btn" onclick="toggleSidebar()" title="Tutup sidebar">◀</button>
 
 <!-- Ghost hover zone to re-open sidebar when collapsed -->
-<div id="sidebar-ghost" onmouseenter="openSidebar()"></div>
+<div id="sidebar-ghost"></div>
 
 <!-- ════ MAIN ════ -->
 <div class="main">
@@ -189,6 +223,7 @@
 <script src="/Dashboard/js/styles.js"></script>
 <script src="/Dashboard/js/config.js"></script>
 <script src="/Dashboard/js/session-manager.js"></script>
+<script src="/Dashboard/js/mobile-responsive.js"></script><!-- Responsive mobile/tablet handling -->
 <script src="/Dashboard/js/nav.js"></script>
 <script src="/Dashboard/js/iot.js"></script>
 <script src="/Dashboard/js/sensors.js"></script>
@@ -258,12 +293,32 @@
 </div>
  <script>
   // Inject user dari localStorage (diset saat login)
+  // Auto-restore banner kalau drawer ditutup via ESC atau cara lain
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.getElementById('alert-banner-strip')?.classList.remove('behind-drawer');
+    }
+  });
+
   window.SAIL_USER = {
     username: localStorage.getItem('email')    || localStorage.getItem('sail_username') || '',
     name:     localStorage.getItem('name')     || localStorage.getItem('email') || '',
     role:     localStorage.getItem('role')     || 'user',
     user_id:  localStorage.getItem('user_id')  || null,
   };
+
+  // Apply display mode jika role === 'display'
+  if (window.SAIL_USER.role === 'display') {
+    document.body.classList.add('display-mode', 'sidebar-collapsed');
+    // Jalankan applyDisplayMode setelah semua script loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof applyDisplayMode === 'function') applyDisplayMode();
+    });
+    // Fallback: coba lagi setelah semua script loaded
+    window.addEventListener('load', () => {
+      if (typeof applyDisplayMode === 'function') applyDisplayMode();
+    });
+  }
 </script>
 </body>
 </html>

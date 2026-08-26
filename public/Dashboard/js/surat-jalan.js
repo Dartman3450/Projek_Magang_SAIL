@@ -130,7 +130,7 @@ function openSuratJalanForm(idx=-1) {
     (sj.items||[]).forEach(it => addSuratJalanItem(it));
   } else {
     document.getElementById('sj-modal-title').textContent = '📋 Buat Surat Jalan';
-    document.getElementById('sj-f-no').value = genSJNo();
+    document.getElementById('sj-f-no').value = genSJNo(today);
     document.getElementById('sj-f-date').value = today;
     ['sj-f-penerima','sj-f-kendaraan','sj-f-driver','sj-f-pengirim','sj-f-notes'].forEach(id => {
       const el = document.getElementById(id); if(el) el.value = '';
@@ -151,19 +151,19 @@ function closeSuratJalanForm() {
   _sjEditIdx = -1;
 }
 
-function genSJNo() {
-  const today = new Date();
-  const dd = String(today.getDate()).padStart(2, '0');
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const yyyy = today.getFullYear();
-  const dateStr = `${dd}${mm}${yyyy}`;
+function genSJNo(dateStr) {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const dateKey = `${dd}${mm}${yyyy}`;
 
   // Kunci sequence harian
-  const key = 'sj_seq_' + dateStr;
+  const key = 'sj_seq_' + dateKey;
   const seq = (parseInt(localStorage.getItem(key) || '0')) + 1;
   localStorage.setItem(key, seq);
 
-  return `SJ${String(seq).padStart(3, '0')}-${dateStr}`;
+  return `SJ${String(seq).padStart(3, '0')}-${dateKey}`;
 }
 
 // Cache dari API — diisi oleh loadSJFromAPI()
@@ -171,7 +171,7 @@ let _sjApiCache = null;
 
 async function loadSJFromAPI() {
   try {
-    const resp = await fetch('/api/surat-jalan');
+    const resp = await fetch('/api/dataentry/surat-jalan');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
     if (!json.success) throw new Error(json.error);
@@ -265,14 +265,14 @@ function downloadSuratJalanPDF(idx) {
     return dt.toLocaleDateString('id-ID', { day:'2-digit', month:'long', year:'numeric' });
   };
 
-  // Format No. SJ → SJ/dd/mm/yyyy dari tanggal dokumen
+  // Format No. SJ → SJ-dd-mm-yyyy dari tanggal dokumen
   const fmtNoSJ = (d) => {
     if (!d) return sj.no || '—';
     const dt = new Date(d);
     const dd = String(dt.getDate()).padStart(2,'0');
     const mm = String(dt.getMonth()+1).padStart(2,'0');
     const yyyy = dt.getFullYear();
-    return `SJ/${dd}/${mm}/${yyyy}`;
+    return `SJ-${dd}-${mm}-${yyyy}`;
   };
 
   // Baris barang — hanya sebanyak produk yang diisi (tidak ada padding kosong)
@@ -627,7 +627,7 @@ function submitSuratJalan() {
   if (!penerima) { showSjSt('error', '❌ Tujuan wajib diisi!'); return; }
 
   const sjDate = document.getElementById('sj-f-date')?.value || new Date().toISOString().split('T')[0];
-  const sjNo   = document.getElementById('sj-f-no')?.value.trim() || genSJNo();
+  const sjNo   = document.getElementById('sj-f-no')?.value.trim() || genSJNo(sjDate);
 
   const items = [];
   document.querySelectorAll('#sj-items > div[id^="sj-item-"]').forEach(row => {
@@ -681,13 +681,16 @@ function submitSuratJalan() {
           const seal = sealEl?.value?.trim() || null;
           const qtyRaw = qtyEl?.value?.trim() || '';
           const desc = descEl?.value?.trim() || null;
+          const fromKartuEl = document.getElementById('sj-i-fromKartu-' + uid);
+          const fromKartu = fromKartuEl?.value === '1';
           
-          console.log(`    prodId: ${prodId}, name: ${name}, qty: ${qtyRaw}`);
+          console.log(`    prodId: ${prodId}, name: ${name}, qty: ${qtyRaw}, fromKartu: ${fromKartu}`);
           
           // Only add if name exists
           if (name) {
             const item = {
               kartu_stok_id: prodId ? parseInt(prodId, 10) : null,
+              fromKartu:     fromKartu,
               name: name,
               seal: seal || null,
               qty: qtyRaw ? parseFloat(qtyRaw) : 0,
@@ -727,11 +730,11 @@ function submitSuratJalan() {
       console.log('✓ JSON.stringify succeeded');
       console.log('📦 Payload to send:', payloadJson);
 
-      let endpoint = '/api/surat-jalan';
+      let endpoint = '/api/dataentry/surat-jalan';
       let method = 'POST';
 
       if (_sjEditIdx >= 0 && getSJData()[_sjEditIdx]?.id) {
-        endpoint = `/api/surat-jalan/${getSJData()[_sjEditIdx].id}`;
+        endpoint = `/api/dataentry/surat-jalan/${getSJData()[_sjEditIdx].id}`;
         method = 'PUT';
       }
 
@@ -755,89 +758,41 @@ function submitSuratJalan() {
       console.log('✅ Saved to database successfully');
 
       // ── Auto-debit kartu stok untuk item dari Kartu Stok ──────────────────────
-      if (typeof gSCTxn === 'function' && typeof sSCTxn === 'function') {
-        const txns = gSCTxn();
-
-        // Hapus auto-debit lama jika ini edit
-        if (_sjEditIdx >= 0) {
-          const oldSJ = getSJData()[_sjEditIdx];
-          const oldAutoIds = oldSJ._autoDebitIds || [];
-          const filtered = txns.filter(t => !oldAutoIds.includes(t.id));
-          txns.length = 0; filtered.forEach(t => txns.push(t));
-          
-          // Hapus auto-debit dari database juga
-          for (const oldId of oldAutoIds) {
-            // oldId format: 'sj-auto-...' → tidak ada di database, skip
-            // Atau jika ada, bisa di-delete via API
-          }
-        }
-
-        const autoDebitIds = [];
+      const postTxnPromises = [];
+      
+      collectedItems.forEach(it => {
+        const prodId = it.kartu_stok_id || it.productId;
+        if (!it.fromKartu || !prodId || !it.qty) return;
         
-        // Buat array promise untuk post transaksi ke database secara paralel
-        const postTxnPromises = [];
+        const keterangan = 'Auto: Surat Jalan ' + sjNo + (it.desc ? ' – ' + it.desc : '') + ' | Tujuan: ' + penerima;
         
-        collectedItems.forEach(it => {
-          // Support both kartu_stok_id (new) dan productId (old)
-          const prodId = it.kartu_stok_id || it.productId;
-          if (!it.fromKartu || !prodId || !it.qty) return;
-          const tid = 'sj-auto-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
-          
-          const txnObj = {
-            id:        tid,
-            productId: prodId,  // untuk filter di stock.js dan surat-jalan.js
-            date:      sjDate,
-            debit:     it.qty,   // barang keluar
-            credit:    '',
-            kode:      it.seal || '',
-            seal:      it.seal || '',
-            pic:       entry.pengirim || '',
-            desc:      'Auto: Surat Jalan ' + sjNo + (it.desc ? ' – ' + it.desc : ''),
-            notes:     'Tujuan: ' + penerima,
-            _autoSJ:   entry.id,
-          };
-          
-          txns.push(txnObj);
-          autoDebitIds.push(tid);
-          
-          // POST transaksi ke database
-          const postPromise = fetch(`/api/kartu-stok/${prodId}/transaksi`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tanggal: sjDate,
-              debit: it.qty,
-              kredit: 0,
-              no_seal: it.seal || '',
-              keterangan: txnObj.desc
-            })
+        const postPromise = fetch(`/api/kartu-stok/${prodId}/transaksi`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tanggal: sjDate,
+            debit:   parseFloat(it.qty),
+            kredit:  0,
+            no_seal: it.seal || '',
+            keterangan: keterangan
           })
-            .then(r => r.json())
-            .then(json => {
-              if (json.success) {
-                console.log('✅ Auto-debit transaksi tersimpan ke database:', json.data);
-              } else {
-                console.error('❌ Gagal save auto-debit transaksi:', json.error);
-              }
-            })
-            .catch(err => console.error('❌ Error posting transaksi:', err));
-          
-          postTxnPromises.push(postPromise);
-        });
+        })
+          .then(r => r.json())
+          .then(res => {
+            if (res.success) {
+              console.log('✅ Auto-debit tersimpan:', res.data);
+            } else {
+              console.error('❌ Gagal auto-debit:', res.error);
+            }
+          })
+          .catch(err => console.error('❌ Error auto-debit:', err));
         
-        // Tunggu semua transaksi selesai di-post
-        Promise.all(postTxnPromises).then(() => {
-          console.log('✅ Semua auto-debit transaksi selesai di-post');
-          // Setelah semua transaksi di-post, reload data kartu stok untuk reflect perubahan
-          if (typeof loadSCDataFromAPI === 'function') {
-            loadSCDataFromAPI().then(() => {
-              console.log('✅ Data kartu stok ter-refresh');
-            }).catch(err => console.error('Error refresh data kartu stok:', err));
-          }
-        });
+        postTxnPromises.push(postPromise);
+      });
 
-        entry._autoDebitIds = autoDebitIds;
-        sSCTxn(txns);
+      await Promise.all(postTxnPromises);
+      if (postTxnPromises.length > 0) {
+        console.log(`✅ ${postTxnPromises.length} auto-debit kartu stok selesai`);
       }
 
       // Reload dari API supaya semua device sync
@@ -911,7 +866,7 @@ window.deleteSuratJalan = function(idx) {
   // Hapus dari database via API
   (async () => {
     try {
-      const resp = await fetch(`/api/surat-jalan/${sj.id}`, {
+      const resp = await fetch(`/api/dataentry/surat-jalan/${sj.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       });

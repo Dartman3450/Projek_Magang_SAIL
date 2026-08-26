@@ -329,10 +329,20 @@ async function _loadSummary() {
     const wf = d.water_flow;
     if (wf) {
       const v = +(wf.flow_rate ?? wf.water_flow ?? wf.flow ?? 0);
+      const rpm = Math.round(v * 8);
+      const vol = (wf.volume ?? wf.total_volume ?? '—') + ' L';
+      const t   = _fmtT(wf.created_at);
       _set('wf-val', v);
-      _set('wf-rpm', Math.round(v * 8) + ' rpm');
-      _set('wf-vol', (wf.volume ?? wf.total_volume ?? '—') + ' L');
-      _set('wf-time', _fmtT(wf.created_at));
+      _set('wf-rpm', rpm + ' rpm');
+      _set('wf-vol', vol);
+      _set('wf-time', t);
+      // Filter Water wheel mirror
+      _set('filter-wf-val', v);
+      _set('filter-wf-rpm', rpm);
+      _set('filter-wf-vol', wf.volume ?? wf.total_volume ?? '—');
+      _set('filter-wf-time', t);
+      const wheel = document.getElementById('flow-wheel-svg');
+      if (wheel) wheel.style.animationDuration = v > 0 ? Math.max(.3, 6 / v) + 's' : '2s';
       const fan = document.getElementById('fan-svg');
       if (fan) fan.style.animationDuration = v > 0 ? Math.max(.2, 6 / v) + 's' : '99s';
       document.querySelectorAll('.fp').forEach(p => {

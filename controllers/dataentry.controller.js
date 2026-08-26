@@ -13,6 +13,11 @@ const SP_HISTORY_COLS = [
   'sp_offset','sp_temp_feed','sp_temp_heater','sp_temp_top','sp_vacuum',
   'sp_temp_bot','sp_temp_out','sp_chill','sp_cond_water','sp_press_sys',
   'sp_press_steam','vacuum_status','notes',
+  // kolom tambahan — previously only in set_point
+  'sp_steam_flow','sp_sys_vacuum',
+  'sp_add1','sp_add2','sp_add3','sp_add4',
+  'sp_add5','sp_add6','sp_add7','sp_add8',
+  'sp_cond_temp1','sp_cond_temp2',
 ];
 
 /**
@@ -58,14 +63,20 @@ async function insertProductionHistory(productionRow, action, oldRow = null) {
         sp_prod_out, sp_cond1, sp_cond2, sp_ext, sp_int, sp_cond_rate, sp_offset,
         sp_temp_feed, sp_temp_heater, sp_temp_top, sp_vacuum, sp_temp_bot,
         sp_temp_out, sp_chill, sp_cond_water, sp_press_sys, sp_press_steam,
-        vacuum_status, notes, changed_fields
+        vacuum_status, notes, changed_fields,
+        sp_steam_flow, sp_sys_vacuum,
+        sp_add1, sp_add2, sp_add3, sp_add4, sp_add5, sp_add6, sp_add7, sp_add8,
+        sp_cond_temp1, sp_cond_temp2
       ) VALUES (
         $1,$2,$3,$4,
         $5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,
         $18,$19,$20,$21,$22,
         $23,$24,$25,$26,$27,
-        $28,$29,$30
+        $28,$29,$30,
+        $31,$32,
+        $33,$34,$35,$36,$37,$38,$39,$40,
+        $41,$42
       )
     `, [
       r.id, projectName, r.tanggal, action,
@@ -75,10 +86,76 @@ async function insertProductionHistory(productionRow, action, oldRow = null) {
       r.sp_temp_out, r.sp_chill, r.sp_cond_water, r.sp_press_sys, r.sp_press_steam,
       r.vacuum_status, r.notes,
       Object.keys(changedFields).length > 0 ? JSON.stringify(changedFields) : null,
+      r.sp_steam_flow ?? null, r.sp_sys_vacuum ?? null,
+      r.sp_add1 ?? null, r.sp_add2 ?? null, r.sp_add3 ?? null, r.sp_add4 ?? null,
+      r.sp_add5 ?? null, r.sp_add6 ?? null, r.sp_add7 ?? null, r.sp_add8 ?? null,
+      r.sp_cond_temp1 ?? null, r.sp_cond_temp2 ?? null,
     ]);
   } catch (histErr) {
     // Jangan lempar error — history gagal tidak boleh menggagalkan response utama
     console.error('⚠️  insertProductionHistory failed (non-fatal):', histErr.message);
+  }
+}
+
+// ── Utility history helpers ──────────────────────────────────
+const UTIL_HISTORY_COLS = [
+  'b1_steam_press','b2_fg_temp','b3_fw_temp','b4_scale_temp','b5_overheat_temp',
+  'b6_next_blowdown','b7_conductivity','b8_air_press','b9_ignition_count',
+  'b10_oil_lfire_time','b11_oil_hfire_time','b12_flue_lfire_temp','b13_flue_hfire_temp',
+  'b14_fw_avg_temp','b15_oil_efficiency','b16_oil_fuel_cons','b17_steam_output','b18_surface_bd',
+  'c1_set_point','c2_water_in_temp','c3_water_out_temp','c4_cap',
+  'c5_discharge_a','c6_suction_a','c7_discharge_b','c8_suction_b',
+  'c9_unit_capacity','c10_cir_a_capacity','c11_cir_b_capacity','notes',
+];
+
+function diffUtilSnapshot(oldRow, newRow) {
+  const changes = {};
+  for (const col of UTIL_HISTORY_COLS) {
+    const oldVal = oldRow ? (oldRow[col] ?? null) : null;
+    const newVal = newRow[col] ?? null;
+    const oldStr = oldVal === null ? null : String(oldVal);
+    const newStr = newVal === null ? null : String(newVal);
+    if (oldStr !== newStr) changes[col] = { old: oldVal, new: newVal };
+  }
+  return changes;
+}
+
+async function insertUtilityHistory(utilRow, action, oldRow = null) {
+  try {
+    const r = utilRow;
+    const changedFields = diffUtilSnapshot(oldRow, r);
+    await pool.query(`
+      INSERT INTO de_utility_history (
+        utility_id, project_name, tanggal, action,
+        b1_steam_press, b2_fg_temp, b3_fw_temp, b4_scale_temp, b5_overheat_temp,
+        b6_next_blowdown, b7_conductivity, b8_air_press, b9_ignition_count,
+        b10_oil_lfire_time, b11_oil_hfire_time,
+        b12_flue_lfire_temp, b13_flue_hfire_temp, b14_fw_avg_temp,
+        b15_oil_efficiency, b16_oil_fuel_cons, b17_steam_output, b18_surface_bd,
+        c1_set_point, c2_water_in_temp, c3_water_out_temp, c4_cap,
+        c5_discharge_a, c6_suction_a, c7_discharge_b, c8_suction_b,
+        c9_unit_capacity, c10_cir_a_capacity, c11_cir_b_capacity,
+        notes, changed_fields
+      ) VALUES (
+        $1,$2,$3,$4,
+        $5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,
+        $23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
+      )
+    `, [
+      r.id, r.project_name || '', r.tanggal, action,
+      r.b1_steam_press, r.b2_fg_temp, r.b3_fw_temp, r.b4_scale_temp, r.b5_overheat_temp,
+      r.b6_next_blowdown, r.b7_conductivity, r.b8_air_press, r.b9_ignition_count,
+      r.b10_oil_lfire_time, r.b11_oil_hfire_time,
+      r.b12_flue_lfire_temp, r.b13_flue_hfire_temp, r.b14_fw_avg_temp,
+      r.b15_oil_efficiency, r.b16_oil_fuel_cons, r.b17_steam_output, r.b18_surface_bd,
+      r.c1_set_point, r.c2_water_in_temp, r.c3_water_out_temp, r.c4_cap,
+      r.c5_discharge_a, r.c6_suction_a, r.c7_discharge_b, r.c8_suction_b,
+      r.c9_unit_capacity, r.c10_cir_a_capacity, r.c11_cir_b_capacity,
+      r.notes,
+      Object.keys(changedFields).length > 0 ? JSON.stringify(changedFields) : null,
+    ]);
+  } catch (histErr) {
+    console.error('⚠️  insertUtilityHistory failed (non-fatal):', histErr.message);
   }
 }
 
@@ -131,7 +208,7 @@ async function saveProduction(req, res) {
           sp_temp_feed   = COALESCE($14, sp_temp_feed),
           sp_temp_heater = COALESCE($15, sp_temp_heater),
           sp_temp_top    = COALESCE($16, sp_temp_top),
-          sp_vacuum      = COALESCE($17, sp_vacuum),
+          sp_sys_vacuum  = COALESCE($17, sp_sys_vacuum),
           sp_temp_bot    = COALESCE($18, sp_temp_bot),
           sp_temp_out    = COALESCE($19, sp_temp_out),
           sp_chill       = COALESCE($20, sp_chill),
@@ -146,6 +223,17 @@ async function saveProduction(req, res) {
           fp_entries     = COALESCE($29, fp_entries),
           notes          = COALESCE($30, notes),
           foto_urls      = COALESCE($31, foto_urls),
+          sp_steam_flow  = COALESCE($33, sp_steam_flow),
+          sp_add1        = COALESCE($34, sp_add1),
+          sp_add2        = COALESCE($35, sp_add2),
+          sp_add3        = COALESCE($36, sp_add3),
+          sp_add4        = COALESCE($37, sp_add4),
+          sp_add5        = COALESCE($38, sp_add5),
+          sp_add6        = COALESCE($39, sp_add6),
+          sp_add7        = COALESCE($40, sp_add7),
+          sp_add8        = COALESCE($41, sp_add8),
+          sp_cond_temp1  = COALESCE($42, sp_cond_temp1),
+          sp_cond_temp2  = COALESCE($43, sp_cond_temp2),
           updated_at     = now()
         WHERE id = $32
         RETURNING *
@@ -166,13 +254,13 @@ async function saveProduction(req, res) {
         parseNum(d['sp-temp-feed']),
         parseNum(d['sp-temp-heater']),
         parseNum(d['sp-temp-top']),
-        parseNum(d['sp-vacuum']),
+        parseNum(d['sp-system-vacuum'] ?? d['sp-vacuum']),
         parseNum(d['sp-temp-bot']),
         parseNum(d['sp-temp-out']),
-        parseNum(d['sp-chill']),
-        parseNum(d['sp-cond-water']),
-        parseNum(d['sp-press-sys']),
-        parseNum(d['sp-press-steam']),
+        parseNum(d['sp-chilled'] ?? d['sp-chill']),
+        parseNum(d['sp-condenser-water'] ?? d['sp-cond-water']),
+        parseNum(d['sp-press-sys'] ?? d['sp-press_sys']),
+        parseNum(d['sp-press-steam'] ?? d['sp-press_steam']),
         d.vacuum_status      || null,
         d.cip_prod_done === true ? true : null,
         d.cip_prod_checks    ? JSON.stringify(d.cip_prod_checks) : null,
@@ -182,6 +270,17 @@ async function saveProduction(req, res) {
         d.notes              || null,
         d.foto_urls?.length  ? JSON.stringify(d.foto_urls)       : null,
         existing.rows[0].id,
+        parseNum(d['sp-steam-flow']),
+        parseNum(d['sp-add1']),
+        parseNum(d['sp-add2']),
+        parseNum(d['sp-add3']),
+        parseNum(d['sp-add4']),
+        parseNum(d['sp-add5']),
+        parseNum(d['sp-add6']),
+        parseNum(d['sp-add7']),
+        parseNum(d['sp-add8']),
+        parseNum(d['sp-Condensate1']),
+        parseNum(d['sp-Condensate2']),
       ]);
       const updatedRow = upd.rows[0];
       resultId = updatedRow?.id;
@@ -196,9 +295,12 @@ async function saveProduction(req, res) {
           project_id, project_name, tanggal,
           sp_slurry, sp_hopper, sp_density, sp_feed, sp_aroma, sp_steam,
           sp_prod_out, sp_cond1, sp_cond2, sp_ext, sp_int, sp_cond_rate, sp_offset,
-          sp_temp_feed, sp_temp_heater, sp_temp_top, sp_vacuum, sp_temp_bot,
+          sp_temp_feed, sp_temp_heater, sp_temp_top, sp_sys_vacuum, sp_temp_bot,
           sp_temp_out, sp_chill, sp_cond_water, sp_press_sys, sp_press_steam,
           vacuum_status,
+          sp_steam_flow,
+          sp_add1, sp_add2, sp_add3, sp_add4, sp_add5, sp_add6, sp_add7, sp_add8,
+          sp_cond_temp1, sp_cond_temp2,
           cip_prod_done, cip_prod_checks,
           cip_lab_done,  cip_lab_checks,
           fp_entries, notes, foto_urls
@@ -209,9 +311,11 @@ async function saveProduction(req, res) {
           $16,$17,$18,$19,$20,
           $21,$22,$23,$24,$25,
           $26,
-          $27,$28,
-          $29,$30,
-          $31,$32,$33
+          $27,$28,$29,$30,$31,$32,$33,$34,$35,
+          $36,$37,
+          $38,$39,
+          $40,$41,$42,
+          $43,$44
         ) RETURNING *
       `, [
         projectId, d.project_name || null,
@@ -231,14 +335,25 @@ async function saveProduction(req, res) {
         parseNum(d['sp-temp-feed']),
         parseNum(d['sp-temp-heater']),
         parseNum(d['sp-temp-top']),
-        parseNum(d['sp-vacuum']),
+        parseNum(d['sp-system-vacuum'] ?? d['sp-vacuum']),
         parseNum(d['sp-temp-bot']),
         parseNum(d['sp-temp-out']),
-        parseNum(d['sp-chill']),
-        parseNum(d['sp-cond-water']),
-        parseNum(d['sp-press-sys']),
-        parseNum(d['sp-press-steam']),
+        parseNum(d['sp-chilled'] ?? d['sp-chill']),
+        parseNum(d['sp-condenser-water'] ?? d['sp-cond-water']),
+        parseNum(d['sp-press-sys'] ?? d['sp-press_sys']),
+        parseNum(d['sp-press-steam'] ?? d['sp-press_steam']),
         d.vacuum_status      || null,
+        parseNum(d['sp-steam-flow']),
+        parseNum(d['sp-add1']),
+        parseNum(d['sp-add2']),
+        parseNum(d['sp-add3']),
+        parseNum(d['sp-add4']),
+        parseNum(d['sp-add5']),
+        parseNum(d['sp-add6']),
+        parseNum(d['sp-add7']),
+        parseNum(d['sp-add8']),
+        parseNum(d['sp-Condensate1']),
+        parseNum(d['sp-Condensate2']),
         d.cip_prod_done === true,
         JSON.stringify(d.cip_prod_checks || {}),
         d.cip_lab_done  === true,
@@ -319,14 +434,14 @@ async function saveUtility(req, res) {
       if (chillerNotes) d.chiller_notes = chillerNotes;
     }
 
-    // ── Data Harian (Solar / Listrik / Air) → tabel de_utility_harian ──
+    // ── Data Harian (Solar / Listrik / Air / Genset) → tabel de_utility_harian ──
     if (d.tipe === 'harian') {
       const ins = await pool.query(`
         INSERT INTO de_utility_harian (
-          tanggal, kategori, label, awal, akhir, total, notes, foto_urls
+          tanggal, kategori, label, awal, akhir, total, notes, foto_urls, extra_data
         ) VALUES (
           COALESCE($1::date, CURRENT_DATE),
-          $2, $3, $4, $5, $6, $7, $8
+          $2, $3, $4, $5, $6, $7, $8, $9
         ) RETURNING id
       `, [
         d.tanggal      || null,
@@ -337,6 +452,7 @@ async function saveUtility(req, res) {
         d.total != null ? parseFloat(d.total) : null,
         d.notes        || null,
         JSON.stringify(d.foto_urls || []),
+        d.extra_data   ? JSON.stringify(d.extra_data) : null,
       ]);
       return res.json({ success: true, id: ins.rows[0]?.id, action: 'inserted' });
     }
@@ -360,6 +476,8 @@ async function saveUtility(req, res) {
     let resultId;
 
     if (existing.rows.length > 0) {
+      // Ambil snapshot lama sebelum UPDATE untuk diff history
+      const existingRow = await pool.query('SELECT * FROM de_utility WHERE id = $1', [existing.rows[0].id]).then(r => r.rows[0]).catch(() => null);
       const upd = await pool.query(`
         UPDATE de_utility SET
           b1_steam_press      = COALESCE($1,  b1_steam_press),
@@ -394,7 +512,7 @@ async function saveUtility(req, res) {
           notes               = COALESCE($30, notes),
           foto_urls           = COALESCE($31, foto_urls),
           updated_at          = now()
-        WHERE id = $32 RETURNING id
+        WHERE id = $32 RETURNING *
       `, [
         parseNum(d.b1), parseNum(d.b2), parseNum(d.b3), parseNum(d.b4), parseNum(d.b5),
         d.b6 || null, parseNum(d.b7), parseNum(d.b8), parseIntVal(d.b9),
@@ -409,6 +527,8 @@ async function saveUtility(req, res) {
         existing.rows[0].id,
       ]);
       resultId = upd.rows[0]?.id;
+      // Catat ke history
+      if (upd.rows[0]) await insertUtilityHistory(upd.rows[0], 'update', existingRow);
 
     } else {
       const ins = await pool.query(`
@@ -445,11 +565,29 @@ async function saveUtility(req, res) {
         JSON.stringify(d.foto_urls || []),
       ]);
       resultId = ins.rows[0]?.id;
+      // Catat ke history
+      if (ins.rows[0]) await insertUtilityHistory(ins.rows[0], 'insert', null);
     }
 
     res.json({ success: true, id: resultId, action: existing.rows.length > 0 ? 'updated' : 'inserted' });
   } catch (err) {
     console.error('❌ saveUtility:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function getUtilityHistory(req, res) {
+  try {
+    const { project_name, limit = 200 } = req.query;
+    let q = `SELECT * FROM de_utility_history WHERE 1=1`;
+    const params = [];
+    if (project_name) { params.push(project_name); q += ` AND project_name = $${params.length}`; }
+    params.push(Math.min(parseInt(limit)||200, 500));
+    q += ` ORDER BY recorded_at ASC LIMIT $${params.length}`;
+    const r = await pool.query(q, params);
+    res.json({ success: true, data: r.rows });
+  } catch (err) {
+    console.error('getUtilityHistory:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 }
@@ -525,14 +663,14 @@ async function saveLaboratorium(req, res) {
     if (existing.rows.length > 0) {
       const upd = await pool.query(`
         UPDATE de_laboratorium SET
-          -- append entry baru agar history input hari yang sama tidak tertimpa
+          -- replace entries (bukan append) agar tidak duplikat
           brix_entries     = CASE
             WHEN $1::jsonb IS NULL THEN brix_entries
-            ELSE COALESCE(brix_entries, '[]'::jsonb) || $1::jsonb
+            ELSE $1::jsonb
           END,
           moisture_entries = CASE
             WHEN $2::jsonb IS NULL THEN moisture_entries
-            ELSE COALESCE(moisture_entries, '[]'::jsonb) || $2::jsonb
+            ELSE $2::jsonb
           END,
           cip_lab_done     = COALESCE($3, cip_lab_done),
           cip_lab_checks   = COALESCE($4, cip_lab_checks),
@@ -604,38 +742,62 @@ async function saveLimbah(req, res) {
     const d = req.body;
     if (!d) return res.status(400).json({ success: false, error: 'Body kosong' });
 
-    // Validasi tanggal minimal
-    const tanggal = d.tanggal || new Date().toISOString().split('T')[0];
-    if (!tanggal) return res.status(400).json({ success: false, error: 'Tanggal tidak valid' });
+    // Validasi dan format tanggal
+    let tanggal = d.tanggal;
+    if (!tanggal) {
+      // Default ke hari ini jika tidak ada
+      tanggal = new Date().toISOString().split('T')[0];
+    } else {
+      // Ensure format YYYY-MM-DD
+      // Jika input format ISO lengkap, ambil bagian date-nya saja
+      if (tanggal.includes('T')) {
+        tanggal = tanggal.split('T')[0];
+      }
+      // Validate format YYYY-MM-DD
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) {
+        // Try to parse sebagai date
+        const dateObj = new Date(tanggal);
+        if (isNaN(dateObj.getTime())) {
+          return res.status(400).json({ success: false, error: 'Format tanggal tidak valid (gunakan YYYY-MM-DD)' });
+        }
+        tanggal = dateObj.toISOString().split('T')[0];
+      }
+    }
+
+    console.log('📅 Processing tanggal:', tanggal);
 
     const result = await pool.query(`
       INSERT INTO de_limbah (
         tanggal, project_name, tipe,
         awal, akhir, volume,
         cod, bod, tss, ph, temp_effluent,
+        jar_alum, jar_total, jar_entries,
         notes, foto_urls
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *
+      ) VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING *
     `, [
-      tanggal,
-      d.project_name || null,
-      d.tipe         || 'harian',
-      parseNum(d.awal),
-      parseNum(d.akhir),
-      parseNum(d.vol_m3 ?? d.vol),
-      parseNum(d.cod),
-      parseNum(d.bod),
-      parseNum(d.tss),
-      parseNum(d.ph),
-      parseNum(d.temp_effluent ?? d.temp) || null,
-      d.notes   || null,
-      JSON.stringify(d.foto_urls || []),
+      tanggal,                              // $1 :: date casting
+      d.project_name || null,               // $2
+      d.tipe         || 'harian',           // $3
+      parseNum(d.awal),                     // $4
+      parseNum(d.akhir),                    // $5
+      parseNum(d.vol_m3 ?? d.vol),          // $6
+      parseNum(d.cod),                      // $7
+      parseNum(d.bod),                      // $8
+      parseNum(d.tss),                      // $9
+      parseNum(d.ph),                       // $10
+      parseNum(d.temp_effluent ?? d.temp) || null, // $11
+      parseNum(d.jar_alum),                 // $12 - PAC dosing average
+      parseNum(d.jar_total),                // $13 - Polimer dosing average
+      JSON.stringify(d.jar_entries || []),  // $14 - detail per sampel
+      d.notes   || null,                    // $15
+      JSON.stringify(d.foto_urls || []),    // $16
     ]);
 
     if (!result.rows[0]) {
       return res.status(500).json({ success: false, error: 'Data tidak tersimpan, coba lagi' });
     }
 
-    console.log('✅ saveLimbah SUCCESS:', result.rows[0].id);
+    console.log('✅ saveLimbah SUCCESS:', result.rows[0].id, 'tanggal:', result.rows[0].tanggal);
     res.json({ 
       success: true, 
       id: result.rows[0].id, 
@@ -643,7 +805,7 @@ async function saveLimbah(req, res) {
       message: 'Data limbah berhasil disimpan' 
     });
   } catch (err) {
-    console.error('❌ saveLimbah ERROR:', err.message);
+    console.error('❌ saveLimbah ERROR:', err.message, 'Detail:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 }
@@ -717,17 +879,18 @@ async function saveLaboratoriumHarian(req, res) {
   try {
     const d       = req.body;
     const tgl     = d.tanggal || new Date().toISOString().split('T')[0];
-    const section = d.section || null; // 'tw1' | 'tw2' | 'filter'
+    const section = d.section || null;
     const a       = d.analisa || {};
 
-    // Build notes string (backward compat)
+    // Build notes string
     let notesVal = d.notes || null;
     if (d.analisa && typeof d.analisa === 'object') {
       const parts = [];
       if (section)    parts.push('[' + section.toUpperCase() + ']');
-      if (a.sample)   parts.push('Sample: ' + a.sample);
+      if (a.cod)      parts.push('COD: ' + a.cod + ' ppm');
+      if (a.bod)      parts.push('BOD: ' + a.bod + ' ppm');
       if (a.ph)       parts.push('pH: ' + a.ph);
-      if (a.tds)      parts.push('TDS: ' + a.tds + ' mg/L');
+      if (a.tds)      parts.push('TDS: ' + a.tds + (section === 'wwtp' ? ' ppm' : ' mg/L'));
       if (a.hardness) parts.push('Hardness: ' + a.hardness + ' mg/L');
       if (a.alkali)   parts.push('Alkali: ' + a.alkali + ' mg/L');
       if (parts.length) notesVal = parts.join(' | ') + (d.notes ? '\n' + d.notes : '');
@@ -739,60 +902,56 @@ async function saveLaboratoriumHarian(req, res) {
     const cipChkJSON = d.cip_lab_checks           ? JSON.stringify(d.cip_lab_checks)   : null;
     const fotoJSON   = d.foto_urls?.length        ? JSON.stringify(d.foto_urls)        : null;
 
-    // Cek apakah baris tanggal hari ini sudah ada
+    // Build entry object sesuai section
+    const buildEntry = () => {
+      const base = { recorded_at: new Date().toISOString() };
+      if (section === 'wwtp') {
+        return {
+          ...base,
+          cod:  a.cod ? parseFloat(a.cod) : null,
+          bod:  a.bod ? parseFloat(a.bod) : null,
+          ph:   a.ph  ? parseFloat(a.ph)  : null,
+          tds:  a.tds ? parseFloat(a.tds) : null,
+        };
+      }
+      // tw1, tw2, filter, chiller
+      return {
+        ...base,
+        tds:      a.tds      ? parseFloat(a.tds)      : null,
+        hardness: a.hardness ? parseFloat(a.hardness) : null,
+        ph:       a.ph       ? parseFloat(a.ph)       : null,
+        alkaline: a.alkali   ? parseFloat(a.alkali)   : null,
+      };
+    };
+
+    // Cek existing row hari ini
     const existing = await pool.query(
       `SELECT id, notes, water_quality FROM de_laboratorium_harian WHERE tanggal = $1 ORDER BY created_at DESC LIMIT 1`,
       [tgl]
     );
 
     if (section && existing.rows.length > 0) {
-      // ── UPDATE: PUSH entry baru ke array section (tidak overwrite) ──
       const row   = existing.rows[0];
       const oldWQ = row.water_quality || {};
 
-      // Pastikan section adalah array — migrate dari format object lama jika perlu
+      // Section adalah array — push entry baru
       const existingEntries = Array.isArray(oldWQ[section])
         ? oldWQ[section]
         : (oldWQ[section] && typeof oldWQ[section] === 'object' ? [oldWQ[section]] : []);
 
-      const newEntry = {
-        tds:         a.tds      ? parseFloat(a.tds)      : null,
-        hardness:    a.hardness ? parseFloat(a.hardness) : null,
-        ph:          a.ph       ? parseFloat(a.ph)       : null,
-        alkaline:    a.alkali   ? parseFloat(a.alkali)   : null,
-        sample:      a.sample   || null,
-        recorded_at: new Date().toISOString(),
-      };
-
-      const newWQ = {
-        ...oldWQ,
-        [section]: [...existingEntries, newEntry],
-      };
-
-      const oldNotes     = row.notes || '';
+      const newWQ = { ...oldWQ, [section]: [...existingEntries, buildEntry()] };
+      const oldNotes = row.notes || '';
       const updatedNotes = oldNotes + (oldNotes ? '\n' : '') + notesVal;
 
       await pool.query(
-        `UPDATE de_laboratorium_harian
-         SET water_quality = $1, notes = $2, updated_at = now()
-         WHERE id = $3`,
+        `UPDATE de_laboratorium_harian SET water_quality=$1, notes=$2, updated_at=now() WHERE id=$3`,
         [JSON.stringify(newWQ), updatedNotes, row.id]
       );
       return res.json({ success: true, id: row.id, action: 'updated', entries: newWQ[section].length });
     }
 
-    // ── INSERT: baris baru untuk tanggal ini (atau entry non-analisa) ──
-    const wqInit = (section && a) ? {
-      [section]: [{
-        tds:         a.tds      ? parseFloat(a.tds)      : null,
-        hardness:    a.hardness ? parseFloat(a.hardness) : null,
-        ph:          a.ph       ? parseFloat(a.ph)       : null,
-        alkaline:    a.alkali   ? parseFloat(a.alkali)   : null,
-        sample:      a.sample   || null,
-        recorded_at: new Date().toISOString(),
-      }]
-    } : {};
-
+    // INSERT row baru
+    const wqInit = section ? { [section]: [buildEntry()] } : {};
     const result = await pool.query(`
       INSERT INTO de_laboratorium_harian (
         tanggal, brix_entries, moisture_entries,
@@ -802,12 +961,10 @@ async function saveLaboratoriumHarian(req, res) {
       RETURNING id
     `, [
       tgl,
-      brixJSON   || '[]',
-      moistJSON  || '[]',
+      brixJSON   || '[]', moistJSON  || '[]',
       d.cip_lab_done === true,
-      cipChkJSON || '{}',
-      cipEntJSON || '[]',
-      notesVal,
+      cipChkJSON || '{}', cipEntJSON || '[]',
+      notesVal || d.notes || null,
       fotoJSON   || '[]',
       JSON.stringify(wqInit),
     ]);
@@ -929,13 +1086,123 @@ async function deleteLabSample(req, res) {
   }
 }
 
+// ── Lab Locations ─────────────────────────────────────────────
+async function getLabLocations(req, res) {
+  try {
+    const result = await pool.query(
+      `SELECT id, name FROM lab_locations ORDER BY name ASC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function createLabLocation(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Nama lokasi wajib diisi' });
+    }
+    const result = await pool.query(
+      `INSERT INTO lab_locations (name) VALUES ($1)
+       ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+       RETURNING id, name`,
+      [name.trim()]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function deleteLabLocation(req, res) {
+  try {
+    const { name } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, error: 'Nama lokasi wajib diisi' });
+    }
+    await pool.query(`DELETE FROM lab_locations WHERE name = $1`, [name.trim()]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+
+// ── Surat Jalan ──────────────────────────────────────────────
+async function getSuratJalan(req, res) {
+  try {
+    const result = await pool.query(
+      `SELECT id, nomor, tanggal, penerima, alamat, kendaraan, driver, pengirim, catatan, items
+       FROM surat_jalan ORDER BY tanggal DESC, id DESC`
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function createSuratJalan(req, res) {
+  try {
+    const { nomor, tanggal, penerima, alamat, kendaraan, driver, pengirim, catatan, items } = req.body;
+    if (!penerima) return res.status(400).json({ success: false, error: 'Penerima wajib diisi' });
+
+    // FIX: pg driver tidak bisa serialize array JS ke jsonb secara otomatis
+    // Harus dikonversi ke JSON string dulu, lalu cast ::jsonb di SQL
+    const itemsJson = JSON.stringify(Array.isArray(items) ? items : []);
+
+    const result = await pool.query(
+      `INSERT INTO surat_jalan (nomor, tanggal, penerima, alamat, kendaraan, driver, pengirim, catatan, items)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb) RETURNING *`,
+      [nomor||null, tanggal||null, penerima, alamat||null, kendaraan||null, driver||null, pengirim||null, catatan||null, itemsJson]
+    );
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function updateSuratJalan(req, res) {
+  try {
+    const { id } = req.params;
+    const { nomor, tanggal, penerima, alamat, kendaraan, driver, pengirim, catatan, items } = req.body;
+
+    // FIX: sama seperti create — serialize ke JSON string dulu
+    const itemsJson = JSON.stringify(Array.isArray(items) ? items : []);
+
+    const result = await pool.query(
+      `UPDATE surat_jalan SET nomor=$1, tanggal=$2, penerima=$3, alamat=$4, kendaraan=$5,
+       driver=$6, pengirim=$7, catatan=$8, items=$9::jsonb WHERE id=$10 RETURNING *`,
+      [nomor||null, tanggal||null, penerima, alamat||null, kendaraan||null, driver||null, pengirim||null, catatan||null, itemsJson, id]
+    );
+    if (!result.rowCount) return res.status(404).json({ success: false, error: 'Data tidak ditemukan' });
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+async function deleteSuratJalan(req, res) {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(`DELETE FROM surat_jalan WHERE id=$1`, [id]);
+    if (!result.rowCount) return res.status(404).json({ success: false, error: 'Data tidak ditemukan' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+}
+
 module.exports = {
   saveProduction,         getProduction,         getProductionHistory,
-  saveUtility,            getUtility,
+  saveUtility,            getUtility,            getUtilityHistory,
   saveLaboratorium,       getLaboratorium,
   saveLaboratoriumHarian, getLaboratoriumHarian,
   saveLimbah,             getLimbah,
   saveLimbahHarian,       getLimbahHarian,
   saveLaporan,            getLaporan,
-  getLabSamples, createLabSample, deleteLabSample,
+  getLabSamples,    createLabSample,    deleteLabSample,
+  getLabLocations,  createLabLocation,  deleteLabLocation,
+  getSuratJalan, createSuratJalan, updateSuratJalan, deleteSuratJalan,
 };

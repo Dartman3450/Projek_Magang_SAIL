@@ -8,17 +8,16 @@ router.post('/api/dataentry/limbah', async (req, res) => {
   try {
     const {
       tanggal, volume, cod, bod, tss, ph, notes, foto_urls,
-      // Kolom baru (pastikan sudah ALTER TABLE)
-      project_name, tipe, awal, akhir, jar_alum, jar_total
+      project_name, tipe, awal, akhir, jar_alum, jar_total, jar_entries
     } = req.body;
 
     const result = await pool.query(`
       INSERT INTO de_limbah
         (tanggal, volume, cod, bod, tss, ph, notes, foto_urls,
-         project_name, tipe, awal, akhir, jar_alum, jar_total)
+         project_name, tipe, awal, akhir, jar_alum, jar_total, jar_entries)
       VALUES
         ($1, $2, $3, $4, $5, $6, $7, $8,
-         $9, $10, $11, $12, $13, $14)
+         $9, $10, $11, $12, $13, $14, $15)
       RETURNING id
     `, [
       tanggal   || new Date().toISOString().split('T')[0],
@@ -35,6 +34,7 @@ router.post('/api/dataentry/limbah', async (req, res) => {
       akhir     || null,
       jar_alum  || null,
       jar_total || null,
+      JSON.stringify(jar_entries || []),
     ]);
 
     res.json({ success: true, id: result.rows[0].id, action: 'inserted' });
